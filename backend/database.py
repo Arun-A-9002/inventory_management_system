@@ -1,62 +1,66 @@
 # database.py
-import os
-import urllib.parse
-from typing import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-import logging
+import urllib.parse
+import pymysql
+from models.register_models import Base
 
+DB_USER = "root"
+DB_PASSWORD = ""
+DB_HOST = "localhost"
+DB_PORT = "3306"
+MASTER_DB = "ims_master"
 
-# MASTER DB
-DB_USER = os.getenv("MASTER_DB_USER", "root")
-DB_PASSWORD = os.getenv("MASTER_DB_PASSWORD", "")
-DB_HOST = os.getenv("MASTER_DB_HOST", "127.0.0.1")
-DB_PORT = os.getenv("MASTER_DB_PORT", "3306")
-MASTER_DB_NAME = os.getenv("MASTER_DB_NAME", "IMS_master")
-
-MASTER_DATABASE_URL = (
+DB_URL = (
     f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}"
-    f"@{DB_HOST}:{DB_PORT}/{MASTER_DB_NAME}"
+    f"@{DB_HOST}:{DB_PORT}/{MASTER_DB}"
 )
 
-master_engine = create_engine(
-    MASTER_DATABASE_URL,
-    pool_pre_ping=True,
-    future=True
-)
+# Create master database if not exists
 
-MasterSessionLocal = sessionmaker(bind=master_engine, autoflush=False, autocommit=False)
+try:
+    conn = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, port=int(DB_PORT))
+    cursor = conn.cursor()
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {MASTER_DB}")
+    conn.close()
+except:
+    pass
+
+engine = create_engine(DB_URL, echo=True, future=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create tables
+
+Base.metadata.create_all(bind=engine)
 
 
-def get_master_db() -> Generator:
-    db = MasterSessionLocal()
+def get_master_db():
+    db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
+# ---------------- CREATE TENANT DATABASE ----------------
 
-# CREATE TENANT
 def create_tenant_database(db_name: str):
+    url_without_db = (
+        f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}"
+        f"@{DB_HOST}:{DB_PORT}/"
+    )
+    temp_engine = create_engine(url_without_db, future=True)
 
-    url_no_db = f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}@{DB_HOST}:{DB_PORT}/"
-    engine = create_engine(url_no_db, pool_pre_ping=True, future=True)
-
-    with engine.connect() as conn:
+    with temp_engine.connect() as conn:
         conn.execution_options(isolation_level="AUTOCOMMIT")
-        conn.execute(text(f"""
-            CREATE DATABASE IF NOT EXISTS {db_name}
-            CHARACTER SET utf8mb4
-            COLLATE utf8mb4_unicode_ci;
-        """))
+        conn.execute(
+            text(f"CREATE DATABASE IF NOT EXISTS `{db_name}` "
+                 f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+        )
+    temp_engine.dispose()
 
-    engine.dispose()
-
-
-# TENANT ENGINE
 def get_tenant_engine(db_name: str):
     url = (
         f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}"
         f"@{DB_HOST}:{DB_PORT}/{db_name}"
     )
-    return create_engine(url, pool_pre_ping=True, future=True)
+    return create_engine(url, future=True)

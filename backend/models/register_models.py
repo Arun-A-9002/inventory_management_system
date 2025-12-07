@@ -25,11 +25,5 @@ class Tenant(Base):
     designation = Column(String(100))
 
     status = Column(String(50))
-
     password_hash = Column(String(255))
     database_name = Column(String(255))
-    created_at = Column(String(100))
-
-
-
-
