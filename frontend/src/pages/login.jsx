@@ -9,7 +9,7 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // TIMER (5 minutes)
+  // TIMER (5   minutes)
   const [timer, setTimer] = useState(300);
 
   // Start countdown when OTP is sent
