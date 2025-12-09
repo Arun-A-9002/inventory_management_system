@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String,DateTime
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -27,3 +27,7 @@ class Tenant(Base):
     status = Column(String(50))
     password_hash = Column(String(255))
     database_name = Column(String(255))
+
+     # NEW FIELDS for refresh token rotation
+    refresh_token_hash = Column(String(255), nullable=True)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
