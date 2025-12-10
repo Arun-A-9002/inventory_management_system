@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Integer, String,DateTime
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
+
+# ⬇️ IMPORT LOGGERS
+from utils.logger import log_api, log_audit, log_error
 
 Base = declarative_base()
 
@@ -28,6 +31,31 @@ class Tenant(Base):
     password_hash = Column(String(255))
     database_name = Column(String(255))
 
-     # NEW FIELDS for refresh token rotation
+    # NEW FIELDS for refresh token rotation
     refresh_token_hash = Column(String(255), nullable=True)
     refresh_token_expires_at = Column(DateTime, nullable=True)
+
+    # ---------------------------
+    # LOG WHEN MODEL IS CREATED
+    # ---------------------------
+    def __init__(self, **kwargs):
+        try:
+            super().__init__(**kwargs)
+
+            log_audit(
+                f"[Tenant Model Instantiated] Org={kwargs.get('organization_name')} | "
+                f"Admin={kwargs.get('admin_email')}"
+            )
+
+        except Exception as e:
+            log_error(e, location="Tenant Model __init__")
+
+    # ---------------------------
+    # LOG WHEN PRINTING MODEL
+    # ---------------------------
+    def __repr__(self):
+        try:
+            return f"<Tenant id={self.id} org={self.organization_name} admin={self.admin_email}>"
+        except Exception as e:
+            log_error(e, location="Tenant Model __repr__")
+            return "<Tenant Error>"

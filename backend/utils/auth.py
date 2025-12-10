@@ -5,6 +5,10 @@ from jose import jwt
 import os, hashlib, secrets, smtplib, ssl, traceback
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from fastapi import HTTPException
+
+# ⬇️ IMPORT LOGGERS
+from utils.logger import log_error, log_audit, log_api
 
 load_dotenv()
 
@@ -23,78 +27,99 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM", "NUTRYAH <no-reply@nutryah.com>")
 
+
 # -----------------------------------------
 # ACCESS TOKEN
 # -----------------------------------------
 def create_access_token(data: dict):
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_EXPIRE_MIN)
-    to_encode = data.copy()
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    try:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_EXPIRE_MIN)
+        to_encode = data.copy()
+        to_encode.update({"exp": expire})
+
+        token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        log_audit(f"Access token created for email={data.get('email')}")
+
+        return token
+
+    except Exception as e:
+        log_error(e, location="create_access_token()")
+        raise
+
 
 # -----------------------------------------
 # REFRESH TOKEN
 # -----------------------------------------
 def generate_refresh_token():
-    return secrets.token_urlsafe(64)
+    token = secrets.token_urlsafe(64)
+    log_audit("Refresh token generated")
+    return token
+
 
 def hash_token(token: str):
-    return hashlib.sha256(token.encode()).hexdigest()
+    hashed = hashlib.sha256(token.encode()).hexdigest()
+    return hashed
+
 
 def refresh_expiry():
-    return datetime.utcnow() + timedelta(days=REFRESH_EXPIRE_DAYS)
+    exp = datetime.utcnow() + timedelta(days=REFRESH_EXPIRE_DAYS)
+    return exp
+
 
 # -----------------------------------------
 # OTP STORAGE (in-memory)
 # -----------------------------------------
-otp_store = {}  
-# Structure:
-# otp_store[email] = { "otp": "123456", "expires": datetime.utcnow()+5min }
-
+otp_store = {}
 OTP_EXPIRY_MIN = 5
+
 
 def generate_otp(email: str) -> str:
     """Generate & store OTP for 5 minutes in memory."""
-    otp = str(secrets.randbelow(900000) + 100000)  # 6-digit OTP
 
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MIN)
+    try:
+        otp = str(secrets.randbelow(900000) + 100000)  # 6-digit OTP
+        expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MIN)
 
-    otp_store[email] = {
-        "otp": otp,
-        "expires": expires_at
-    }
+        otp_store[email] = {
+            "otp": otp,
+            "expires": expires_at
+        }
 
-    print(f"[OTP GENERATED] {email} = {otp} (expires {expires_at})")
+        log_audit(f"OTP generated for {email}")
+        return otp
 
-    return otp
+    except Exception as e:
+        log_error(e, location="generate_otp()")
+        raise
 
 
 def verify_otp(email: str, otp: str) -> bool:
     """Validate OTP and remove after use."""
+
     try:
         if email not in otp_store:
-            print("[OTP ERROR] No OTP stored for:", email)
+            log_error(Exception("OTP not found"), location=f"verify_otp() - {email}")
             return False
 
         data = otp_store[email]
 
         # Expired?
         if datetime.utcnow() > data["expires"]:
-            print("[OTP ERROR] Expired OTP for:", email)
+            log_error(Exception("OTP expired"), location=f"verify_otp() - {email}")
             del otp_store[email]
             return False
 
         # Match?
         if data["otp"] != otp:
-            print("[OTP ERROR] Incorrect OTP for:", email)
+            log_error(Exception("OTP mismatch"), location=f"verify_otp() - {email}")
             return False
 
-        # OTP is correct → remove from memory
         del otp_store[email]
+        log_audit(f"OTP verified successfully for {email}")
         return True
 
     except Exception as e:
-        print("[OTP VERIFY ERROR]:", e)
+        log_error(e, location="verify_otp()")
         traceback.print_exc()
         return False
 
@@ -123,23 +148,20 @@ def send_otp_email(to_email: str, otp: str):
     msg["To"] = to_email
 
     try:
-        print("🔍 DEBUG: Trying to send email...")
-        print("SMTP_HOST:", SMTP_HOST)
-        print("SMTP_PORT:", SMTP_PORT)
-        print("SMTP_USER:", SMTP_USER)
+        log_api(f"Attempting to send OTP email → {to_email}")
 
         context = ssl.create_default_context()
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.set_debuglevel(1)  # ← PRINT EXACT SMTP ERROR
+            server.set_debuglevel(1)  # print SMTP response
 
             server.starttls(context=context)
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_FROM, to_email, msg.as_string())
 
-        print(f"✅ OTP SENT to {to_email}")
+        log_audit(f"OTP email sent to {to_email}")
 
     except Exception as e:
-        print("❌ EMAIL ERROR:", e)
+        log_error(e, location="send_otp_email()")
         traceback.print_exc()
         raise HTTPException(500, "Email sending failed. Check SMTP settings.")

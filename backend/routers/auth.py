@@ -20,12 +20,15 @@ from utils.auth import (
     send_otp_email
 )
 
+# Logging
+from utils.logger import log_error, log_audit, log_api
+
 router = APIRouter(tags=["Authentication"], prefix="/auth")
 
 
-# --------------------------------------
-# LOGIN REQUEST (STEP 1 → SEND OTP)
-# --------------------------------------
+# --------------------------
+# LOGIN REQUEST → SEND OTP
+# --------------------------
 class LoginModel(BaseModel):
     email: str
     password: str
@@ -33,39 +36,36 @@ class LoginModel(BaseModel):
 
 @router.post("/login")
 def login(req: LoginModel, db: Session = Depends(get_master_db)):
-    """
-    Step 1:
-    - Validate email/password
-    - Generate OTP (valid 5 min)
-    - Send OTP to email
-    """
+
+    log_api(f"LOGIN ATTEMPT → {req.email}")
 
     try:
         user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+
         if not user:
+            log_error(Exception("Invalid credentials"), location="Login Email Check")
             raise HTTPException(400, "Invalid email or password")
 
-        # password check (sha256)
         hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
         if hashed_pw != user.password_hash:
+            log_error(Exception("Wrong password"), location="Password Check")
             raise HTTPException(400, "Invalid email or password")
 
-        # Generate OTP and store it in memory
         otp = generate_otp(req.email)
-
-        # Send email
         send_otp_email(req.email, otp)
 
-        return {"message": "OTP sent to email"}
-    except Exception as e:
-        print("LOGIN ERROR:", e)
-        traceback.print_exc()
-        raise HTTPException(500, "Internal server error")
-    
+        log_audit(f"OTP SENT TO {req.email}")
 
-# --------------------------------------
-# VERIFY OTP (STEP 2 → SET REFRESH TOKEN)
-# --------------------------------------
+        return {"message": "OTP sent to email"}
+
+    except Exception as e:
+        log_error(e, location="Login Endpoint")
+        raise HTTPException(500, "Internal server error")
+
+
+# --------------------------
+# VERIFY OTP → ISSUE TOKENS
+# --------------------------
 class OTPVerifyModel(BaseModel):
     email: str
     otp: str
@@ -73,92 +73,85 @@ class OTPVerifyModel(BaseModel):
 
 @router.post("/verify")
 def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_master_db)):
-    """
-    Step 2:
-    - Validate OTP
-    - Create access token
-    - Create refresh token (hash stored in DB)
-    - Set refresh token in HTTP-only cookie
-    """
+
+    log_api(f"OTP VERIFY ATTEMPT → {req.email}")
 
     try:
-        # Validate OTP
         if not verify_otp(req.email, req.otp):
+            log_error(Exception("Invalid OTP"), location="OTP Verify")
             raise HTTPException(400, "Invalid or expired OTP")
 
         user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+
         if not user:
+            log_error(Exception("User not found"), location="OTP Verify User Fetch")
             raise HTTPException(400, "Invalid email")
 
-        # Create access token (expires 30 min)
+        # -------------------------------
+        # 🔥 UPDATED ACCESS TOKEN (with tenant_id)
+        # -------------------------------
         access_token = create_access_token({
             "sub": str(user.id),
+            "tenant_id": user.id,   # 👈 ADDED
             "email": user.admin_email,
             "org": user.organization_name
         })
 
-        # Create refresh token (rotating)
+        # Refresh token rotation
         raw_refresh = generate_refresh_token()
-
-        # Store hashed refresh token in DB
         user.refresh_token_hash = hash_token(raw_refresh)
         user.refresh_token_expires_at = refresh_expiry()
-
         db.commit()
 
-        # Set cookie
         response.set_cookie(
             key="refresh_token",
             value=raw_refresh,
             httponly=True,
-            secure=False,     # change to True in production
+            secure=False,
             samesite="lax",
             max_age=7 * 24 * 3600
         )
 
+        log_audit(f"LOGIN SUCCESS → {req.email}")
+
         return {"access_token": access_token, "token_type": "bearer"}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print("VERIFY OTP ERROR:", e)
-        traceback.print_exc()
+        log_error(e, location="Verify Endpoint")
         raise HTTPException(500, "Internal server error")
 
 
-# --------------------------------------
-# REFRESH TOKEN → ROTATE NEW REFRESH
-# --------------------------------------
+# --------------------------
+# REFRESH TOKEN ROTATION
+# --------------------------
 @router.post("/refresh")
 def refresh(request: Request, response: Response, db: Session = Depends(get_master_db)):
-    """
-    - Read refresh token cookie
-    - Validate & verify hashed token in DB
-    - Rotate the refresh token
-    - Issue new access token
-    """
+
+    log_api("REFRESH TOKEN CALLED")
 
     try:
         raw = request.cookies.get("refresh_token")
         if not raw:
+            log_error(Exception("Missing refresh token"), location="Refresh Token")
             raise HTTPException(401, "Missing refresh token")
 
         hashed = hash_token(raw)
-
         user = db.query(Tenant).filter(Tenant.refresh_token_hash == hashed).first()
+
         if not user:
+            log_error(Exception("Invalid refresh token"), location="Refresh Token")
             raise HTTPException(401, "Invalid refresh token")
 
         if not user.refresh_token_expires_at or user.refresh_token_expires_at < datetime.utcnow():
+            log_error(Exception("Expired refresh token"), location="Refresh Token Expiry")
             raise HTTPException(401, "Refresh token expired")
 
-        # ROTATE refresh token
+        # ROTATE
         new_raw = generate_refresh_token()
         user.refresh_token_hash = hash_token(new_raw)
         user.refresh_token_expires_at = refresh_expiry()
         db.commit()
 
-        # Replace cookie
         response.set_cookie(
             key="refresh_token",
             value=new_raw,
@@ -168,29 +161,36 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
             max_age=7 * 24 * 3600
         )
 
+        # -------------------------------
+        # 🔥 UPDATED ACCESS TOKEN (with tenant_id)
+        # -------------------------------
         new_access = create_access_token({
             "sub": str(user.id),
+            "tenant_id": user.id,   # 👈 ADDED
             "email": user.admin_email,
             "org": user.organization_name
         })
 
+        log_audit(f"TOKEN ROTATED → {user.admin_email}")
+
         return {"access_token": new_access}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print("REFRESH ERROR:", e)
-        traceback.print_exc()
+        log_error(e, location="Refresh Endpoint")
         raise HTTPException(500, "Internal server error")
 
 
-# --------------------------------------
-# LOGOUT → REMOVE REFRESH TOKEN
-# --------------------------------------
+# --------------------------
+# LOGOUT
+# --------------------------
 @router.post("/logout")
 def logout(response: Response, request: Request, db: Session = Depends(get_master_db)):
+
+    log_api("LOGOUT CALLED")
+
     try:
         raw = request.cookies.get("refresh_token")
+
         if raw:
             hashed = hash_token(raw)
             user = db.query(Tenant).filter(Tenant.refresh_token_hash == hashed).first()
@@ -200,10 +200,12 @@ def logout(response: Response, request: Request, db: Session = Depends(get_maste
                 user.refresh_token_expires_at = None
                 db.commit()
 
-        # Delete cookie
         response.delete_cookie("refresh_token")
+
+        log_audit("LOGOUT SUCCESS")
+
         return {"message": "Logged out"}
+
     except Exception as e:
-        print("LOGOUT ERROR:", e)
-        traceback.print_exc()
+        log_error(e, location="Logout Endpoint")
         raise HTTPException(500, "Internal server error")
