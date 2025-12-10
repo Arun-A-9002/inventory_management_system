@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
+from database import get_tenant_db
 
 from models.tenant_models import Department
 from schemas.tenant_schemas import (
@@ -9,49 +9,51 @@ from schemas.tenant_schemas import (
     DepartmentResponse
 )
 
-router = APIRouter(
-    prefix="/departments",
-    tags=["Departments"]
-)
+DEFAULT_TENANT_DB = "arun"
+
+router = APIRouter(prefix="/departments", tags=["Departments"])
+
+def get_tenant_session():
+    yield from get_tenant_db(DEFAULT_TENANT_DB)
 
 
-# ------------------ CREATE ------------------
+# CREATE
 @router.post("/", response_model=DepartmentResponse)
-def create_department(data: DepartmentCreate, db: Session = Depends(get_db)):
+def create_department(data: DepartmentCreate, db: Session = Depends(get_tenant_session)):
     existing = db.query(Department).filter(Department.name == data.name).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Department already exists")
+        raise HTTPException(400, "Department already exists")
 
-    dept = Department(**data.dict())
+    dept = Department(name=data.name, description=data.description, is_active=True)
     db.add(dept)
     db.commit()
     db.refresh(dept)
     return dept
 
 
-# ------------------ GET ALL ------------------
+# GET ALL
 @router.get("/", response_model=list[DepartmentResponse])
-def get_all_departments(db: Session = Depends(get_db)):
+def get_all_departments(db: Session = Depends(get_tenant_session)):
     return db.query(Department).all()
 
 
-# ------------------ GET ONE ------------------
+# GET ONE
 @router.get("/{dept_id}", response_model=DepartmentResponse)
-def get_department(dept_id: int, db: Session = Depends(get_db)):
+def get_department(dept_id: int, db: Session = Depends(get_tenant_session)):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
-        raise HTTPException(status_code=404, detail="Department not found")
+        raise HTTPException(404, "Department not found")
     return dept
 
 
-# ------------------ UPDATE ------------------
+# UPDATE
 @router.put("/{dept_id}", response_model=DepartmentResponse)
-def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depends(get_db)):
+def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depends(get_tenant_session)):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
-        raise HTTPException(status_code=404, detail="Department not found")
+        raise HTTPException(404, "Department not found")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
 
     for key, value in update_data.items():
         setattr(dept, key, value)
@@ -61,12 +63,12 @@ def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depend
     return dept
 
 
-# ------------------ DELETE ------------------
+# DELETE
 @router.delete("/{dept_id}")
-def delete_department(dept_id: int, db: Session = Depends(get_db)):
+def delete_department(dept_id: int, db: Session = Depends(get_tenant_session)):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
-        raise HTTPException(status_code=404, detail="Department not found")
+        raise HTTPException(404, "Department not found")
 
     db.delete(dept)
     db.commit()

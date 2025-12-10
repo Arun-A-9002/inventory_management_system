@@ -153,8 +153,6 @@ def send_otp_email(to_email: str, otp: str):
         context = ssl.create_default_context()
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.set_debuglevel(1)  # print SMTP response
-
             server.starttls(context=context)
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_FROM, to_email, msg.as_string())
@@ -165,3 +163,61 @@ def send_otp_email(to_email: str, otp: str):
         log_error(e, location="send_otp_email()")
         traceback.print_exc()
         raise HTTPException(500, "Email sending failed. Check SMTP settings.")
+
+def send_welcome_email(to_email: str, username: str, temp_password: str):
+    """Send welcome email for new user creation."""
+
+    subject = "Welcome to Nutryah - Account Created"
+    body = f"""
+    Dear {username},
+
+    Welcome to Nutryah Inventory Management System!
+
+    Your account has been successfully created.
+    Email: {to_email}
+    Temporary Password: {temp_password}
+
+    Please login and change your password.
+
+    Regards,
+    Nutryah Team
+    """
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+
+    try:
+        log_api(f"Sending welcome email → {to_email}")
+
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            server.starttls(context=context)
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, to_email, msg.as_string())
+
+        log_audit(f"Welcome email sent to {to_email}")
+
+    except Exception as e:
+        log_error(e, location="send_welcome_email()")
+        raise HTTPException(500, "Welcome email sending failed.")
+
+
+# -----------------------------------------
+# PASSWORD HASHING
+# -----------------------------------------
+import hashlib
+
+def hash_password(password: str) -> str:
+    """Hash a plain password using SHA256 with salt."""
+    salt = "inventory_salt_2024"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plain password against stored hash."""
+    try:
+        return hash_password(plain) == hashed
+    except:
+        return False

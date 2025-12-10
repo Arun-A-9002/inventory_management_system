@@ -6,7 +6,6 @@ from schemas.register_schema import RegisterModel
 from models.register_models import Tenant
 from database import (
     get_master_db,
-    create_tenant_database,
     get_tenant_engine
 )
 import hashlib
@@ -82,7 +81,11 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         # -----------------------------------------------------
         # STEP 1 → Create the tenant database
         # -----------------------------------------------------
-        create_tenant_database(db_name)
+        import pymysql
+        conn = pymysql.connect(host="localhost", user="root", password="", port=3306)
+        cursor = conn.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+        conn.close()
         log_audit(f"Database created for tenant: {db_name}")
 
         # -----------------------------------------------------

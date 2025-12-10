@@ -36,28 +36,49 @@ class LoginModel(BaseModel):
 
 @router.post("/login")
 def login(req: LoginModel, db: Session = Depends(get_master_db)):
-
     log_api(f"LOGIN ATTEMPT → {req.email}")
-
+    
     try:
+        # First check tenant users in arun database
+        from database import get_tenant_db
+        from models.tenant_models import User
+        from utils.auth import verify_password
+        
+        tenant_db_gen = get_tenant_db("arun")
+        tenant_db = next(tenant_db_gen)
+        
+        tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+        
+        if tenant_user and verify_password(req.password, tenant_user.hashed_password):
+            if not tenant_user.is_active:
+                tenant_db.close()
+                raise HTTPException(400, "Account is inactive")
+            
+            # Send OTP for tenant user
+            otp = generate_otp(req.email)
+            send_otp_email(req.email, otp)
+            tenant_db.close()
+            log_audit(f"OTP SENT TO TENANT USER {req.email}")
+            return {"message": "OTP sent to email"}
+        
+        tenant_db.close()
+        
+        # Then check tenant admins
         user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
-
-        if not user:
-            log_error(Exception("Invalid credentials"), location="Login Email Check")
-            raise HTTPException(400, "Invalid email or password")
-
-        hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
-        if hashed_pw != user.password_hash:
-            log_error(Exception("Wrong password"), location="Password Check")
-            raise HTTPException(400, "Invalid email or password")
-
-        otp = generate_otp(req.email)
-        send_otp_email(req.email, otp)
-
-        log_audit(f"OTP SENT TO {req.email}")
-
-        return {"message": "OTP sent to email"}
-
+        
+        if user:
+            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
+            if hashed_pw == user.password_hash:
+                otp = generate_otp(req.email)
+                send_otp_email(req.email, otp)
+                log_audit(f"OTP SENT TO ADMIN {req.email}")
+                return {"message": "OTP sent to email"}
+        
+        log_error(Exception("Invalid credentials"), location="Login Check")
+        raise HTTPException(400, "Invalid email or password")
+        
+    except HTTPException:
+        raise
     except Exception as e:
         log_error(e, location="Login Endpoint")
         raise HTTPException(500, "Internal server error")
@@ -81,18 +102,38 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             log_error(Exception("Invalid OTP"), location="OTP Verify")
             raise HTTPException(400, "Invalid or expired OTP")
 
+        # Check tenant users first
+        from database import get_tenant_db
+        from models.tenant_models import User
+        
+        tenant_db_gen = get_tenant_db("arun")
+        tenant_db = next(tenant_db_gen)
+        
+        tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+        
+        if tenant_user:
+            access_token = create_access_token({
+                "sub": str(tenant_user.id),
+                "email": tenant_user.email,
+                "tenant_db": "arun",
+                "user_type": "tenant_user"
+            })
+            tenant_db.close()
+            log_audit(f"TENANT USER LOGIN SUCCESS → {req.email}")
+            return {"access_token": access_token, "token_type": "bearer"}
+        
+        tenant_db.close()
+        
+        # Check admin users
         user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
 
         if not user:
             log_error(Exception("User not found"), location="OTP Verify User Fetch")
             raise HTTPException(400, "Invalid email")
 
-        # -------------------------------
-        # 🔥 UPDATED ACCESS TOKEN (with tenant_id)
-        # -------------------------------
         access_token = create_access_token({
             "sub": str(user.id),
-            "tenant_id": user.id,   # 👈 ADDED
+            "tenant_id": user.id,
             "email": user.admin_email,
             "org": user.organization_name
         })
@@ -112,10 +153,12 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             max_age=7 * 24 * 3600
         )
 
-        log_audit(f"LOGIN SUCCESS → {req.email}")
+        log_audit(f"ADMIN LOGIN SUCCESS → {req.email}")
 
         return {"access_token": access_token, "token_type": "bearer"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_error(e, location="Verify Endpoint")
         raise HTTPException(500, "Internal server error")

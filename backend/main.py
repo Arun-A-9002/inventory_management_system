@@ -8,6 +8,8 @@ import uuid
 from routers import register, auth
 from utils.logger import log_error, log_audit, log_api
 from routers.department import router as department_router
+from routers.roles import router as roles_router
+from routers.users import router as users_router
 
 
 app = FastAPI(title="NUTRYAH IMS API")
@@ -31,8 +33,8 @@ app.add_middleware(
 app.include_router(register.router, prefix="/api")
 app.include_router(auth.router)
 app.include_router(department_router)
-
-
+app.include_router(roles_router)
+app.include_router(users_router)
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: API LOGGING + REQUEST ID TRACKING
 # ----------------------------------------------------------
@@ -80,3 +82,14 @@ async def log_requests(request: Request, call_next):
 def health():
     log_audit("Health check OK")
     return {"status": "running"}
+
+@app.get("/health/db")
+def health_db():
+    try:
+        from database import get_tenant_db
+        db_gen = get_tenant_db("tenant_demo")
+        db = next(db_gen)
+        db.execute("SELECT 1")
+        return {"status": "db_ok"}
+    except Exception as e:
+        return {"status": "db_error", "error": str(e)}
