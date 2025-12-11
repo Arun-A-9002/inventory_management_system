@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api";
+import { hasPermission } from "../utils/permissions";
 
 export default function Roles() {
   const [roles, setRoles] = useState([]);
@@ -22,7 +23,9 @@ export default function Roles() {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    loadAll();
+    if (hasPermission("roles.view")) {
+      loadAll();
+    }
   }, []);
 
   async function loadAll() {
@@ -46,6 +49,7 @@ export default function Roles() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("roles.create")) return alert("Permission denied");
     if (!name.trim()) return alert("Role name is required");
     try {
       const payload = { name: name.trim(), description: description.trim(), permission_ids: Array.from(selectedPerms) };
@@ -59,6 +63,7 @@ export default function Roles() {
   };
 
   const startEdit = (role) => {
+    if (!hasPermission("roles.update")) return alert("Permission denied");
     setEditingId(role.id);
     setEditName(role.name || "");
     setEditDescription(role.description || "");
@@ -71,6 +76,7 @@ export default function Roles() {
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("roles.update")) return alert("Permission denied");
     if (!editName.trim()) return alert("Role name required");
     try {
       await api.put(`/roles/${editingId}`, {
@@ -87,6 +93,7 @@ export default function Roles() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("roles.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this role?")) return;
     try {
       await api.delete(`/roles/${id}`);
@@ -105,6 +112,10 @@ export default function Roles() {
     const q = query.toLowerCase();
     return r.name.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q);
   });
+
+  if (!hasPermission("roles.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view roles.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -161,7 +172,7 @@ export default function Roles() {
 
             <div className="mt-4 flex gap-2">
               {!editingId ? (
-                <button onClick={handleCreate} className="rounded-full bg-emerald-600 text-white px-5 py-2">Create role</button>
+                hasPermission("roles.create") && <button onClick={handleCreate} className="rounded-full bg-emerald-600 text-white px-5 py-2">Create role</button>
               ) : (
                 <>
                   <button onClick={handleUpdate} className="rounded-full bg-sky-600 text-white px-4 py-2">Save</button>
@@ -221,8 +232,8 @@ export default function Roles() {
                         </td>
                         <td className="py-3">
                           <div className="flex gap-2">
-                            <button onClick={() => startEdit(r)} className="rounded-full px-3 py-1 bg-slate-900 text-white">Edit</button>
-                            <button onClick={() => handleDelete(r.id)} className="rounded-full px-3 py-1 bg-red-500 text-white">Delete</button>
+                            {hasPermission("roles.update") && <button onClick={() => startEdit(r)} className="rounded-full px-3 py-1 bg-slate-900 text-white">Edit</button>}
+                            {hasPermission("roles.delete") && <button onClick={() => handleDelete(r.id)} className="rounded-full px-3 py-1 bg-red-500 text-white">Delete</button>}
                           </div>
                         </td>
                       </tr>

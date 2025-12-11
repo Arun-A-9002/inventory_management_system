@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api";
+import { hasPermission } from "../utils/permissions";
 
 export default function Department() {
   const [departments, setDepartments] = useState([]);
@@ -19,7 +20,9 @@ export default function Department() {
   const [filter, setFilter] = useState("all"); // all / with-desc / without-desc
 
   useEffect(() => {
-    loadDepartments();
+    if (hasPermission("departments.view")) {
+      loadDepartments();
+    }
   }, []);
 
   const loadDepartments = async () => {
@@ -36,6 +39,7 @@ export default function Department() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("departments.create")) return alert("Permission denied");
     if (!name.trim()) return alert("Department name is required");
     try {
       await api.post("/departments", { name: name.trim(), description: description.trim() });
@@ -49,6 +53,7 @@ export default function Department() {
   };
 
   const startEdit = (dept) => {
+    if (!hasPermission("departments.update")) return alert("Permission denied");
     setEditingId(dept.id);
     setEditName(dept.name || "");
     setEditDescription(dept.description || "");
@@ -61,6 +66,7 @@ export default function Department() {
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("departments.update")) return alert("Permission denied");
     if (!editName.trim()) return alert("Name is required");
     try {
       await api.put(`/departments/${editingId}`, {
@@ -76,6 +82,7 @@ export default function Department() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("departments.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this department?")) return;
     try {
       await api.delete(`/departments/${id}`);
@@ -98,6 +105,10 @@ export default function Department() {
       const q = query.toLowerCase();
       return (d.name || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
     });
+
+  if (!hasPermission("departments.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view departments.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -149,21 +160,23 @@ export default function Department() {
               rows={4}
             />
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleCreate}
-                className="inline-flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 shadow"
-              >
-                Create department
-              </button>
+            {hasPermission("departments.create") && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCreate}
+                  className="inline-flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 shadow"
+                >
+                  Create department
+                </button>
 
-              <button
-                onClick={() => { setName(""); setDescription(""); }}
-                className="inline-flex items-center justify-center rounded-full border px-4 py-2 text-slate-700"
-              >
-                Reset
-              </button>
-            </div>
+                <button
+                  onClick={() => { setName(""); setDescription(""); }}
+                  className="inline-flex items-center justify-center rounded-full border px-4 py-2 text-slate-700"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
 
             {/* Edit inline area */}
             {editingId && (
@@ -261,18 +274,22 @@ export default function Department() {
                           <td className="py-3">{d.is_active ? "Active" : "Inactive"}</td>
                           <td className="py-3">
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => startEdit(d)}
-                                className="text-sm px-3 py-1 rounded-full border hover:bg-slate-100"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(d.id)}
-                                className="text-sm px-3 py-1 rounded-full border text-red-600 hover:bg-red-50"
-                              >
-                                Delete
-                              </button>
+                              {hasPermission("departments.update") && (
+                                <button
+                                  onClick={() => startEdit(d)}
+                                  className="text-sm px-3 py-1 rounded-full border hover:bg-slate-100"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              {hasPermission("departments.delete") && (
+                                <button
+                                  onClick={() => handleDelete(d.id)}
+                                  className="text-sm px-3 py-1 rounded-full border text-red-600 hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

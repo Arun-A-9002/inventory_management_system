@@ -2,20 +2,25 @@
 
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-import os, hashlib, secrets, smtplib, ssl, traceback
+import os
+import hashlib
+import secrets
+import smtplib
+import ssl
+import traceback
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 from fastapi import HTTPException, Header, Depends
-from typing import Optional
+from typing import Optional, Dict, Any
 
-# ⬇️ IMPORT LOGGERS
+# Logging helpers (assumed present in your project)
 from utils.logger import log_error, log_audit, log_api
 
 load_dotenv()
 
-# -----------------------------------------
+# ===========================================================
 # ENV CONFIG
-# -----------------------------------------
+# ===========================================================
 SECRET_KEY = os.getenv("SECRET_KEY", "mysecretkey")
 ALGORITHM = "HS256"
 
@@ -28,11 +33,10 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM", "NUTRYAH <no-reply@nutryah.com>")
 
-
-# -----------------------------------------
+# ===========================================================
 # ACCESS TOKEN
-# -----------------------------------------
-def create_access_token(data: dict):
+# ===========================================================
+def create_access_token(data: Dict[str, Any]) -> str:
     try:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_EXPIRE_MIN)
         to_encode = data.copy()
@@ -40,7 +44,6 @@ def create_access_token(data: dict):
 
         token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         log_audit(f"Access token created for email={data.get('email')}")
-
         return token
 
     except Exception as e:
@@ -48,43 +51,37 @@ def create_access_token(data: dict):
         raise
 
 
-# -----------------------------------------
+# ===========================================================
 # REFRESH TOKEN
-# -----------------------------------------
-def generate_refresh_token():
+# ===========================================================
+def generate_refresh_token() -> str:
     token = secrets.token_urlsafe(64)
     log_audit("Refresh token generated")
     return token
 
 
-def hash_token(token: str):
-    hashed = hashlib.sha256(token.encode()).hexdigest()
-    return hashed
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
-def refresh_expiry():
-    exp = datetime.utcnow() + timedelta(days=REFRESH_EXPIRE_DAYS)
-    return exp
+def refresh_expiry() -> datetime:
+    return datetime.utcnow() + timedelta(days=REFRESH_EXPIRE_DAYS)
 
 
-# -----------------------------------------
-# OTP STORAGE (in-memory)
-# -----------------------------------------
-otp_store = {}
+# ===========================================================
+# OTP STORAGE (IN-MEMORY)
+# ===========================================================
+otp_store: dict = {}
 OTP_EXPIRY_MIN = 5
 
 
 def generate_otp(email: str) -> str:
-    """Generate & store OTP for 5 minutes in memory."""
-
+    """Generate & store 6-digit OTP for 5 minutes."""
     try:
-        otp = str(secrets.randbelow(900000) + 100000)  # 6-digit OTP
+        otp = str(secrets.randbelow(900000) + 100000)
         expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MIN)
 
-        otp_store[email] = {
-            "otp": otp,
-            "expires": expires_at
-        }
+        otp_store[email] = {"otp": otp, "expires": expires_at}
 
         log_audit(f"OTP generated for {email}")
         return otp
@@ -95,24 +92,18 @@ def generate_otp(email: str) -> str:
 
 
 def verify_otp(email: str, otp: str) -> bool:
-    """Validate OTP and remove after use."""
-
+    """Validate OTP and delete after use."""
     try:
         if email not in otp_store:
-            log_error(Exception("OTP not found"), location=f"verify_otp() - {email}")
             return False
 
         data = otp_store[email]
 
-        # Expired?
         if datetime.utcnow() > data["expires"]:
-            log_error(Exception("OTP expired"), location=f"verify_otp() - {email}")
             del otp_store[email]
             return False
 
-        # Match?
         if data["otp"] != otp:
-            log_error(Exception("OTP mismatch"), location=f"verify_otp() - {email}")
             return False
 
         del otp_store[email]
@@ -121,22 +112,18 @@ def verify_otp(email: str, otp: str) -> bool:
 
     except Exception as e:
         log_error(e, location="verify_otp()")
-        traceback.print_exc()
         return False
 
 
-# -----------------------------------------
+# ===========================================================
 # SEND OTP EMAIL
-# -----------------------------------------
+# ===========================================================
 def send_otp_email(to_email: str, otp: str):
-    """Send OTP using Office365 SMTP."""
-
     subject = "Your Nutryah Login OTP"
     body = f"""
     Dear User,
 
     Your OTP for login is: {otp}
-
     This OTP is valid for 5 minutes.
 
     Regards,
@@ -149,10 +136,9 @@ def send_otp_email(to_email: str, otp: str):
     msg["To"] = to_email
 
     try:
-        log_api(f"Attempting to send OTP email → {to_email}")
+        log_api(f"Sending OTP email → {to_email}")
 
         context = ssl.create_default_context()
-
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
             server.starttls(context=context)
             server.login(SMTP_USER, SMTP_PASSWORD)
@@ -162,19 +148,18 @@ def send_otp_email(to_email: str, otp: str):
 
     except Exception as e:
         log_error(e, location="send_otp_email()")
-        traceback.print_exc()
         raise HTTPException(500, "Email sending failed. Check SMTP settings.")
 
-def send_welcome_email(to_email: str, username: str, temp_password: str):
-    """Send welcome email for new user creation."""
 
+# ===========================================================
+# WELCOME EMAIL
+# ===========================================================
+def send_welcome_email(to_email: str, username: str, temp_password: str):
     subject = "Welcome to Nutryah - Account Created"
     body = f"""
     Dear {username},
 
-    Welcome to Nutryah Inventory Management System!
-
-    Your account has been successfully created.
+    Your account has been created.
     Email: {to_email}
     Temporary Password: {temp_password}
 
@@ -190,10 +175,7 @@ def send_welcome_email(to_email: str, username: str, temp_password: str):
     msg["To"] = to_email
 
     try:
-        log_api(f"Sending welcome email → {to_email}")
-
         context = ssl.create_default_context()
-
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
             server.starttls(context=context)
             server.login(SMTP_USER, SMTP_PASSWORD)
@@ -206,100 +188,141 @@ def send_welcome_email(to_email: str, username: str, temp_password: str):
         raise HTTPException(500, "Welcome email sending failed.")
 
 
-# -----------------------------------------
+# ===========================================================
 # PASSWORD HASHING
-# -----------------------------------------
-import hashlib
-
+# ===========================================================
 def hash_password(password: str) -> str:
-    """Hash a plain password using SHA256 with salt."""
     salt = "inventory_salt_2024"
     return hashlib.sha256((password + salt).encode()).hexdigest()
 
+
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain password against stored hash."""
     try:
         return hash_password(plain) == hashed
-    except:
+    except Exception:
         return False
 
 
-# =================================================================
-# 🔐 JWT AUTH — MUST COME FIRST
-# =================================================================
+# ===========================================================
+# JWT VERIFY + CURRENT USER
+# ===========================================================
 def verify_token(token: str) -> Optional[dict]:
-    """Verify JWT token and return payload."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
 
-def get_current_user(Authorization: str = Header(None)):
-    """Extract and validate JWT token from Authorization header."""
-    log_api("Validating JWT token...")
+def _parse_bearer_token(header_value: str) -> Optional[str]:
+    """Return token string if header is 'Bearer <token>' else None."""
+    if not header_value:
+        return None
+    parts = header_value.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1]
+    return None
 
+
+def get_current_user(Authorization: str = Header(None)) -> dict:
+    """
+    Extract JWT, validate, and return payload with full permissions.
+    Raises 401 if token missing/invalid.
+    """
+
+    # Require header
     if not Authorization:
-        log_error(Exception("Authorization header missing"), location="get_current_user")
+        log_error(Exception("Missing Authorization header"), location="get_current_user")
         raise HTTPException(401, "Token required")
 
-    try:
-        token = Authorization.split(" ")[1]
-    except:
+    token = _parse_bearer_token(Authorization)
+    if not token:
         log_error(Exception("Malformed Authorization header"), location="get_current_user")
         raise HTTPException(401, "Invalid token format")
 
     payload = verify_token(token)
     if not payload:
-        log_error(Exception("Token expired or invalid"), location="get_current_user")
-        raise HTTPException(401, "Token expired/invalid")
+        log_error(Exception("JWT verification failed or expired"), location="get_current_user")
+        raise HTTPException(401, "Token expired or invalid")
 
-    # Get user permissions for tenant users
-    if payload.get('user_type') == 'tenant_user':
+    # Default fields
+    payload.setdefault("permissions", [])
+    payload.setdefault("role", payload.get("role", "user"))
+
+    # TENANT USER: refresh permissions from tenant DB (safe fetch)
+    if payload.get("user_type") == "tenant_user":
+        tenant_db = None
         try:
             from database import get_tenant_db
             from models.tenant_models import User
-            
-            tenant_db_gen = get_tenant_db(payload.get('tenant_db', 'arun'))
-            tenant_db = next(tenant_db_gen)
-            
-            user = tenant_db.query(User).filter(User.id == int(payload.get('sub'))).first()
-            if user:
-                # Get all permissions from user's roles
-                permissions = []
-                for role in user.roles:
-                    for permission in role.permissions:
-                        permissions.append(permission.name)
-                
-                payload['permissions'] = list(set(permissions))  # Remove duplicates
-                payload['role'] = 'user'  # Regular user
-            
-            tenant_db.close()
-        except Exception as e:
-            log_error(e, location="get_current_user - permission fetch")
-            payload['permissions'] = []
-            payload['role'] = 'user'
-    else:
-        # Admin users have all permissions
-        payload['role'] = 'admin'
-        payload['permissions'] = ['*']  # All permissions
 
-    log_audit(f"Token validated for user {payload.get('email')}")
+            tenant_db_gen = get_tenant_db("arun")
+            tenant_db = next(tenant_db_gen)
+
+            # sub may be string; convert safely
+            try:
+                user_id = int(payload.get("sub"))
+            except Exception:
+                user_id = None
+
+            if user_id is not None:
+                db_user = tenant_db.query(User).filter(User.id == user_id).first()
+            else:
+                db_user = None
+
+            if db_user:
+                permissions = []
+                for role in db_user.roles:
+                    for perm in role.permissions:
+                        permissions.append(perm.name)
+
+                payload["permissions"] = list(set(permissions))
+                payload["role"] = "user"
+            else:
+                payload["permissions"] = []
+                payload["role"] = "user"
+
+        except Exception as e:
+            log_error(e, location="get_current_user tenant_user load")
+            # On error, do not escalate to 500 here — mark as unauthenticated
+            raise HTTPException(401, "Unable to load user permissions")
+
+        finally:
+            # Close tenant DB session if we obtained one
+            try:
+                if tenant_db is not None:
+                    tenant_db.close()
+            except Exception:
+                pass
+
+    else:
+        # ADMIN or master user token: respect any permissions already present on token.
+        # If none provided, default to wildcard (full access)
+        if payload.get("permissions"):
+            # keep given permissions
+            pass
+        else:
+            payload["permissions"] = ["*"]
+        payload["role"] = payload.get("role", "admin")
+
     return payload
 
 
+# ===========================================================
+# PERMISSION CHECK DECORATOR
+# ===========================================================
 def check_permission(required_permission: str):
-    """Decorator to check if user has required permission."""
+    """Used in routers to enforce RBAC."""
     def permission_checker(user = Depends(get_current_user)):
-        # Admin has all permissions
-        if user.get('role') == 'admin':
+        # Admin → full access if role==admin OR wildcard present
+        if user.get("role") == "admin" or "*" in user.get("permissions", []):
             return user
-        
-        user_permissions = user.get('permissions', [])
-        if required_permission not in user_permissions:
-            log_error(Exception(f"Permission denied: {required_permission}"), location="check_permission")
+
+        # Tenant user: must have specific permission
+        if required_permission not in user.get("permissions", []):
+            log_error(Exception(f"Permission denied: {required_permission} for {user.get('email')}"),
+                      location="check_permission")
             raise HTTPException(403, f"Permission denied: {required_permission} required")
-        
+
         return user
+
     return permission_checker

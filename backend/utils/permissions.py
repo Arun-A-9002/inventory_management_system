@@ -3,37 +3,46 @@
 Simple permission checking utility.
 """
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
+from utils.auth import get_current_user
 
-def has_permission(user, permission_name: str) -> bool:
+def has_permission(user_data: dict, permission_name: str) -> bool:
     """Check if user has specific permission."""
-    if not user or not user.is_active:
+    if not user_data:
         return False
     
-    for role in user.roles:
-        for perm in role.permissions:
-            if perm.name == permission_name:
-                return True
-    return False
+    permissions = user_data.get("permissions", [])
+    
+    # Admin has all permissions
+    if "*" in permissions or user_data.get("role") == "admin":
+        return True
+    
+    # Check specific permission
+    return permission_name in permissions
 
 def require_permission(permission_name: str):
     """FastAPI dependency to check permissions."""
-    def check_permission():
-        # For now, skip authentication - return None to allow access
-        return None
+    def check_permission(current_user: dict = Depends(get_current_user)):
+        if not has_permission(current_user, permission_name):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Permission denied. Required: {permission_name}"
+            )
+        return current_user
     return check_permission
 
-def get_user_permissions(user) -> list:
+def get_user_permissions(user_data: dict) -> list:
     """Get all permissions for a user."""
-    if not user:
+    if not user_data:
         return []
     
-    permissions = set()
-    for role in user.roles:
-        for perm in role.permissions:
-            permissions.add(perm.name)
+    # Admin users have all permissions
+    if user_data.get("role") == "admin":
+        return ["departments.view", "departments.create", "departments.update", "departments.delete",
+                "roles.view", "roles.create", "roles.update", "roles.delete",
+                "users.view", "users.create", "users.update", "users.delete"]
     
-    return list(permissions)
+    return user_data.get("permissions", [])
 
 # Department permission decorators
 def require_departments_view():
