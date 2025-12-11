@@ -8,6 +8,12 @@ from schemas.tenant_schemas import (
     DepartmentUpdate,
     DepartmentResponse
 )
+from utils.permissions import (
+    require_departments_view,
+    require_departments_create,
+    require_departments_update,
+    require_departments_delete
+)
 
 DEFAULT_TENANT_DB = "arun"
 
@@ -19,7 +25,7 @@ def get_tenant_session():
 
 # CREATE
 @router.post("/", response_model=DepartmentResponse)
-def create_department(data: DepartmentCreate, db: Session = Depends(get_tenant_session)):
+def create_department(data: DepartmentCreate, db: Session = Depends(get_tenant_session), user = Depends(require_departments_create())):
     existing = db.query(Department).filter(Department.name == data.name).first()
     if existing:
         raise HTTPException(400, "Department already exists")
@@ -33,13 +39,13 @@ def create_department(data: DepartmentCreate, db: Session = Depends(get_tenant_s
 
 # GET ALL
 @router.get("/", response_model=list[DepartmentResponse])
-def get_all_departments(db: Session = Depends(get_tenant_session)):
+def get_all_departments(db: Session = Depends(get_tenant_session), user = Depends(require_departments_view())):
     return db.query(Department).all()
 
 
 # GET ONE
 @router.get("/{dept_id}", response_model=DepartmentResponse)
-def get_department(dept_id: int, db: Session = Depends(get_tenant_session)):
+def get_department(dept_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_departments_view())):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
         raise HTTPException(404, "Department not found")
@@ -48,7 +54,7 @@ def get_department(dept_id: int, db: Session = Depends(get_tenant_session)):
 
 # UPDATE
 @router.put("/{dept_id}", response_model=DepartmentResponse)
-def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depends(get_tenant_session)):
+def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depends(get_tenant_session), user = Depends(require_departments_update())):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
         raise HTTPException(404, "Department not found")
@@ -65,7 +71,7 @@ def update_department(dept_id: int, data: DepartmentUpdate, db: Session = Depend
 
 # DELETE
 @router.delete("/{dept_id}")
-def delete_department(dept_id: int, db: Session = Depends(get_tenant_session)):
+def delete_department(dept_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_departments_delete())):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:
         raise HTTPException(404, "Department not found")

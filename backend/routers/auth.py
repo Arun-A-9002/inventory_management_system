@@ -17,7 +17,8 @@ from utils.auth import (
     refresh_expiry,
     generate_otp,
     verify_otp,
-    send_otp_email
+    send_otp_email,
+    get_current_user
 )
 
 # Logging
@@ -112,11 +113,18 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
         tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
         
         if tenant_user:
+            # Get user permissions
+            permissions = []
+            for role in tenant_user.roles:
+                for permission in role.permissions:
+                    permissions.append(permission.name)
+            
             access_token = create_access_token({
                 "sub": str(tenant_user.id),
                 "email": tenant_user.email,
                 "tenant_db": "arun",
-                "user_type": "tenant_user"
+                "user_type": "tenant_user",
+                "permissions": list(set(permissions))  # Remove duplicates
             })
             tenant_db.close()
             log_audit(f"TENANT USER LOGIN SUCCESS → {req.email}")
@@ -135,7 +143,8 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             "sub": str(user.id),
             "tenant_id": user.id,
             "email": user.admin_email,
-            "org": user.organization_name
+            "org": user.organization_name,
+            "role": "admin"
         })
 
         # Refresh token rotation
@@ -251,4 +260,36 @@ def logout(response: Response, request: Request, db: Session = Depends(get_maste
 
     except Exception as e:
         log_error(e, location="Logout Endpoint")
+        raise HTTPException(500, "Internal server error")
+
+
+# --------------------------
+# GET CURRENT USER PROFILE
+# --------------------------
+@router.get("/profile")
+def get_profile(current_user = Depends(get_current_user)):
+    """Get current user profile with permissions."""
+    log_api(f"PROFILE REQUEST → {current_user.get('email')}")
+    
+    try:
+        profile = {
+            "id": current_user.get("sub"),
+            "email": current_user.get("email"),
+            "role": current_user.get("role", "user"),
+            "permissions": current_user.get("permissions", []),
+            "user_type": current_user.get("user_type", "admin")
+        }
+        
+        # Add organization info for admin users
+        if current_user.get("org"):
+            profile["organization"] = current_user.get("org")
+        
+        # Add tenant info for tenant users
+        if current_user.get("tenant_db"):
+            profile["tenant_db"] = current_user.get("tenant_db")
+        
+        return profile
+        
+    except Exception as e:
+        log_error(e, location="Profile Endpoint")
         raise HTTPException(500, "Internal server error")

@@ -7,6 +7,12 @@ from database import get_tenant_db
 from models.tenant_models import User, Role
 from schemas.tenant_schemas import UserCreate, UserUpdate, UserResponse
 from utils.auth import hash_password, send_welcome_email
+from utils.permissions import (
+    require_users_view,
+    require_users_create,
+    require_users_update,
+    require_users_delete
+)
 
 DEFAULT_TENANT_DB = "arun"
 
@@ -19,7 +25,7 @@ def get_tenant_session():
 
 # CREATE USER
 @router.post("/", response_model=UserResponse)
-def create_user(payload: UserCreate, db: Session = Depends(get_tenant_session)):
+def create_user(payload: UserCreate, db: Session = Depends(get_tenant_session), user = Depends(require_users_create())):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(400, "Email already registered")
 
@@ -53,13 +59,13 @@ def create_user(payload: UserCreate, db: Session = Depends(get_tenant_session)):
 
 # LIST USERS
 @router.get("/", response_model=List[UserResponse])
-def list_users(db: Session = Depends(get_tenant_session)):
+def list_users(db: Session = Depends(get_tenant_session), user = Depends(require_users_view())):
     return db.query(User).order_by(User.full_name).all()
 
 
 # GET USER BY ID
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_tenant_session)):
+def get_user(user_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_users_view())):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -68,7 +74,7 @@ def get_user(user_id: int, db: Session = Depends(get_tenant_session)):
 
 # UPDATE USER
 @router.put("/{user_id}", response_model=UserResponse)
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_tenant_session)):
+def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_tenant_session), user = Depends(require_users_update())):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -97,7 +103,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_ten
 
 # DELETE USER
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_tenant_session)):
+def delete_user(user_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_users_delete())):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")

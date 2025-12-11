@@ -32,6 +32,20 @@ PERMISSIONS = [
     ("users.create", "Users — Create", "Users"),
     ("users.update", "Users — Update", "Users"),
     ("users.delete", "Users — Delete", "Users"),
+
+    # Inventory (for future modules)
+    ("inventory.view", "Inventory — View", "Inventory"),
+    ("inventory.create", "Inventory — Create", "Inventory"),
+    ("inventory.update", "Inventory — Update", "Inventory"),
+    ("inventory.delete", "Inventory — Delete", "Inventory"),
+
+    # Reports (for future modules)
+    ("reports.view", "Reports — View", "Reports"),
+    ("reports.create", "Reports — Create", "Reports"),
+
+    # Settings (for future modules)
+    ("settings.view", "Settings — View", "Settings"),
+    ("settings.update", "Settings — Update", "Settings"),
 ]
 
 

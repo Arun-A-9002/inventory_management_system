@@ -1,11 +1,12 @@
 # utils/auth.py
 
 from datetime import datetime, timedelta
-from jose import jwt
+from jose import jwt, JWTError
 import os, hashlib, secrets, smtplib, ssl, traceback
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from fastapi import HTTPException
+from fastapi import HTTPException, Header, Depends
+from typing import Optional
 
 # ⬇️ IMPORT LOGGERS
 from utils.logger import log_error, log_audit, log_api
@@ -221,3 +222,84 @@ def verify_password(plain: str, hashed: str) -> bool:
         return hash_password(plain) == hashed
     except:
         return False
+
+
+# =================================================================
+# 🔐 JWT AUTH — MUST COME FIRST
+# =================================================================
+def verify_token(token: str) -> Optional[dict]:
+    """Verify JWT token and return payload."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None
+
+
+def get_current_user(Authorization: str = Header(None)):
+    """Extract and validate JWT token from Authorization header."""
+    log_api("Validating JWT token...")
+
+    if not Authorization:
+        log_error(Exception("Authorization header missing"), location="get_current_user")
+        raise HTTPException(401, "Token required")
+
+    try:
+        token = Authorization.split(" ")[1]
+    except:
+        log_error(Exception("Malformed Authorization header"), location="get_current_user")
+        raise HTTPException(401, "Invalid token format")
+
+    payload = verify_token(token)
+    if not payload:
+        log_error(Exception("Token expired or invalid"), location="get_current_user")
+        raise HTTPException(401, "Token expired/invalid")
+
+    # Get user permissions for tenant users
+    if payload.get('user_type') == 'tenant_user':
+        try:
+            from database import get_tenant_db
+            from models.tenant_models import User
+            
+            tenant_db_gen = get_tenant_db(payload.get('tenant_db', 'arun'))
+            tenant_db = next(tenant_db_gen)
+            
+            user = tenant_db.query(User).filter(User.id == int(payload.get('sub'))).first()
+            if user:
+                # Get all permissions from user's roles
+                permissions = []
+                for role in user.roles:
+                    for permission in role.permissions:
+                        permissions.append(permission.name)
+                
+                payload['permissions'] = list(set(permissions))  # Remove duplicates
+                payload['role'] = 'user'  # Regular user
+            
+            tenant_db.close()
+        except Exception as e:
+            log_error(e, location="get_current_user - permission fetch")
+            payload['permissions'] = []
+            payload['role'] = 'user'
+    else:
+        # Admin users have all permissions
+        payload['role'] = 'admin'
+        payload['permissions'] = ['*']  # All permissions
+
+    log_audit(f"Token validated for user {payload.get('email')}")
+    return payload
+
+
+def check_permission(required_permission: str):
+    """Decorator to check if user has required permission."""
+    def permission_checker(user = Depends(get_current_user)):
+        # Admin has all permissions
+        if user.get('role') == 'admin':
+            return user
+        
+        user_permissions = user.get('permissions', [])
+        if required_permission not in user_permissions:
+            log_error(Exception(f"Permission denied: {required_permission}"), location="check_permission")
+            raise HTTPException(403, f"Permission denied: {required_permission} required")
+        
+        return user
+    return permission_checker

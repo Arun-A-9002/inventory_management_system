@@ -8,6 +8,12 @@ from schemas.tenant_schemas import (
     RoleCreate, RoleUpdate, RoleResponse,
     PermissionResponse, PermissionCreate
 )
+from utils.permissions import (
+    require_roles_view,
+    require_roles_create,
+    require_roles_update,
+    require_roles_delete
+)
 
 DEFAULT_TENANT_DB = "arun"
 
@@ -20,13 +26,13 @@ def get_tenant_session():
 
 # LIST PERMISSIONS
 @router.get("/permissions", response_model=List[PermissionResponse])
-def list_permissions(db: Session = Depends(get_tenant_session)):
+def list_permissions(db: Session = Depends(get_tenant_session), user = Depends(require_roles_view())):
     return db.query(Permission).order_by(Permission.group, Permission.label).all()
 
 
 # CREATE PERMISSION
 @router.post("/permissions", response_model=PermissionResponse)
-def create_permission(data: PermissionCreate, db: Session = Depends(get_tenant_session)):
+def create_permission(data: PermissionCreate, db: Session = Depends(get_tenant_session), user = Depends(require_roles_create())):
     existing = db.query(Permission).filter(Permission.name == data.name).first()
     if existing:
         raise HTTPException(400, "Permission already exists")
@@ -40,7 +46,7 @@ def create_permission(data: PermissionCreate, db: Session = Depends(get_tenant_s
 
 # CREATE ROLE
 @router.post("/", response_model=RoleResponse)
-def create_role(payload: RoleCreate, db: Session = Depends(get_tenant_session)):
+def create_role(payload: RoleCreate, db: Session = Depends(get_tenant_session), user = Depends(require_roles_create())):
     if db.query(Role).filter(Role.name == payload.name).first():
         raise HTTPException(400, "Role already exists")
 
@@ -62,13 +68,13 @@ def create_role(payload: RoleCreate, db: Session = Depends(get_tenant_session)):
 
 # LIST ROLES
 @router.get("/", response_model=List[RoleResponse])
-def list_roles(db: Session = Depends(get_tenant_session)):
+def list_roles(db: Session = Depends(get_tenant_session), user = Depends(require_roles_view())):
     return db.query(Role).order_by(Role.name).all()
 
 
 # GET ONE ROLE
 @router.get("/{role_id}", response_model=RoleResponse)
-def get_role(role_id: int, db: Session = Depends(get_tenant_session)):
+def get_role(role_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_roles_view())):
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(404, "Role not found")
@@ -77,7 +83,7 @@ def get_role(role_id: int, db: Session = Depends(get_tenant_session)):
 
 # UPDATE ROLE
 @router.put("/{role_id}", response_model=RoleResponse)
-def update_role(role_id: int, payload: RoleUpdate, db: Session = Depends(get_tenant_session)):
+def update_role(role_id: int, payload: RoleUpdate, db: Session = Depends(get_tenant_session), user = Depends(require_roles_update())):
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(404, "Role not found")
@@ -106,7 +112,7 @@ def update_role(role_id: int, payload: RoleUpdate, db: Session = Depends(get_ten
 
 # DELETE ROLE
 @router.delete("/{role_id}")
-def delete_role(role_id: int, db: Session = Depends(get_tenant_session)):
+def delete_role(role_id: int, db: Session = Depends(get_tenant_session), user = Depends(require_roles_delete())):
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(404, "Role not found")

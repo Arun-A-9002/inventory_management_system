@@ -40,8 +40,7 @@ class PermissionCreate(PermissionBase):
 class PermissionResponse(PermissionBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RoleBase(BaseModel):
     name: str
@@ -61,8 +60,7 @@ class RoleResponse(RoleBase):
     id: int
     permissions: list[PermissionResponse] = []
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ------------------ User Schemas ------------------
 from pydantic import BaseModel, EmailStr
@@ -97,6 +95,5 @@ class UserResponse(BaseModel):
     department: DepartmentResponse | None = None
     roles: list[RoleResponse] = []
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 

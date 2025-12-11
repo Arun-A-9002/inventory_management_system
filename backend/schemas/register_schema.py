@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 import re
 
 class RegisterModel(BaseModel):
@@ -24,7 +24,8 @@ class RegisterModel(BaseModel):
     password: str
 
     # CITY VALIDATION
-    @validator("city")
+    @field_validator("city")
+    @classmethod
     def validate_city(cls, v):
         CITY_LIST = ["Chennai", "Coimbatore", "Madurai", "Trichy", "Salem"]
         if v not in CITY_LIST:
@@ -32,7 +33,8 @@ class RegisterModel(BaseModel):
         return v
 
     # STATE VALIDATION
-    @validator("state")
+    @field_validator("state")
+    @classmethod
     def validate_state(cls, v):
         STATE_LIST = ["Tamil Nadu", "Kerala", "Karnataka", "Andhra Pradesh", "Telangana"]
         if v not in STATE_LIST:
@@ -40,28 +42,32 @@ class RegisterModel(BaseModel):
         return v
 
     # PINCODE
-    @validator("pincode")
+    @field_validator("pincode")
+    @classmethod
     def validate_pincode(cls, v):
         if not re.fullmatch(r"\d{6}", v):
             raise ValueError("Pincode must be exactly 6 digits.")
         return v
 
     # PHONE
-    @validator("contact_phone", "admin_phone", "admin_secondary_phone")
+    @field_validator("contact_phone", "admin_phone", "admin_secondary_phone")
+    @classmethod
     def validate_phone(cls, v):
         if not re.fullmatch(r"\d{10}", v):
             raise ValueError("Phone must be 10 digits.")
         return v
 
     # EMAIL
-    @validator("contact_email", "admin_email")
+    @field_validator("contact_email", "admin_email")
+    @classmethod
     def validate_email(cls, v):
         if "@" not in v or not v.endswith(".com"):
             raise ValueError("Email must contain '@' and end with '.com'")
         return v
 
     # PASSWORD
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password(cls, v):
         if (
             not re.search(r"[A-Z]", v)
