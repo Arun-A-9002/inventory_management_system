@@ -24,10 +24,14 @@ export default function Sidebar() {
       ],
     },
 
-    // ✔ FIXED — Organization Setup is now a SINGLE item
     {
       name: "Organization Setup",
-      path: "/app/organization",
+      submenu: [
+        { name: "Organization Structure Setup", path: "/app/organization/structure" },
+        { name: "Master Data Setup", path: "/app/organization/master-data" },
+        { name: "User Access and Permission", path: "/app/organization/user-access" },
+        { name: "Inventory Rules & Policies", path: "/app/organization/inventory-rules" },
+      ],
     },
 
     { name: "Reports", path: "/app/reports" },
