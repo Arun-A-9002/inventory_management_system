@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from datetime import datetime
 
 
 class DepartmentBase(BaseModel):
@@ -96,4 +97,277 @@ class UserResponse(BaseModel):
     roles: list[RoleResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+# ============================================================
+#                     COMPANY SCHEMAS
+# ============================================================
+class CompanyBase(BaseModel):
+    name: str
+    code: Optional[str] = None
+    gst_number: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    logo: Optional[str] = None
+
+
+class CompanyCreate(CompanyBase):
+    pass
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    gst_number: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    logo: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class CompanyResponse(CompanyBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                     BRANCH SCHEMAS
+# ============================================================
+class BranchBase(BaseModel):
+    company_id: int
+    name: str
+    code: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    pincode: Optional[str] = None
+
+
+class BranchCreate(BranchBase):
+    pass
+
+
+class BranchUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    pincode: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class BranchResponse(BranchBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+
+
+
+# ============================================================
+#                     STORE SCHEMAS
+# ============================================================
+class StoreBase(BaseModel):
+    branch_id: int
+    name: str
+    code: Optional[str] = None
+    store_type: str
+    is_central: Optional[bool] = False
+    description: Optional[str] = None
+
+
+class StoreCreate(StoreBase):
+    pass
+
+
+class StoreUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    store_type: Optional[str] = None
+    is_central: Optional[bool] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class StoreResponse(StoreBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                     CATEGORY SCHEMAS
+# ============================================================
+class CategoryBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class CategoryResponse(CategoryBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                   SUBCATEGORY SCHEMAS
+# ============================================================
+class SubCategoryBase(BaseModel):
+    category_id: int
+    name: str
+    description: Optional[str] = None
+
+
+class SubCategoryCreate(SubCategoryBase):
+    pass
+
+
+class SubCategoryUpdate(BaseModel):
+    category_id: Optional[int] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class SubCategoryResponse(SubCategoryBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                     BRAND SCHEMAS
+# ============================================================
+class BrandBase(BaseModel):
+    brand_name: str
+    manufacturer_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+
+
+class BrandCreate(BrandBase):
+    pass
+
+
+class BrandUpdate(BaseModel):
+    brand_name: Optional[str] = None
+    manufacturer_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class BrandResponse(BrandBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                     UOM SCHEMAS
+# ============================================================
+class UOMBase(BaseModel):
+    name: str
+    code: Optional[str] = None
+    conversion_factor: Optional[float] = 1.0
+
+
+class UOMCreate(UOMBase):
+    pass
+
+
+class UOMUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    conversion_factor: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class UOMResponse(UOMBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                     TAX CODE SCHEMAS
+# ============================================================
+class TaxCodeBase(BaseModel):
+    hsn_code: str
+    description: Optional[str] = None
+    gst_percentage: float
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+
+
+class TaxCodeCreate(TaxCodeBase):
+    pass
+
+
+class TaxCodeUpdate(BaseModel):
+    hsn_code: Optional[str] = None
+    description: Optional[str] = None
+    gst_percentage: Optional[float] = None
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class TaxCodeResponse(TaxCodeBase):
+    id: int
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
 

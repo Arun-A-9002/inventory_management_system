@@ -1,6 +1,6 @@
 # ------------------ Department Model ------------------
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -78,3 +78,197 @@ class User(TenantBase):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# ============================================================
+#                        COMPANY
+# ============================================================
+class Company(TenantBase):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String(191), nullable=False)
+    code = Column(String(100), nullable=True)
+
+    gst_number = Column(String(100), nullable=True)
+    address = Column(Text, nullable=True)
+
+    contact_person = Column(String(191), nullable=True)
+    email = Column(String(191), nullable=True)
+    phone = Column(String(100), nullable=True)
+
+    logo = Column(String(500), nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relations
+    branches = relationship(
+        "Branch",
+        back_populates="company",
+        cascade="all, delete-orphan"
+    )
+
+
+# ============================================================
+#                        BRANCH / LOCATION
+# ============================================================
+class Branch(TenantBase):
+    __tablename__ = "branches"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(191), nullable=False)
+    code = Column(String(100), nullable=True)
+
+    address = Column(Text, nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
+    country = Column(String(100), nullable=True)
+    pincode = Column(String(20), nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relations
+    company = relationship("Company", back_populates="branches")
+    stores = relationship("Store", back_populates="branch", cascade="all, delete-orphan")
+
+
+# ============================================================
+#                        STORE
+# ============================================================
+class Store(TenantBase):
+    __tablename__ = "stores"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    branch_id = Column(Integer, ForeignKey("branches.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(191), nullable=False)
+    code = Column(String(100), nullable=True)
+
+    store_type = Column(String(100), nullable=False)   # e.g. Pharmacy, Warehouse, General
+    is_central = Column(Boolean, default=False)
+
+    description = Column(Text, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relation
+    branch = relationship("Branch", back_populates="stores")
+
+
+# ============================================================
+#                        CATEGORY
+# ============================================================
+class Category(TenantBase):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String(191), nullable=False)
+    description = Column(Text, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relation
+    subcategories = relationship(
+        "SubCategory",
+        back_populates="category",
+        cascade="all, delete-orphan"
+    )
+
+
+# ============================================================
+#                        SUB CATEGORY
+# ============================================================
+class SubCategory(TenantBase):
+    __tablename__ = "subcategories"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(191), nullable=False)
+    description = Column(Text, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relation
+    category = relationship("Category", back_populates="subcategories")
+
+
+# ============================================================
+#                        BRAND
+# ============================================================
+class Brand(TenantBase):
+    __tablename__ = "brands"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    brand_name = Column(String(191), nullable=False)
+    manufacturer_name = Column(String(191), nullable=True)
+
+    contact_number = Column(String(50), nullable=True)
+    email = Column(String(191), nullable=True)
+    website = Column(String(255), nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
+# ============================================================
+#                        UOM (Unit of Measure)
+# ============================================================
+class UOM(TenantBase):
+    __tablename__ = "uoms"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String(191), nullable=False)
+    code = Column(String(100), nullable=True)
+    conversion_factor = Column(String(50), default="1.0")
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
+# ============================================================
+#                        TAX CODE
+# ============================================================
+class TaxCode(TenantBase):
+    __tablename__ = "tax_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    hsn_code = Column(String(191), nullable=False)
+    description = Column(Text, nullable=True)
+    gst_percentage = Column(String(50), nullable=False)
+    cgst = Column(String(50), nullable=True)
+    sgst = Column(String(50), nullable=True)
+    igst = Column(String(50), nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())

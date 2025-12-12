@@ -18,6 +18,15 @@ DB_HOST = "localhost"
 DB_PORT = "3306"
 MASTER_DB = "ims_master"
 
+# -------------------------------------------------------
+# TENANT DB CONFIG
+# -------------------------------------------------------
+TENANT_USER = DB_USER
+TENANT_PASSWORD = DB_PASSWORD
+TENANT_HOST = DB_HOST
+TENANT_PORT = DB_PORT
+TENANT_DATABASE_URL = f"mysql+pymysql://{TENANT_USER}:{urllib.parse.quote_plus(TENANT_PASSWORD)}@{TENANT_HOST}:{TENANT_PORT}/arun"
+
 DB_URL = (
     f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}"
     f"@{DB_HOST}:{DB_PORT}/{MASTER_DB}"
@@ -121,7 +130,8 @@ def get_tenant_sessionmaker(db_name: str):
 # -------------------------------------------------------
 # FINAL — TENANT SESSION (USED IN ROUTERS)
 # -------------------------------------------------------
-def get_tenant_db(tenant_db_name: str):
+def get_tenant_db(tenant_db_name: str = "arun"):
+
     """Creates tenant DB if not exists, ensures tables exist, returns session."""
     try:
         # 1️⃣ Create tenant DB if missing

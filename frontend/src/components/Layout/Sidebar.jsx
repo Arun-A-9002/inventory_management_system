@@ -23,6 +23,15 @@ export default function Sidebar() {
         { name: "Users", path: "/app/users" }
       ]
     },
+    {
+      name: "Organization Setup",
+      submenu: [
+        { name: "Organization Structure Setup", path: "/app/organization/structure" },
+        { name: "Master Data Setup", path: "/app/organization/master-data" },
+        { name: "User Access and Permission", path: "/app/organization/user-access" },
+        { name: "Inventory Rules & Policies", path: "/app/organization/inventory-rules" },
+      ],
+    },
     { name: "Reports", path: "/app/reports" },
     { name: "Settings", path: "/app/settings" },
   ];

@@ -5,11 +5,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uuid
 
+# Existing routers
 from routers import register, auth
-from utils.logger import log_error, log_audit, log_api
 from routers.department import router as department_router
 from routers.roles import router as roles_router
 from routers.users import router as users_router
+
+# NEW Organization Setup Routers
+from routers.organization.company import router as company_router
+from routers.organization.branch import router as branch_router
+from routers.organization.store import router as store_router
+from routers.organization.category import router as category_router
+from routers.organization.subcategory import router as subcategory_router
+from routers.organization.brand import router as brand_router
+from routers.organization.uom import router as uom_router
+from routers.organization.tax import router as tax_router
+
+from utils.logger import log_error, log_audit, log_api
 
 
 app = FastAPI(title="NUTRYAH IMS API")
@@ -30,11 +42,24 @@ app.add_middleware(
 # ----------------------------------------------------------
 # ROUTERS
 # ----------------------------------------------------------
+# Existing modules
 app.include_router(register.router, prefix="/api")
 app.include_router(auth.router)
 app.include_router(department_router)
 app.include_router(roles_router)
 app.include_router(users_router)
+
+# Organization Setup Modules
+app.include_router(company_router)
+app.include_router(branch_router)
+app.include_router(store_router)
+app.include_router(category_router)
+app.include_router(subcategory_router)
+app.include_router(brand_router)
+app.include_router(uom_router)
+app.include_router(tax_router)
+
+
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: API LOGGING + REQUEST ID TRACKING
 # ----------------------------------------------------------
@@ -53,7 +78,6 @@ async def log_requests(request: Request, call_next):
 
         response = await call_next(request)
 
-        # Log success response
         log_api(
             f"[REQ:{request_id}] Completed with status {response.status_code}"
         )
@@ -76,12 +100,13 @@ async def log_requests(request: Request, call_next):
 
 
 # ----------------------------------------------------------
-# HEALTH CHECK ROUTE
+# HEALTH CHECK ROUTES
 # ----------------------------------------------------------
 @app.get("/")
 def health():
     log_audit("Health check OK")
     return {"status": "running"}
+
 
 @app.get("/health/db")
 def health_db():
