@@ -40,7 +40,18 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
     log_api(f"LOGIN ATTEMPT → {req.email}")
     
     try:
-        # First check tenant users in arun database
+        # First check admin users
+        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+        
+        if user:
+            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
+            if hashed_pw == user.password_hash:
+                otp = generate_otp(req.email)
+                send_otp_email(req.email, otp)
+                log_audit(f"OTP SENT TO ADMIN {req.email}")
+                return {"message": "OTP sent to email"}
+        
+        # Then check tenant users in arun database
         from database import get_tenant_db
         from models.tenant_models import User
         from utils.auth import verify_password
@@ -63,17 +74,6 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
             return {"message": "OTP sent to email"}
         
         tenant_db.close()
-        
-        # Then check tenant admins
-        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
-        
-        if user:
-            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
-            if hashed_pw == user.password_hash:
-                otp = generate_otp(req.email)
-                send_otp_email(req.email, otp)
-                log_audit(f"OTP SENT TO ADMIN {req.email}")
-                return {"message": "OTP sent to email"}
         
         log_error(Exception("Invalid credentials"), location="Login Check")
         raise HTTPException(400, "Invalid email or password")
@@ -103,7 +103,37 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             log_error(Exception("Invalid OTP"), location="OTP Verify")
             raise HTTPException(400, "Invalid or expired OTP")
 
-        # Check tenant users first
+        # Check admin users first
+        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+        
+        if user:
+            access_token = create_access_token({
+                "sub": str(user.id),
+                "tenant_id": user.id,
+                "email": user.admin_email,
+                "org": user.organization_name,
+                "role": "admin"
+            })
+
+            # Refresh token rotation
+            raw_refresh = generate_refresh_token()
+            user.refresh_token_hash = hash_token(raw_refresh)
+            user.refresh_token_expires_at = refresh_expiry()
+            db.commit()
+
+            response.set_cookie(
+                key="refresh_token",
+                value=raw_refresh,
+                httponly=True,
+                secure=False,
+                samesite="lax",
+                max_age=7 * 24 * 3600
+            )
+
+            log_audit(f"ADMIN LOGIN SUCCESS → {req.email}")
+            return {"access_token": access_token, "token_type": "bearer"}
+        
+        # Then check tenant users
         from database import get_tenant_db
         from models.tenant_models import User
         
@@ -132,39 +162,8 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
         
         tenant_db.close()
         
-        # Check admin users
-        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
-
-        if not user:
-            log_error(Exception("User not found"), location="OTP Verify User Fetch")
-            raise HTTPException(400, "Invalid email")
-
-        access_token = create_access_token({
-            "sub": str(user.id),
-            "tenant_id": user.id,
-            "email": user.admin_email,
-            "org": user.organization_name,
-            "role": "admin"
-        })
-
-        # Refresh token rotation
-        raw_refresh = generate_refresh_token()
-        user.refresh_token_hash = hash_token(raw_refresh)
-        user.refresh_token_expires_at = refresh_expiry()
-        db.commit()
-
-        response.set_cookie(
-            key="refresh_token",
-            value=raw_refresh,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=7 * 24 * 3600
-        )
-
-        log_audit(f"ADMIN LOGIN SUCCESS → {req.email}")
-
-        return {"access_token": access_token, "token_type": "bearer"}
+        log_error(Exception("User not found"), location="OTP Verify User Fetch")
+        raise HTTPException(400, "Invalid email")
 
     except HTTPException:
         raise
