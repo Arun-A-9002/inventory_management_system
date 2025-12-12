@@ -6,32 +6,30 @@ export default function Sidebar() {
   const [openMenus, setOpenMenus] = useState({});
 
   const toggleMenu = (menuName) => {
-    setOpenMenus(prev => ({
+    setOpenMenus((prev) => ({
       ...prev,
-      [menuName]: !prev[menuName]
+      [menuName]: !prev[menuName],
     }));
   };
 
   const menu = [
     { name: "Dashboard", path: "/app/dashboard" },
-    { name: "Inventory", path: "/app/inventory" },
-    { 
-      name: "User Management", 
+
+    {
+      name: "User Management",
       submenu: [
         { name: "Department", path: "/app/department" },
         { name: "Roles", path: "/app/roles" },
-        { name: "Users", path: "/app/users" }
-      ]
-    },
-    {
-      name: "Organization Setup",
-      submenu: [
-        { name: "Organization Structure Setup", path: "/app/organization/structure" },
-        { name: "Master Data Setup", path: "/app/organization/master-data" },
-        { name: "User Access and Permission", path: "/app/organization/user-access" },
-        { name: "Inventory Rules & Policies", path: "/app/organization/inventory-rules" },
+        { name: "Users", path: "/app/users" },
       ],
     },
+
+    // ✔ FIXED — Organization Setup is now a SINGLE item
+    {
+      name: "Organization Setup",
+      path: "/app/organization",
+    },
+
     { name: "Reports", path: "/app/reports" },
     { name: "Settings", path: "/app/settings" },
   ];
@@ -43,6 +41,8 @@ export default function Sidebar() {
       <ul className="space-y-3">
         {menu.map((item) => (
           <li key={item.name}>
+            
+            {/* If menu has submenu */}
             {item.submenu ? (
               <div>
                 <button
@@ -51,6 +51,7 @@ export default function Sidebar() {
                 >
                   {item.name}
                 </button>
+
                 {openMenus[item.name] && (
                   <ul className="ml-4 mt-2 space-y-2">
                     {item.submenu.map((subItem) => (
@@ -71,6 +72,7 @@ export default function Sidebar() {
                 )}
               </div>
             ) : (
+              // Normal menu item
               <Link
                 to={item.path}
                 className={`block px-4 py-2 rounded-lg transition ${
@@ -82,6 +84,7 @@ export default function Sidebar() {
                 {item.name}
               </Link>
             )}
+
           </li>
         ))}
       </ul>
