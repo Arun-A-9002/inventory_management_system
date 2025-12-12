@@ -1,34 +1,7 @@
 // src/pages/Users.jsx
-import { useEffect, useState, useMemo, useCallback, memo } from "react";
+import { useEffect, useState } from "react";
 import api from "../api";
 import { hasPermission } from "../utils/permissions";
-
-const UserCard = memo(({ user, onEdit, onDelete }) => (
-  <div className="bg-white rounded-2xl p-4 shadow-sm border flex flex-col justify-between">
-    <div>
-      <div className="text-lg font-semibold">{user.full_name}</div>
-      <div className="text-sm text-slate-500">{user.email}</div>
-      <div className="mt-4 text-sm text-slate-500">
-        <div><span className="font-medium">Department:</span> {user.department ? user.department.name : 'No department'}</div>
-        <div className="mt-2">
-          <div className="flex gap-2 flex-wrap mt-2">{(user.roles || []).map(r => <div key={r.id} className="text-xs bg-slate-100 px-3 py-1 rounded-full">{r.name}</div>)}</div>
-        </div>
-      </div>
-    </div>
-    <div className="mt-4 flex gap-2">
-      {hasPermission("users.update") && <button onClick={()=>onEdit(user)} className="rounded-full border px-4 py-2">Edit</button>}
-      {hasPermission("users.delete") && <button onClick={()=>onDelete(user.id)} className="rounded-full border px-4 py-2 text-red-600">Delete</button>}
-    </div>
-  </div>
-));
-
-const UserGrid = memo(({ users, loading, onEdit, onDelete }) => (
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-    {loading ? <div>Loading...</div> : users.length === 0 ? <div className="col-span-3">No users</div> : users.map(u => (
-      <UserCard key={u.id} user={u} onEdit={onEdit} onDelete={onDelete} />
-    ))}
-  </div>
-));
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -45,7 +18,11 @@ export default function Users() {
   const [selectedRoles, setSelectedRoles] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
 
-  const loadAll = useCallback(async () => {
+  useEffect(() => {
+    if (hasPermission("users.view")) loadAll();
+  }, []);
+
+  async function loadAll() {
     setLoading(true);
     try {
       const [dRes, rRes, uRes] = await Promise.all([api.get("/departments"), api.get("/roles"), api.get("/users")]);
@@ -58,21 +35,15 @@ export default function Users() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    if (hasPermission("users.view")) loadAll();
-  }, [loadAll]);
+  function toggleRole(id) {
+    const copy = new Set(selectedRoles);
+    if (copy.has(id)) copy.delete(id); else copy.add(id);
+    setSelectedRoles(copy);
+  }
 
-  const toggleRole = useCallback((id) => {
-    setSelectedRoles(prev => {
-      const copy = new Set(prev);
-      if (copy.has(id)) copy.delete(id); else copy.add(id);
-      return copy;
-    });
-  }, []);
-
-  const handleCreate = useCallback(async () => {
+  async function handleCreate() {
     if (!editingId && !hasPermission("users.create")) return alert("Permission denied");
     if (editingId && !hasPermission("users.update")) return alert("Permission denied");
 
@@ -101,16 +72,16 @@ export default function Users() {
       console.error("Full error:", e);
       alert(e?.response?.data?.detail || "Save failed");
     }
-  }, [editingId, fullName, email, password, departmentId, isActive, selectedRoles, loadAll]);
+  }
 
-  const closeModal = useCallback(() => {
+  function closeModal() {
     setShowModal(false);
     setEditingId(null);
     setFullName(""); setEmail(""); setPassword("");
     setDepartmentId(null); setIsActive(true); setSelectedRoles(new Set());
-  }, []);
+  }
 
-  const startEdit = useCallback((u) => {
+  function startEdit(u) {
     if (!hasPermission("users.update")) return alert("Permission denied");
     setEditingId(u.id);
     setFullName(u.full_name);
@@ -119,9 +90,9 @@ export default function Users() {
     setIsActive(!!u.is_active);
     setSelectedRoles(new Set((u.roles || []).map(r => r.id)));
     setShowModal(true);
-  }, []);
+  }
 
-  const handleDelete = useCallback(async (id) => {
+  async function handleDelete(id) {
     if (!hasPermission("users.delete")) return alert("Permission denied");
     if (!window.confirm("Delete user?")) return;
     try {
@@ -131,7 +102,7 @@ export default function Users() {
       console.error(e);
       alert("Delete failed");
     }
-  }, [loadAll]);
+  }
 
   if (!hasPermission("users.view")) {
     return <div className="p-6 text-red-600">You do not have permission to view users.</div>;
@@ -152,7 +123,27 @@ export default function Users() {
         </div>
       </div>
 
-      <UserGrid users={users} loading={loading} onEdit={startEdit} onDelete={handleDelete} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {loading ? <div>Loading...</div> : users.length === 0 ? <div className="col-span-3">No users</div> : users.map(u => (
+          <div key={u.id} className="bg-white rounded-2xl p-4 shadow-sm border flex flex-col justify-between">
+            <div>
+              <div className="text-lg font-semibold">{u.full_name}</div>
+              <div className="text-sm text-slate-500">{u.email}</div>
+              <div className="mt-4 text-sm text-slate-500">
+                <div><span className="font-medium">Department:</span> {u.department ? u.department.name : 'No department'}</div>
+                <div className="mt-2">
+                  <div className="flex gap-2 flex-wrap mt-2">{(u.roles || []).map(r => <div key={r.id} className="text-xs bg-slate-100 px-3 py-1 rounded-full">{r.name}</div>)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              {hasPermission("users.update") && <button onClick={()=>startEdit(u)} className="rounded-full border px-4 py-2">Edit</button>}
+              {hasPermission("users.delete") && <button onClick={()=>handleDelete(u.id)} className="rounded-full border px-4 py-2 text-red-600">Delete</button>}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
@@ -166,7 +157,7 @@ export default function Users() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input placeholder="Full name" value={fullName} onChange={e=>setFullName(e.target.value)} className="rounded-lg border px-4 py-2" />
               <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} className="rounded-lg border px-4 py-2" />
-              {!editingId && <input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} className="rounded-lg border px-4 py-2" />}
+              {!editingId && <input placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} className="rounded-lg border px-4 py-2" />}
               <select value={departmentId||''} onChange={e=>setDepartmentId(e.target.value?Number(e.target.value):null)} className="rounded-lg border px-4 py-2">
                 <option value="">No department</option>
                 {departments.map(d=> <option key={d.id} value={d.id}>{d.name}</option>)}
