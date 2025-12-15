@@ -371,3 +371,84 @@ class TaxCodeResponse(TaxCodeBase):
     class Config:
         orm_mode = True
 
+
+
+# =========================================================
+# GLOBAL RULE SCHEMAS
+# =========================================================
+class InventoryGlobalRuleCreate(BaseModel):
+    min_stock_percent: float
+    max_stock_percent: float
+    safety_stock_formula: str
+    reorder_method: str
+    allow_negative_stock: bool
+    issue_method: str
+
+
+class InventoryGlobalRuleResponse(InventoryGlobalRuleCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# =========================================================
+# ITEM REORDER RULE SCHEMAS
+# =========================================================
+class ItemReorderRuleCreate(BaseModel):
+    item_id: int
+    min_level: float
+    max_level: float
+    reorder_level: float
+    safety_stock: float
+    auto_po: bool = False
+    remarks: Optional[str]
+
+
+class ItemReorderRuleResponse(ItemReorderRuleCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# =========================================================
+# LEAD TIME SCHEMAS
+# =========================================================
+class LeadTimeCreate(BaseModel):
+    item_id: int
+    vendor_id: int
+    avg_lead_time: int
+    min_lead_time: int
+    max_lead_time: int
+
+
+class LeadTimeResponse(LeadTimeCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# =========================================================
+# ALERT RULE SCHEMAS
+# =========================================================
+class InventoryAlertRuleCreate(BaseModel):
+    alert_method: str
+    alert_trigger_percent: float
+    dashboard_priority: str
+
+    notify_store_keeper: bool
+    notify_purchase_manager: bool
+    notify_department_head: bool
+    notify_admin: bool
+
+    auto_pr: bool
+    auto_po: bool
+
+
+class InventoryAlertRuleResponse(InventoryAlertRuleCreate):
+    id: int
+
+    class Config:
+        from_attributes = True

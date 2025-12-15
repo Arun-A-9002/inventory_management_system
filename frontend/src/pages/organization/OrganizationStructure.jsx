@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Company from './Company';
 import Branch from './Branch';
 import Store from './Store';
+import DepartmentSetup from './DepartmentSetup';
 
 export default function OrganizationStructure() {
   const [activeTab, setActiveTab] = useState('company');
@@ -9,7 +10,7 @@ export default function OrganizationStructure() {
   const tabs = [
     { id: 'company', label: 'Company', component: <Company /> },
     { id: 'branch', label: 'Branch', component: <Branch /> },
-    { id: 'department', label: 'Department', component: <div>Department Component</div> },
+    { id: 'department', label: 'Department', component: <DepartmentSetup /> },
     { id: 'store', label: 'Store', component: <Store /> },
   ];
 

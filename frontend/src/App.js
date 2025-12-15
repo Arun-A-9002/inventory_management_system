@@ -17,6 +17,7 @@ import MasterData from "./pages/organization/MasterData";
 import UserAccess from "./pages/organization/UserAccess";
 import InventoryRules from "./pages/organization/InventoryRules";
 
+
 function App() {
   return (
     <BrowserRouter>

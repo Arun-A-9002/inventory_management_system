@@ -1,6 +1,6 @@
 # ------------------ Department Model ------------------
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -272,3 +272,82 @@ class TaxCode(TenantBase):
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+
+
+
+# =========================================================
+# GLOBAL INVENTORY RULES
+# =========================================================
+class InventoryGlobalRule(TenantBase):
+    __tablename__ = "inventory_global_rules"
+
+    id = Column(Integer, primary_key=True)
+    min_stock_percent = Column(Float, nullable=False)
+    max_stock_percent = Column(Float, nullable=False)
+    safety_stock_formula = Column(String(255), nullable=False)
+    reorder_method = Column(String(50), nullable=False)
+    allow_negative_stock = Column(Boolean, default=False)
+    issue_method = Column(String(20), default="FIFO")
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
+# =========================================================
+# ITEM LEVEL REORDER RULES
+# =========================================================
+class ItemReorderRule(TenantBase):
+    __tablename__ = "item_reorder_rules"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, nullable=False)
+
+    min_level = Column(Float, nullable=False)
+    max_level = Column(Float, nullable=False)
+    reorder_level = Column(Float, nullable=False)
+    safety_stock = Column(Float, nullable=False)
+
+    auto_po = Column(Boolean, default=False)
+    remarks = Column(Text)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# =========================================================
+# LEAD TIME SETTINGS
+# =========================================================
+class ItemVendorLeadTime(TenantBase):
+    __tablename__ = "item_vendor_lead_times"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, nullable=False)
+    vendor_id = Column(Integer, nullable=False)
+
+    avg_lead_time = Column(Integer, nullable=False)
+    min_lead_time = Column(Integer, nullable=False)
+    max_lead_time = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# =========================================================
+# ALERT & NOTIFICATION RULES
+# =========================================================
+class InventoryAlertRule(TenantBase):
+    __tablename__ = "inventory_alert_rules"
+
+    id = Column(Integer, primary_key=True)
+
+    alert_method = Column(String(50), nullable=False)
+    alert_trigger_percent = Column(Float, nullable=False)
+    dashboard_priority = Column(String(20), nullable=False)
+
+    notify_store_keeper = Column(Boolean, default=False)
+    notify_purchase_manager = Column(Boolean, default=False)
+    notify_department_head = Column(Boolean, default=False)
+    notify_admin = Column(Boolean, default=False)
+
+    auto_pr = Column(Boolean, default=False)
+    auto_po = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, server_default=func.now())

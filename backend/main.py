@@ -20,6 +20,8 @@ from routers.organization.subcategory import router as subcategory_router
 from routers.organization.brand import router as brand_router
 from routers.organization.uom import router as uom_router
 from routers.organization.tax import router as tax_router
+from routers.organization.inventory_rules import router as inventory_rules_router
+
 
 from utils.logger import log_error, log_audit, log_api
 
@@ -58,7 +60,7 @@ app.include_router(subcategory_router)
 app.include_router(brand_router)
 app.include_router(uom_router)
 app.include_router(tax_router)
-
+app.include_router(inventory_rules_router)
 
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: API LOGGING + REQUEST ID TRACKING
