@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_tenant_db
 
@@ -44,7 +44,7 @@ def create_store(data: StoreCreate, db: Session = Depends(get_tenant_db)):
 # --------------------------
 @router.get("/", response_model=list[StoreResponse])
 def list_stores(db: Session = Depends(get_tenant_db)):
-    return db.query(Store).all()
+    return db.query(Store).options(joinedload(Store.branch)).all()
 
 
 # --------------------------

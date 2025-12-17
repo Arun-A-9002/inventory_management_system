@@ -192,6 +192,7 @@ export default function Register() {
         body: JSON.stringify(form),
       });
 
+      // eslint-disable-next-line no-unused-vars
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {

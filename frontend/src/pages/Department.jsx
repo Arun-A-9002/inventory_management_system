@@ -14,6 +14,7 @@ export default function Department() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
+  // eslint-disable-next-line no-unused-vars
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
 

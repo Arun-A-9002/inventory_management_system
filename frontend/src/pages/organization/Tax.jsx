@@ -9,9 +9,9 @@ export default function Tax() {
     hsn_code: "",
     description: "",
     gst_percentage: "",
-    cgst_percentage: "",
-    sgst_percentage: "",
-    igst_percentage: ""
+    cgst: "",
+    sgst: "",
+    igst: ""
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -42,18 +42,18 @@ export default function Tax() {
       await api.post("/tax/", {
         ...form,
         gst_percentage: Number(form.gst_percentage),
-        cgst_percentage: form.cgst_percentage ? Number(form.cgst_percentage) : null,
-        sgst_percentage: form.sgst_percentage ? Number(form.sgst_percentage) : null,
-        igst_percentage: form.igst_percentage ? Number(form.igst_percentage) : null,
+        cgst: form.cgst ? Number(form.cgst) : null,
+        sgst: form.sgst ? Number(form.sgst) : null,
+        igst: form.igst ? Number(form.igst) : null,
       });
 
       setForm({
         hsn_code: "",
         description: "",
         gst_percentage: "",
-        cgst_percentage: "",
-        sgst_percentage: "",
-        igst_percentage: ""
+        cgst: "",
+        sgst: "",
+        igst: ""
       });
 
       loadTax();
@@ -69,9 +69,9 @@ export default function Tax() {
     setEditForm({
       ...t,
       gst_percentage: t.gst_percentage || "",
-      cgst_percentage: t.cgst_percentage || "",
-      sgst_percentage: t.sgst_percentage || "",
-      igst_percentage: t.igst_percentage || "",
+      cgst: t.cgst || "",
+      sgst: t.sgst || "",
+      igst: t.igst || "",
     });
   };
 
@@ -82,9 +82,9 @@ export default function Tax() {
       await api.put(`/tax/${editingId}`, {
         ...editForm,
         gst_percentage: Number(editForm.gst_percentage),
-        cgst_percentage: editForm.cgst_percentage ? Number(editForm.cgst_percentage) : null,
-        sgst_percentage: editForm.sgst_percentage ? Number(editForm.sgst_percentage) : null,
-        igst_percentage: editForm.igst_percentage ? Number(editForm.igst_percentage) : null,
+        cgst: editForm.cgst ? Number(editForm.cgst) : null,
+        sgst: editForm.sgst ? Number(editForm.sgst) : null,
+        igst: editForm.igst ? Number(editForm.igst) : null,
       });
 
       setEditingId(null);
@@ -131,7 +131,7 @@ export default function Tax() {
               <>
                 <h2 className="text-xl font-semibold mb-3">Add Tax Code</h2>
 
-                {["hsn_code", "description", "gst_percentage", "cgst_percentage", "sgst_percentage", "igst_percentage"].map((key) => (
+                {["hsn_code", "description", "gst_percentage", "cgst", "sgst", "igst"].map((key) => (
                   <div key={key} className="mb-3">
                     <label className="text-sm font-medium">
                       {key.replace("_", " ").toUpperCase()}
@@ -157,7 +157,7 @@ export default function Tax() {
                 {/* EDIT MODE */}
                 <h2 className="text-xl font-semibold mb-3">Edit Tax Code</h2>
 
-                {["hsn_code", "description", "gst_percentage", "cgst_percentage", "sgst_percentage", "igst_percentage"].map((key) => (
+                {["hsn_code", "description", "gst_percentage", "cgst", "sgst", "igst"].map((key) => (
                   <div key={key} className="mb-3">
                     <label className="text-sm font-medium">
                       {key.replace("_", " ").toUpperCase()}
@@ -229,9 +229,9 @@ export default function Tax() {
                         <td className="py-3">{idx + 1}</td>
                         <td className="py-3">{t.hsn_code}</td>
                         <td className="py-3">{t.gst_percentage}</td>
-                        <td className="py-3">{t.cgst_percentage || "-"}</td>
-                        <td className="py-3">{t.sgst_percentage || "-"}</td>
-                        <td className="py-3">{t.igst_percentage || "-"}</td>
+                        <td className="py-3">{t.cgst || "-"}</td>
+                        <td className="py-3">{t.sgst || "-"}</td>
+                        <td className="py-3">{t.igst || "-"}</td>
 
                         <td className="py-3">
                           <div className="flex gap-2">

@@ -5,13 +5,13 @@ import { Outlet } from "react-router-dom";
 
 export default function MainLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100">
 
       {/* LEFT SIDEBAR */}
       <Sidebar />
 
       {/* RIGHT SIDE CONTENT */}
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 h-full">
 
         {/* HEADER */}
         <HeaderFooter type="header" />

@@ -17,6 +17,11 @@ import MasterData from "./pages/organization/MasterData";
 import UserAccess from "./pages/organization/UserAccess";
 import InventoryRules from "./pages/organization/InventoryRules";
 
+//items
+import Item from "./pages/items/Item";
+
+//vendors
+import Vendor from "./pages/vendors/vendor";
 
 function App() {
   return (
@@ -48,7 +53,10 @@ function App() {
           <Route path="organization/master-data" element={<MasterData />} />
           <Route path="organization/user-access" element={<UserAccess />} />
           <Route path="organization/inventory-rules" element={<InventoryRules />} />
-
+          
+          <Route path="items" element={<Item />} />
+          {/* Vendor Management */}
+          <Route path="vendor" element={<Vendor />} />
         </Route>
 
       </Routes>

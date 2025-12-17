@@ -1,6 +1,7 @@
 # ------------------ Department Model ------------------
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float,Date,Enum
+import enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -351,3 +352,149 @@ class InventoryAlertRule(TenantBase):
     auto_po = Column(Boolean, default=False)
 
     created_at = Column(DateTime, server_default=func.now())
+
+class Item(TenantBase):
+    __tablename__ = "items"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # 1. Item Basic Information
+    name = Column(String(150), nullable=False)
+    item_code = Column(String(50), unique=True, nullable=False)
+    description = Column(String(255))
+
+    # 2. Classification & Properties
+    category = Column(String(100))
+    sub_category = Column(String(100))
+    brand = Column(String(100))
+    manufacturer = Column(String(150))
+
+    # 3. UOM & Inventory Settings
+    uom = Column(String(50))
+    min_stock = Column(Integer, default=0)
+    max_stock = Column(Integer, default=0)
+    reorder_level = Column(Integer, default=0)
+
+    # 4. Batch & Expiry Management
+    is_batch_managed = Column(Boolean, default=False)
+    has_expiry = Column(Boolean, default=False)
+    expiry_date = Column(Date, nullable=True)
+
+    # 5. Barcode / QR
+    barcode = Column(String(100), unique=True, nullable=True)
+    qr_code = Column(String(100), unique=True, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+# ================= ENUMS =================
+class VendorVerificationStatus(str, enum.Enum):
+    pending = "Pending"
+    verified = "Verified"
+    rejected = "Rejected"
+
+class VendorApprovalStatus(str, enum.Enum):
+    approved = "Approved"
+    pending = "Pending"
+    rejected = "Rejected"
+
+class VendorRiskCategory(str, enum.Enum):
+    low = "Low"
+    medium = "Medium"
+    high = "High"
+
+# ================= VENDOR =================
+class Vendor(TenantBase):
+    __tablename__ = "vendors"
+
+    id = Column(Integer, primary_key=True)
+    vendor_name = Column(String(150), nullable=False)
+    vendor_code = Column(String(50), unique=True, index=True)
+
+    contact_person = Column(String(100))
+    phone = Column(String(20), nullable=False)
+    email = Column(String(100), nullable=False)
+
+    address = Column(Text)
+    country = Column(String(50))
+    state = Column(String(50))
+    city = Column(String(50))
+
+    pan_number = Column(String(20))
+    gst_number = Column(String(20))
+
+    verification_status = Column(
+        Enum(VendorVerificationStatus),
+        default=VendorVerificationStatus.pending
+    )
+
+# ================= QUALIFICATION / AVL =================
+class VendorQualification(TenantBase):
+    __tablename__ = "vendor_qualifications"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"))
+
+    approval_status = Column(
+        Enum(VendorApprovalStatus),
+        default=VendorApprovalStatus.pending
+    )
+
+    category = Column(String(100))
+    risk_category = Column(Enum(VendorRiskCategory))
+    audit_status = Column(String(50))
+    notes = Column(Text)
+
+# ================= CONTRACT =================
+class VendorContract(TenantBase):
+    __tablename__ = "vendor_contracts"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"))
+
+    contract_type = Column(String(50))
+    start_date = Column(Date)
+    end_date = Column(Date)
+
+# ================= CONTRACT ITEMS =================
+class VendorContractItem(TenantBase):
+    __tablename__ = "vendor_contract_items"
+
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(Integer, ForeignKey("vendor_contracts.id"))
+
+    item_name = Column(String(100))
+    contract_price = Column(Float)
+    currency = Column(String(10))
+    moq = Column(Integer)
+
+# ================= PERFORMANCE =================
+class VendorPerformance(TenantBase):
+    __tablename__ = "vendor_performance"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"))
+
+    delivery_quality = Column(Float)
+    delivery_timeliness = Column(Float)
+    response_time = Column(Float)
+    pricing_competitiveness = Column(Float)
+    compliance = Column(Float)
+    overall_rating = Column(Float)
+
+    comments = Column(Text)
+
+# ================= LEAD TIME =================
+class VendorLeadTime(TenantBase):
+    __tablename__ = "vendor_lead_time"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"))
+
+    item_name = Column(String(100))
+    avg_days = Column(Integer)
+    min_days = Column(Integer)
+    max_days = Column(Integer)

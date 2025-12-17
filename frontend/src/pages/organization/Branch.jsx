@@ -6,6 +6,7 @@ export default function Branch() {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
+    company_id: "",
     name: "",
     code: "",
     address: "",
@@ -15,12 +16,24 @@ export default function Branch() {
     pincode: ""
   });
 
+  const [companies, setCompanies] = useState([]);
+
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
     loadBranches();
+    loadCompanies();
   }, []);
+
+  const loadCompanies = async () => {
+    try {
+      const res = await api.get("/company/");
+      setCompanies(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadBranches = async () => {
     try {
@@ -37,10 +50,16 @@ export default function Branch() {
 
   const handleCreate = async () => {
     if (!form.name.trim()) return alert("Branch name is required");
+    if (!form.company_id) return alert("Company is required");
 
     try {
-      await api.post("/branch/", form);
+      const payload = {
+        ...form,
+        company_id: parseInt(form.company_id)
+      };
+      await api.post("/branch/", payload);
       setForm({
+        company_id: "",
         name: "",
         code: "",
         address: "",
@@ -52,7 +71,8 @@ export default function Branch() {
       loadBranches();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.detail || "Create failed");
+      const errorMsg = err?.response?.data?.detail || JSON.stringify(err?.response?.data) || "Create failed";
+      alert(errorMsg);
     }
   };
 
@@ -112,13 +132,30 @@ export default function Branch() {
                     <label className="block text-sm font-medium text-slate-700">
                       {key.replace("_", " ").toUpperCase()}
                     </label>
-                    <input
-                      value={form[key]}
-                      onChange={(e) =>
-                        setForm({ ...form, [key]: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-lg border px-4 py-2"
-                    />
+                    {key === "company_id" ? (
+                      <select
+                        value={form[key]}
+                        onChange={(e) =>
+                          setForm({ ...form, [key]: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      >
+                        <option value="">Select Company</option>
+                        {companies.map((company) => (
+                          <option key={company.id} value={company.id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={form[key]}
+                        onChange={(e) =>
+                          setForm({ ...form, [key]: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      />
+                    )}
                   </div>
                 ))}
 

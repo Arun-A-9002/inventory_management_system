@@ -22,6 +22,12 @@ from routers.organization.uom import router as uom_router
 from routers.organization.tax import router as tax_router
 from routers.organization.inventory_rules import router as inventory_rules_router
 
+#items router
+from routers.items.item import router as item_router
+
+#vendor router
+from routers.vendor.vendor import router as vendor_router
+
 
 from utils.logger import log_error, log_audit, log_api
 
@@ -61,6 +67,12 @@ app.include_router(brand_router)
 app.include_router(uom_router)
 app.include_router(tax_router)
 app.include_router(inventory_rules_router)
+
+#item module
+app.include_router(item_router)
+
+#vendor module
+app.include_router(vendor_router)
 
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: API LOGGING + REQUEST ID TRACKING

@@ -10,7 +10,7 @@ export default function Store() {
     name: "",
     store_type: "",
     branch_id: "",
-    is_central_store: false,
+    is_central: false,
     description: ""
   });
 
@@ -58,7 +58,7 @@ export default function Store() {
         name: "",
         store_type: "",
         branch_id: "",
-        is_central_store: false,
+        is_central: false,
         description: ""
       });
 
@@ -162,9 +162,9 @@ export default function Store() {
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     type="checkbox"
-                    checked={form.is_central_store}
+                    checked={form.is_central}
                     onChange={(e) =>
-                      setForm({ ...form, is_central_store: e.target.checked })
+                      setForm({ ...form, is_central: e.target.checked })
                     }
                   />
                   <label>Is Central Store?</label>
@@ -232,11 +232,11 @@ export default function Store() {
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     type="checkbox"
-                    checked={editForm.is_central_store}
+                    checked={editForm.is_central}
                     onChange={(e) =>
                       setEditForm({
                         ...editForm,
-                        is_central_store: e.target.checked,
+                        is_central: e.target.checked,
                       })
                     }
                   />
@@ -305,7 +305,7 @@ export default function Store() {
                         <td className="py-3">{s.name}</td>
                         <td className="py-3">{s.store_type}</td>
                         <td className="py-3">{s.branch?.name || "-"}</td>
-                        <td className="py-3">{s.is_central_store ? "Yes" : "No"}</td>
+                        <td className="py-3">{s.is_central ? "Yes" : "No"}</td>
 
                         <td className="py-3">
                           <div className="flex gap-2">

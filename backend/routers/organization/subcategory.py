@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_tenant_db
 
@@ -44,7 +44,7 @@ def create_subcategory(data: SubCategoryCreate, db: Session = Depends(get_tenant
 # --------------------------
 @router.get("/", response_model=list[SubCategoryResponse])
 def list_subcategories(db: Session = Depends(get_tenant_db)):
-    return db.query(SubCategory).all()
+    return db.query(SubCategory).options(joinedload(SubCategory.category)).all()
 
 
 # --------------------------
@@ -52,7 +52,7 @@ def list_subcategories(db: Session = Depends(get_tenant_db)):
 # --------------------------
 @router.get("/{sub_id}", response_model=SubCategoryResponse)
 def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db)):
-    sub = db.query(SubCategory).filter(SubCategory.id == sub_id).first()
+    sub = db.query(SubCategory).options(joinedload(SubCategory.category)).filter(SubCategory.id == sub_id).first()
     if not sub:
         raise HTTPException(404, "SubCategory not found")
     return sub

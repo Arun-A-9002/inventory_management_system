@@ -1,3 +1,4 @@
+// src/pages/Roles.jsx
 import { useEffect, useState } from "react";
 import api from "../api";
 import { hasPermission } from "../utils/permissions";
@@ -7,25 +8,20 @@ export default function Roles() {
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // create form
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedPerms, setSelectedPerms] = useState(new Set());
 
-  // edit
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSelectedPerms, setEditSelectedPerms] = useState(new Set());
 
-  // UI controls
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    if (hasPermission("roles.view")) {
-      loadAll();
-    }
+    if (hasPermission("roles.view")) loadAll();
   }, []);
 
   async function loadAll() {
@@ -42,22 +38,22 @@ export default function Roles() {
     }
   }
 
-  const togglePerm = (id, set) => {
-    const copy = new Set(set);
+  function toggleSet(prev, id) {
+    const copy = new Set(prev);
     if (copy.has(id)) copy.delete(id); else copy.add(id);
     return copy;
-  };
+  }
 
   const handleCreate = async () => {
     if (!hasPermission("roles.create")) return alert("Permission denied");
-    if (!name.trim()) return alert("Role name is required");
+    if (!name.trim()) return alert("Role name required");
+
     try {
-      const payload = { name: name.trim(), description: description.trim(), permission_ids: Array.from(selectedPerms) };
-      await api.post("/roles", payload);
+      await api.post("/roles", { name: name.trim(), description: description.trim(), permission_ids: Array.from(selectedPerms) });
       setName(""); setDescription(""); setSelectedPerms(new Set());
       await loadAll();
     } catch (e) {
-      console.error("create role failed", e);
+      console.error(e);
       alert(e?.response?.data?.detail || "Create failed");
     }
   };
@@ -70,24 +66,15 @@ export default function Roles() {
     setEditSelectedPerms(new Set((role.permissions || []).map(p => p.id)));
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditName(""); setEditDescription(""); setEditSelectedPerms(new Set());
-  };
-
   const handleUpdate = async () => {
     if (!hasPermission("roles.update")) return alert("Permission denied");
-    if (!editName.trim()) return alert("Role name required");
+
     try {
-      await api.put(`/roles/${editingId}`, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        permission_ids: Array.from(editSelectedPerms),
-      });
-      cancelEdit();
+      await api.put(`/roles/${editingId}`, { name: editName.trim(), description: editDescription.trim(), permission_ids: Array.from(editSelectedPerms) });
+      setEditingId(null);
       await loadAll();
     } catch (e) {
-      console.error("update failed", e);
+      console.error(e);
       alert(e?.response?.data?.detail || "Update failed");
     }
   };
@@ -99,15 +86,14 @@ export default function Roles() {
       await api.delete(`/roles/${id}`);
       await loadAll();
     } catch (e) {
-      console.error("delete failed", e);
+      console.error(e);
       alert("Delete failed");
     }
   };
 
-  // filtering
   const filtered = roles.filter(r => {
-    if (filter === "with-perms" && (!r.permissions || r.permissions.length === 0)) return false;
-    if (filter === "no-perms" && (r.permissions && r.permissions.length > 0)) return false;
+    if (filter === "with-perms") return r.permissions && r.permissions.length > 0;
+    if (filter === "no-perms") return !r.permissions || r.permissions.length === 0;
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     return r.name.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q);
@@ -119,7 +105,6 @@ export default function Roles() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
-      {/* header */}
       <div className="mb-6">
         <div className="rounded-2xl bg-gradient-to-r from-emerald-600 to-sky-500 p-6 text-white shadow-md">
           <div className="flex items-center justify-between">
@@ -138,52 +123,56 @@ export default function Roles() {
         </div>
       </div>
 
-      {/* content */}
       <div className="grid grid-cols-12 gap-6">
-        {/* left create/edit */}
+        {/* create/edit card */}
         <div className="col-span-12 lg:col-span-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border">
-            <h2 className="text-xl font-semibold mb-3">{editingId ? "Edit role" : "Create role"}</h2>
-            <label className="block text-sm font-medium text-slate-700">Role name *</label>
-            <input value={editingId ? editName : name} onChange={(e) => editingId ? setEditName(e.target.value) : setName(e.target.value)} className="mt-2 mb-3 w-full rounded-lg border px-4 py-2" placeholder="e.g., OPD Doctor" />
+            {hasPermission("roles.create") ? (
+              <>
+                <h2 className="text-xl font-semibold mb-3">{editingId ? "Edit role" : "Create role"}</h2>
+                <label className="block text-sm font-medium text-slate-700">Role name *</label>
+                <input value={editingId ? editName : name} onChange={(e)=> editingId ? setEditName(e.target.value) : setName(e.target.value)} className="mt-2 mb-3 w-full rounded-lg border px-4 py-2" placeholder="e.g., OPD Doctor" />
 
-            <label className="block text-sm font-medium text-slate-700">Description (optional)</label>
-            <textarea value={editingId ? editDescription : description} onChange={(e) => editingId ? setEditDescription(e.target.value) : setDescription(e.target.value)} className="mt-2 mb-3 w-full rounded-lg border px-4 py-2" rows={3} />
+                <label className="block text-sm font-medium text-slate-700">Description (optional)</label>
+                <textarea value={editingId ? editDescription : description} onChange={(e)=> editingId ? setEditDescription(e.target.value) : setDescription(e.target.value)} className="mt-2 mb-3 w-full rounded-lg border px-4 py-2" rows={3} />
 
-            <div className="text-sm font-medium mb-2">Permissions <span className="text-xs text-slate-400">({permissions.length} total)</span></div>
+                <div className="text-sm font-medium mb-2">Permissions <span className="text-xs text-slate-400">({permissions.length} total)</span></div>
+                <div className="h-64 overflow-auto border rounded-md p-3 bg-slate-50">
+                  {permissions.map(p => {
+                    const checked = editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id);
+                    return (
+                      <label key={p.id} className="flex items-start gap-3 p-2 rounded hover:bg-white/50">
+                        <input type="checkbox" checked={checked} onChange={() => {
+                          if (editingId) setEditSelectedPerms(prev => toggleSet(prev, p.id));
+                          else setSelectedPerms(prev => toggleSet(prev, p.id));
+                        }} />
+                        <div>
+                          <div className="font-medium">{p.label}</div>
+                          <div className="text-xs text-slate-400">{p.name}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
 
-            <div className="h-64 overflow-auto border rounded-md p-3 bg-slate-50">
-              {permissions.map((p) => {
-                const checked = editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id);
-                return (
-                  <label key={p.id} className="flex items-start gap-3 p-2 rounded hover:bg-white/50">
-                    <input type="checkbox" checked={checked} onChange={() => {
-                      if (editingId) setEditSelectedPerms(prev => toggleSet(prev, p.id));
-                      else setSelectedPerms(prev => toggleSet(prev, p.id));
-                    }} />
-                    <div>
-                      <div className="font-medium">{p.label}</div>
-                      <div className="text-xs text-slate-400">{p.name}</div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              {!editingId ? (
-                hasPermission("roles.create") && <button onClick={handleCreate} className="rounded-full bg-emerald-600 text-white px-5 py-2">Create role</button>
-              ) : (
-                <>
-                  <button onClick={handleUpdate} className="rounded-full bg-sky-600 text-white px-4 py-2">Save</button>
-                  <button onClick={cancelEdit} className="rounded-full border px-4 py-2">Cancel</button>
-                </>
-              )}
-            </div>
+                <div className="mt-4 flex gap-2">
+                  {!editingId ? (
+                    <button onClick={handleCreate} className="rounded-full bg-emerald-600 text-white px-5 py-2">Create role</button>
+                  ) : (
+                    <>
+                      <button onClick={handleUpdate} className="rounded-full bg-sky-600 text-white px-4 py-2">Save</button>
+                      <button onClick={()=>{ setEditingId(null); }} className="rounded-full border px-4 py-2">Cancel</button>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500">You do not have permission to create or edit roles.</div>
+            )}
           </div>
         </div>
 
-        {/* right list */}
+        {/* list */}
         <div className="col-span-12 lg:col-span-8">
           <div className="bg-white rounded-2xl p-6 shadow-sm border">
             <div className="flex items-start justify-between">
@@ -195,11 +184,6 @@ export default function Roles() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center border rounded-full px-3 py-1">
                   <input placeholder="Search by role name / description" value={query} onChange={(e)=>setQuery(e.target.value)} className="bg-transparent outline-none px-2 text-sm" />
-                </div>
-                <div className="hidden md:flex items-center gap-2 bg-slate-100 rounded-full px-2 py-1">
-                  <button onClick={() => setFilter("all")} className={`px-3 py-1 rounded-full ${filter === "all" ? "bg-emerald-600 text-white" : "text-slate-700"}`}>All</button>
-                  <button onClick={() => setFilter("with-perms")} className={`px-3 py-1 rounded-full ${filter === "with-perms" ? "bg-emerald-600 text-white" : "text-slate-700"}`}>With permissions</button>
-                  <button onClick={() => setFilter("no-perms")} className={`px-3 py-1 rounded-full ${filter === "no-perms" ? "bg-emerald-600 text-white" : "text-slate-700"}`}>No permissions</button>
                 </div>
               </div>
             </div>
@@ -227,13 +211,11 @@ export default function Roles() {
                         <td className="py-3">{idx+1}</td>
                         <td className="py-3 font-medium">{r.name}</td>
                         <td className="py-3">{r.description || "—"}</td>
-                        <td className="py-3">
-                          <span className="inline-block bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm">{r.permissions?.length || 0} permissions</span>
-                        </td>
+                        <td className="py-3"><span className="inline-block bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm">{r.permissions?.length || 0} permissions</span></td>
                         <td className="py-3">
                           <div className="flex gap-2">
-                            {hasPermission("roles.update") && <button onClick={() => startEdit(r)} className="rounded-full px-3 py-1 bg-slate-900 text-white">Edit</button>}
-                            {hasPermission("roles.delete") && <button onClick={() => handleDelete(r.id)} className="rounded-full px-3 py-1 bg-red-500 text-white">Delete</button>}
+                            {hasPermission("roles.update") && <button onClick={()=>startEdit(r)} className="rounded-full px-3 py-1 bg-slate-900 text-white">Edit</button>}
+                            {hasPermission("roles.delete") && <button onClick={()=>handleDelete(r.id)} className="rounded-full px-3 py-1 bg-red-500 text-white">Delete</button>}
                           </div>
                         </td>
                       </tr>
@@ -249,11 +231,4 @@ export default function Roles() {
       </div>
     </div>
   );
-
-  // helper for toggling sets
-  function toggleSet(prev, id) {
-    const copy = new Set(prev);
-    if (copy.has(id)) copy.delete(id); else copy.add(id);
-    return copy;
-  }
 }

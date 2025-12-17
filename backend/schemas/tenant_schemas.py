@@ -2,7 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import datetime,date
+
 
 
 class DepartmentBase(BaseModel):
@@ -204,11 +205,21 @@ class StoreUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class BranchBasic(BaseModel):
+    id: int
+    name: str
+    code: Optional[str] = None
+    city: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
 class StoreResponse(StoreBase):
     id: int
     is_active: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    branch: Optional[BranchBasic] = None
 
     class Config:
         orm_mode = True
@@ -267,6 +278,7 @@ class SubCategoryResponse(SubCategoryBase):
     is_active: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    category: Optional[CategoryResponse] = None
 
     class Config:
         orm_mode = True
@@ -452,3 +464,130 @@ class InventoryAlertRuleResponse(InventoryAlertRuleCreate):
 
     class Config:
         from_attributes = True
+
+
+
+# ---------------- ITEM MASTER ----------------
+
+class ItemBase(BaseModel):
+    name: str
+    item_code: str
+    description: Optional[str] = None
+
+    category: Optional[str] = None
+    sub_category: Optional[str] = None
+    brand: Optional[str] = None
+    manufacturer: Optional[str] = None
+
+    uom: Optional[str] = None
+    min_stock: Optional[int] = 0
+    max_stock: Optional[int] = 0
+    reorder_level: Optional[int] = 0
+
+    is_batch_managed: Optional[bool] = False
+    has_expiry: Optional[bool] = False
+    expiry_date: Optional[date] = None
+
+    barcode: Optional[str] = None
+    qr_code: Optional[str] = None
+
+
+class ItemCreate(ItemBase):
+    pass
+
+
+class ItemUpdate(BaseModel):
+    name: Optional[str]
+    description: Optional[str]
+
+    category: Optional[str]
+    sub_category: Optional[str]
+    brand: Optional[str]
+    manufacturer: Optional[str]
+
+    uom: Optional[str]
+    min_stock: Optional[int]
+    max_stock: Optional[int]
+    reorder_level: Optional[int]
+
+    is_batch_managed: Optional[bool]
+    has_expiry: Optional[bool]
+    expiry_date: Optional[date]
+
+    barcode: Optional[str]
+    qr_code: Optional[str]
+    is_active: Optional[bool]
+
+
+class ItemResponse(ItemBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+
+# ================= VENDOR =================
+class VendorCreate(BaseModel):
+    vendor_name: str
+    contact_person: Optional[str]
+    phone: str
+    email: str
+    address: Optional[str]
+    country: str
+    state: Optional[str]
+    city: Optional[str]
+    pan_number: Optional[str]
+    gst_number: Optional[str]
+
+class VendorResponse(VendorCreate):
+    id: int
+    vendor_code: str
+    verification_status: str
+
+    class Config:
+        orm_mode = True
+
+# ================= QUALIFICATION =================
+class VendorQualificationCreate(BaseModel):
+    vendor_id: int
+    approval_status: str
+    category: str
+    risk_category: str
+    audit_status: str
+    notes: Optional[str]
+
+# ================= CONTRACT =================
+class VendorContractCreate(BaseModel):
+    vendor_id: int
+    contract_type: str
+    start_date: date
+    end_date: date
+
+class VendorContractItemCreate(BaseModel):
+    contract_id: int
+    item_name: str
+    contract_price: float
+    currency: str
+    moq: int
+
+# ================= PERFORMANCE =================
+class VendorPerformanceCreate(BaseModel):
+    vendor_id: int
+    delivery_quality: float
+    delivery_timeliness: float
+    response_time: float
+    pricing_competitiveness: float
+    compliance: float
+    overall_rating: float
+    comments: Optional[str]
+
+# ================= LEAD TIME =================
+class VendorLeadTimeCreate(BaseModel):
+    vendor_id: int
+    item_name: str
+    avg_days: int
+    min_days: int
+    max_days: int
