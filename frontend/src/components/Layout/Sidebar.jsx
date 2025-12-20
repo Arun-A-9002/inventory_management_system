@@ -35,12 +35,12 @@ export default function Sidebar() {
 
     { name: "Item Master", path: "/app/items" },
 
-    // ✅ NEW — VENDOR MANAGEMENT
-    {
-      name: "Vendor Management",
-      path: "/app/vendor"
-    }
+    { name: "Vendor Management", path: "/app/vendor" },
 
+    { name: "Purchase Management", path: "/app/purchase-management" },
+
+    // ✅ SINGLE PAGE GRN (NO SUBMENU)
+    { name: "Goods Receipt & Inspection", path: "/app/grn" },
   ];
 
   return (
@@ -50,7 +50,6 @@ export default function Sidebar() {
       <ul className="space-y-3">
         {menu.map((item) => (
           <li key={item.name}>
-            {/* Menu with submenu */}
             {item.submenu ? (
               <div>
                 <button
@@ -80,7 +79,6 @@ export default function Sidebar() {
                 )}
               </div>
             ) : (
-              // Menu without submenu
               <Link
                 to={item.path}
                 className={`block px-4 py-2 rounded-lg transition ${

@@ -204,10 +204,14 @@ export default function Register() {
         return;
       }
 
+      const emailStatus = data.email_sent ? 
+        "\n\nA confirmation email has been sent to your admin email address." : 
+        "\n\nNote: Confirmation email could not be sent, but registration was successful.";
+
       setPopup({
         show: true,
         type: "success",
-        message: "Organization registered successfully.",
+        message: `Organization registered successfully!${emailStatus}`,
       });
 
       localStorage.removeItem("org_register_form");

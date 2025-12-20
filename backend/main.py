@@ -1,17 +1,28 @@
 # backend/main.py
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 import uuid
 
-# Existing routers
+# ----------------------------------------------------------
+# ENV & CORE
+# ----------------------------------------------------------
+load_dotenv()
+
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+# ----------------------------------------------------------
+# EXISTING ROUTERS
+# ----------------------------------------------------------
 from routers import register, auth
 from routers.department import router as department_router
 from routers.roles import router as roles_router
 from routers.users import router as users_router
 
-# NEW Organization Setup Routers
+# ----------------------------------------------------------
+# ORGANIZATION SETUP ROUTERS
+# ----------------------------------------------------------
 from routers.organization.company import router as company_router
 from routers.organization.branch import router as branch_router
 from routers.organization.store import router as store_router
@@ -22,42 +33,53 @@ from routers.organization.uom import router as uom_router
 from routers.organization.tax import router as tax_router
 from routers.organization.inventory_rules import router as inventory_rules_router
 
-#items router
+# ----------------------------------------------------------
+# ITEMS, VENDOR, PURCHASE
+# ----------------------------------------------------------
 from routers.items.item import router as item_router
-
-#vendor router
 from routers.vendor.vendor import router as vendor_router
+from routers.purchase_order.purchase import router as purchase_order_router
 
+# ----------------------------------------------------------
+# ✅ GOODS RECEIPT & INSPECTION (NEW MODULE)
+# ----------------------------------------------------------
+from routers.GRN.grn import router as grn_router
 
+# ----------------------------------------------------------
+# LOGGER
+# ----------------------------------------------------------
 from utils.logger import log_error, log_audit, log_api
 
-
+# ----------------------------------------------------------
+# FASTAPI APP
+# ----------------------------------------------------------
 app = FastAPI(title="NUTRYAH IMS API")
-
 
 # ----------------------------------------------------------
 # CORS
 # ----------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change in production
+    allow_origins=["*"],  # 🔴 Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ----------------------------------------------------------
+# ROUTER REGISTRATION
+# ----------------------------------------------------------
 
-# ----------------------------------------------------------
-# ROUTERS
-# ----------------------------------------------------------
-# Existing modules
+# Auth & Core
 app.include_router(register.router, prefix="/api")
 app.include_router(auth.router)
+
+# User Management
 app.include_router(department_router)
 app.include_router(roles_router)
 app.include_router(users_router)
 
-# Organization Setup Modules
+# Organization Setup
 app.include_router(company_router)
 app.include_router(branch_router)
 app.include_router(store_router)
@@ -68,19 +90,19 @@ app.include_router(uom_router)
 app.include_router(tax_router)
 app.include_router(inventory_rules_router)
 
-#item module
+# Inventory Core
 app.include_router(item_router)
-
-#vendor module
 app.include_router(vendor_router)
+app.include_router(purchase_order_router)
+
+# ✅ Goods Receipt & Inspection
+app.include_router(grn_router, prefix="/api")
 
 # ----------------------------------------------------------
-# GLOBAL MIDDLEWARE: API LOGGING + REQUEST ID TRACKING
+# GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Middleware to track every API request with unique request ID"""
-
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
 
@@ -112,15 +134,13 @@ async def log_requests(request: Request, call_next):
             },
         )
 
-
 # ----------------------------------------------------------
-# HEALTH CHECK ROUTES
+# HEALTH CHECKS
 # ----------------------------------------------------------
 @app.get("/")
 def health():
     log_audit("Health check OK")
     return {"status": "running"}
-
 
 @app.get("/health/db")
 def health_db():

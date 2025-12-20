@@ -1,8 +1,9 @@
 # ------------------ Department Schemas ------------------
 
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional,List
 from datetime import datetime,date
+from enum import Enum
 
 
 
@@ -482,11 +483,18 @@ class ItemBase(BaseModel):
     uom: Optional[str] = None
     min_stock: Optional[int] = 0
     max_stock: Optional[int] = 0
-    reorder_level: Optional[int] = 0
+    
+    fixing_price: Optional[float] = 0.0
+    mrp: Optional[float] = 0.0
+    tax: Optional[float] = 0.0
 
     is_batch_managed: Optional[bool] = False
     has_expiry: Optional[bool] = False
     expiry_date: Optional[date] = None
+    
+    has_warranty: Optional[bool] = False
+    warranty_start_date: Optional[date] = None
+    warranty_end_date: Optional[date] = None
 
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
@@ -508,11 +516,18 @@ class ItemUpdate(BaseModel):
     uom: Optional[str]
     min_stock: Optional[int]
     max_stock: Optional[int]
-    reorder_level: Optional[int]
+    
+    fixing_price: Optional[float]
+    mrp: Optional[float]
+    tax: Optional[float]
 
     is_batch_managed: Optional[bool]
     has_expiry: Optional[bool]
     expiry_date: Optional[date]
+    
+    has_warranty: Optional[bool]
+    warranty_start_date: Optional[date]
+    warranty_end_date: Optional[date]
 
     barcode: Optional[str]
     qr_code: Optional[str]
@@ -591,3 +606,113 @@ class VendorLeadTimeCreate(BaseModel):
     avg_days: int
     min_days: int
     max_days: int
+
+
+
+#--------------- PURCHASE ORDER SCHEMAS ----------------
+
+# -------- PR --------
+class PRItemCreate(BaseModel):
+    item_name: str
+    quantity: float
+    uom: str
+    priority: str
+    remarks: Optional[str]
+
+
+class PRCreate(BaseModel):
+    requested_by: str
+    items: List[PRItemCreate]
+
+
+# -------- PO --------
+class POItemCreate(BaseModel):
+    item_name: str
+    quantity: float
+    rate: float
+    tax: float
+    discount: float
+
+
+class POCreate(BaseModel):
+    pr_number: str
+    vendor: str
+    items: List[POItemCreate]
+
+
+# -------- QUOTATION --------
+class QuotationCreate(BaseModel):
+    pr_number: str
+    vendor: str
+    item_name: str
+    rate: float
+    tax: float
+    discount: float
+
+
+# -------- RATE CONTRACT --------
+class RateContractCreate(BaseModel):
+    vendor: str
+    item_name: str
+    contract_rate: float
+    currency: str
+    moq: int
+
+
+# -------- PO TRACKING --------
+class POTrackingCreate(BaseModel):
+    po_number: str
+    dispatch_date: date
+    transporter: str
+    tracking_number: str
+    expected_delivery: date
+    status: str
+    remarks: Optional[str]
+
+
+#grn schemas
+
+
+# -------- ENUMS --------
+class GRNStatus(str, Enum):
+    Pending = "Pending"
+    Approved = "Approved"
+    Rejected = "Rejected"
+
+class QCStatus(str, Enum):
+    Accepted = "Accepted"
+    Rejected = "Rejected"
+    Conditional = "Conditional"
+
+# -------- BATCH --------
+class BatchCreate(BaseModel):
+    batch_no: str
+    mfg_date: Optional[date]
+    expiry_date: Optional[date]
+    qty: float
+
+# -------- GRN ITEM --------
+class GRNItemCreate(BaseModel):
+    item_name: str
+    po_qty: float
+    received_qty: float
+    uom: str
+    rate: float
+    batches: List[BatchCreate]
+
+# -------- GRN --------
+class GRNCreate(BaseModel):
+    grn_date: date
+    po_number: str
+    vendor_name: str
+    store: str
+    items: List[GRNItemCreate]
+
+# -------- QC --------
+class QCCreate(BaseModel):
+    qc_required: bool
+    qc_status: QCStatus
+    qc_by: str
+    qc_date: date
+    remarks: Optional[str]
+    rejected_qty: float = 0

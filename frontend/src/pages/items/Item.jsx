@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import api from "../../api";
 import QRCode from "react-qr-code";
 import JsBarcode from "jsbarcode";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 
 export default function Item() {
   const [items, setItems] = useState([]);
+  const { toast, showToast, hideToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
@@ -25,10 +28,15 @@ export default function Item() {
     uom: "",
     min_stock: 0,
     max_stock: 0,
-    reorder_level: 0,
+    fixing_price: 0,
+    mrp: 0,
+    tax: 0,
     is_batch_managed: false,
     has_expiry: false,
     expiry_date: "",
+    has_warranty: false,
+    warranty_start_date: "",
+    warranty_end_date: "",
     barcode: "",
     qr_code: "",
     is_active: true
@@ -73,18 +81,9 @@ export default function Item() {
       return;
     }
     try {
-      const res = await api.get(`/subcategory/`);
-      console.log("All subcategories from API:", res.data);
-      console.log("Looking for category_id:", categoryId, "(type:", typeof categoryId, ")");
-      
-      const filteredSubCategories = res.data?.filter(subCat => {
-        console.log(`SubCategory ${subCat.name} has category_id: ${subCat.category_id} (type: ${typeof subCat.category_id})`);
-        // Ensure both values are numbers for comparison
-        return parseInt(subCat.category_id) === parseInt(categoryId);
-      }) || [];
-      
-      console.log("Filtered subcategories:", filteredSubCategories);
-      setSubCategories(filteredSubCategories);
+      const res = await api.get(`/subcategory/by-category/${categoryId}`);
+      console.log("Subcategories for category", categoryId, ":", res.data);
+      setSubCategories(res.data || []);
     } catch (err) {
       console.error("Failed to load subcategories:", err);
       setSubCategories([]);
@@ -98,7 +97,7 @@ export default function Item() {
       setItems(res.data || []);
     } catch (err) {
       console.error(err);
-      alert("Failed to load items");
+      showToast("Failed to load items", 'error');
     } finally {
       setLoading(false);
     }
@@ -139,10 +138,15 @@ export default function Item() {
       uom: "",
       min_stock: 0,
       max_stock: 0,
-      reorder_level: 0,
+      fixing_price: 0,
+      mrp: 0,
+      tax: 0,
       is_batch_managed: false,
       has_expiry: false,
       expiry_date: "",
+      has_warranty: false,
+      warranty_start_date: "",
+      warranty_end_date: "",
       barcode: "",
       qr_code: "",
       is_active: true
@@ -153,12 +157,15 @@ export default function Item() {
 
   const handleSubmit = async () => {
     if (!form.name || !form.item_code) {
-      return alert("Item name and code are required");
+      showToast("Item name and code are required", 'error');
+      return;
     }
 
     try {
       const payload = {
         ...form,
+        category: form.category ? String(form.category) : null,
+        sub_category: form.sub_category ? String(form.sub_category) : null,
         expiry_date: form.expiry_date || null,
         barcode: form.barcode || null,
         qr_code: form.qr_code || null
@@ -169,11 +176,20 @@ export default function Item() {
       } else {
         await api.post("/items", payload);
       }
+      showToast(editingId ? "Item updated successfully" : "Item created successfully", 'success');
       resetForm();
       loadItems();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.detail || "Failed to save item");
+      let errorMessage = "Failed to save item";
+      if (err?.response?.data?.detail) {
+        if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(", ");
+        } else if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        }
+      }
+      showToast(errorMessage, 'error');
     }
   };
 
@@ -190,10 +206,15 @@ export default function Item() {
       uom: item.uom || "",
       min_stock: item.min_stock,
       max_stock: item.max_stock,
-      reorder_level: item.reorder_level,
+      fixing_price: item.fixing_price || 0,
+      mrp: item.mrp || 0,
+      tax: item.tax || 0,
       is_batch_managed: item.is_batch_managed,
       has_expiry: item.has_expiry,
       expiry_date: item.expiry_date || "",
+      has_warranty: item.has_warranty || false,
+      warranty_start_date: item.warranty_start_date || "",
+      warranty_end_date: item.warranty_end_date || "",
       barcode: item.barcode || "",
       qr_code: item.qr_code || "",
       is_active: item.is_active !== undefined ? item.is_active : true
@@ -209,10 +230,11 @@ export default function Item() {
     if (!window.confirm("Deactivate this item?")) return;
     try {
       await api.delete(`/items/${id}`);
+      showToast("Item deactivated successfully", 'success');
       loadItems();
     } catch (err) {
       console.error(err);
-      alert("Failed to deactivate item");
+      showToast("Failed to deactivate item", 'error');
     }
   };
 
@@ -232,7 +254,7 @@ export default function Item() {
   // Generate Barcode
 const generateBarcode = () => {
   if (!form.item_code) {
-    alert("Item code is required to generate barcode");
+    showToast("Item code is required to generate barcode", 'error');
     return;
   }
   const value = `BAR-${form.item_code}`;
@@ -265,7 +287,7 @@ const generateBarcode = () => {
 // Generate QR
 const generateQR = () => {
   if (!form.item_code) {
-    alert("Item code is required to generate QR");
+    showToast("Item code is required to generate QR", 'error');
     return;
   }
   const value = `QR-${form.item_code}`;
@@ -287,7 +309,7 @@ const downloadBarcode = () => {
   const canvas = container?.querySelector('canvas');
   
   if (!canvas) {
-    alert("Please generate barcode first");
+    showToast("Please generate barcode first", 'error');
     return;
   }
   
@@ -298,7 +320,7 @@ const downloadBarcode = () => {
     link.click();
   } catch (err) {
     console.error("Download failed:", err);
-    alert("Failed to download barcode");
+    showToast("Failed to download barcode", 'error');
   }
 };
 
@@ -307,7 +329,7 @@ const downloadQR = () => {
   const qrElement = document.querySelector('#qr svg');
   
   if (!qrElement) {
-    alert("Please generate QR code first");
+    showToast("Please generate QR code first", 'error');
     return;
   }
   
@@ -334,7 +356,7 @@ const downloadQR = () => {
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
   } catch (err) {
     console.error("QR Download failed:", err);
-    alert("Failed to download QR code");
+    showToast("Failed to download QR code", 'error');
   }
 };
 
@@ -508,12 +530,39 @@ const downloadQR = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Reorder Level</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Fixing Price</label>
                   <input 
                     type="number" 
-                    name="reorder_level" 
-                    placeholder="0" 
-                    value={form.reorder_level} 
+                    step="0.01"
+                    name="fixing_price" 
+                    placeholder="0.00" 
+                    value={form.fixing_price} 
+                    onChange={handleChange}
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">MRP</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    name="mrp" 
+                    placeholder="0.00" 
+                    value={form.mrp} 
+                    onChange={handleChange}
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tax (%)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    name="tax" 
+                    placeholder="0.00" 
+                    value={form.tax} 
                     onChange={handleChange}
                     className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -557,6 +606,42 @@ const downloadQR = () => {
                       onChange={handleChange}
                       className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
+                  </div>
+                )}
+                
+                <label className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    name="has_warranty" 
+                    checked={form.has_warranty} 
+                    onChange={handleChange}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Has Warranty</span>
+                </label>
+                
+                {form.has_warranty && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Start Date</label>
+                      <input 
+                        type="date" 
+                        name="warranty_start_date" 
+                        value={form.warranty_start_date} 
+                        onChange={handleChange}
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty End Date</label>
+                      <input 
+                        type="date" 
+                        name="warranty_end_date" 
+                        value={form.warranty_end_date} 
+                        onChange={handleChange}
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -671,16 +756,18 @@ const downloadQR = () => {
                     <th className="border border-gray-300 px-4 py-2 text-left">Category</th>
                     <th className="border border-gray-300 px-4 py-2 text-left">Brand</th>
                     <th className="border border-gray-300 px-4 py-2 text-left">UOM</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Min Stock</th>
+                    <th className="border border-gray-300 px-4 py-2 text-left">Fixing Price</th>
+                    <th className="border border-gray-300 px-4 py-2 text-left">MRP</th>
+                    <th className="border border-gray-300 px-4 py-2 text-left">Tax (%)</th>
                     <th className="border border-gray-300 px-4 py-2 text-left">Status</th>
                     <th className="border border-gray-300 px-4 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={9} className="border border-gray-300 px-4 py-6 text-center">Loading...</td></tr>
+                    <tr><td colSpan={11} className="border border-gray-300 px-4 py-6 text-center">Loading...</td></tr>
                   ) : items.length === 0 ? (
-                    <tr><td colSpan={9} className="border border-gray-300 px-4 py-6 text-center text-slate-500">No items found</td></tr>
+                    <tr><td colSpan={11} className="border border-gray-300 px-4 py-6 text-center text-slate-500">No items found</td></tr>
                   ) : (
                     items.map((item, idx) => (
                       <tr key={item.id} className="hover:bg-slate-50">
@@ -695,18 +782,26 @@ const downloadQR = () => {
                           <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded">{item.item_code}</span>
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
-                          <div className="text-sm">{getCategoryName(item.category)}</div>
-                          {getSubCategoryName(item.sub_category) && (
-                            <div className="text-xs text-slate-500">{getSubCategoryName(item.sub_category)}</div>
+                          <div className="text-sm">{item.category || "-"}</div>
+                          {item.sub_category && (
+                            <div className="text-xs text-slate-500">{item.sub_category}</div>
                           )}
                         </td>
                         <td className="border border-gray-300 px-4 py-2">{item.brand || "-"}</td>
                         <td className="border border-gray-300 px-4 py-2">{item.uom || "-"}</td>
                         <td className="border border-gray-300 px-4 py-2">
-                          <span className={`text-sm px-2 py-1 rounded ${
-                            item.min_stock > 0 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
-                          }`}>
-                            {item.min_stock}
+                          <span className="text-sm font-medium text-green-600">
+                            ₹{item.fixing_price || 0}
+                          </span>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          <span className="text-sm font-medium text-blue-600">
+                            ₹{item.mrp || 0}
+                          </span>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          <span className="text-sm font-medium text-orange-600">
+                            {item.tax || 0}%
                           </span>
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
@@ -741,6 +836,13 @@ const downloadQR = () => {
           </div>
         </div>
       </div>
+      
+      <Toast 
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

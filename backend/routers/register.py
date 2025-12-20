@@ -18,6 +18,9 @@ from models.tenant_models import TenantBase
 # Logging
 from utils.logger import log_error, log_audit, log_api
 
+# Email utility
+from utils.email import send_registration_email
+
 router = APIRouter()
 
 
@@ -96,9 +99,22 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
 
         log_audit(f"Tenant tables created for database: {db_name}")
 
+        # Send registration confirmation email
+        email_sent = send_registration_email(
+            admin_email=data.admin_email,
+            organization_name=data.organization_name,
+            admin_name=data.admin_name
+        )
+        
+        if email_sent:
+            log_audit(f"Registration email sent to {data.admin_email}")
+        else:
+            log_error(Exception("Email sending failed"), f"Failed to send registration email to {data.admin_email}")
+
         return {
             "message": "Organization registered successfully",
-            "id": tenant.id
+            "id": tenant.id,
+            "email_sent": email_sent
         }
 
     except HTTPException:

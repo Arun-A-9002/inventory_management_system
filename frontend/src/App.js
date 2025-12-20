@@ -23,6 +23,11 @@ import Item from "./pages/items/Item";
 //vendors
 import Vendor from "./pages/vendors/vendor";
 
+// Purchase Management
+import PurchaseManagement from "./pages/purchase/PurchaseManagement";
+
+// Goods Receipt Note (GRN) - New Module to be added later
+import GoodsReceipt from "./pages/grn/GoodsReceipt";
 function App() {
   return (
     <BrowserRouter>
@@ -57,6 +62,12 @@ function App() {
           <Route path="items" element={<Item />} />
           {/* Vendor Management */}
           <Route path="vendor" element={<Vendor />} />
+
+          {/* Purchase Management */}
+          <Route path="purchase-management" element={<PurchaseManagement />} />
+
+           {/* GRN */}
+          <Route path="grn" element={<GoodsReceipt />} />
         </Route>
 
       </Routes>

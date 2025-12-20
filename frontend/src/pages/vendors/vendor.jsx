@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
+import { getCountries, getStates, getCities } from "../../utils/locationData";
 
 export default function Vendor() {
   const [activeTab, setActiveTab] = useState("Registration");
@@ -14,6 +15,7 @@ export default function Vendor() {
     audit_status: "Pending",
     notes: ""
   });
+  const [editingQualification, setEditingQualification] = useState(null);
   const [qualifications, setQualifications] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [items, setItems] = useState([]);
@@ -35,6 +37,7 @@ export default function Vendor() {
     compliance: 4,
     comments: ""
   });
+  const [editingPerformance, setEditingPerformance] = useState(null);
   const [performances, setPerformances] = useState([]);
 
   const StarRating = ({ rating, onRatingChange, label }) => {
@@ -72,12 +75,14 @@ export default function Vendor() {
     phone: "",
     email: "",
     address: "",
-    country: "India",
+    country: "",
     state: "",
     city: "",
     pan_number: "",
     gst_number: ""
   });
+  
+
 
   useEffect(() => {
     loadVendors();
@@ -103,6 +108,9 @@ export default function Vendor() {
     }
   };
 
+  const [availableStates, setAvailableStates] = useState([]);
+  const [availableCities, setAvailableCities] = useState([]);
+  
   const resetForm = () => {
     setVendorForm({
       vendor_name: "",
@@ -110,13 +118,37 @@ export default function Vendor() {
       phone: "",
       email: "",
       address: "",
-      country: "India",
+      country: "",
       state: "",
       city: "",
       pan_number: "",
       gst_number: ""
     });
+    setAvailableStates([]);
+    setAvailableCities([]);
     setEditingId(null);
+  };
+  
+  const handleCountryChange = (country) => {
+    const states = getStates(country);
+    setVendorForm({
+      ...vendorForm,
+      country,
+      state: "",
+      city: ""
+    });
+    setAvailableStates(states);
+    setAvailableCities([]);
+  };
+  
+  const handleStateChange = (state) => {
+    const cities = getCities(vendorForm.country, state);
+    setVendorForm({
+      ...vendorForm,
+      state,
+      city: ""
+    });
+    setAvailableCities(cities);
   };
 
   const registerVendor = async () => {
@@ -141,18 +173,30 @@ export default function Vendor() {
 
   const handleEdit = (vendor) => {
     setEditingId(vendor.id);
+    const country = vendor.country || "";
+    const state = vendor.state || "";
+    
     setVendorForm({
       vendor_name: vendor.vendor_name,
       contact_person: vendor.contact_person || "",
       phone: vendor.phone,
       email: vendor.email,
       address: vendor.address || "",
-      country: vendor.country || "India",
-      state: vendor.state || "",
+      country,
+      state,
       city: vendor.city || "",
       pan_number: vendor.pan_number || "",
       gst_number: vendor.gst_number || ""
     });
+    
+    if (country) {
+      const states = getStates(country);
+      setAvailableStates(states);
+      if (state) {
+        const cities = getCities(country, state);
+        setAvailableCities(cities);
+      }
+    }
   };
 
   const handleDelete = async (id) => {
@@ -199,7 +243,11 @@ export default function Vendor() {
     }
 
     try {
-      await api.post("/vendors/qualification", qualificationForm);
+      if (editingQualification) {
+        await api.put(`/vendors/qualification/${editingQualification.id}`, qualificationForm);
+      } else {
+        await api.post("/vendors/qualification", qualificationForm);
+      }
       setQualificationForm({
         vendor_id: "",
         approval_status: "Pending",
@@ -208,11 +256,34 @@ export default function Vendor() {
         audit_status: "Pending",
         notes: ""
       });
+      setEditingQualification(null);
       loadQualifications();
       alert("Vendor qualification saved successfully");
     } catch (err) {
       console.error(err);
       alert("Error saving qualification");
+    }
+  };
+
+  const editQualification = (qual) => {
+    setEditingQualification(qual);
+    setQualificationForm({
+      vendor_id: qual.vendor_id.toString(),
+      approval_status: qual.approval_status,
+      category: qual.category,
+      risk_category: qual.risk_category,
+      audit_status: qual.audit_status,
+      notes: qual.notes || ""
+    });
+  };
+
+  const deleteQualification = async (id) => {
+    if (!window.confirm("Delete this qualification?")) return;
+    try {
+      await api.delete(`/vendors/qualification/${id}`);
+      loadQualifications();
+    } catch (err) {
+      alert("Failed to delete qualification");
     }
   };
 
@@ -290,11 +361,17 @@ export default function Vendor() {
         performanceForm.compliance
       ) / 5;
 
-      await api.post("/vendors/performance", {
+      const data = {
         ...performanceForm,
         vendor_id: parseInt(performanceForm.vendor_id),
         overall_rating: parseFloat(overall_rating.toFixed(1))
-      });
+      };
+
+      if (editingPerformance) {
+        await api.put(`/vendors/performance/${editingPerformance.id}`, data);
+      } else {
+        await api.post("/vendors/performance", data);
+      }
 
       setPerformanceForm({
         vendor_id: "",
@@ -305,12 +382,36 @@ export default function Vendor() {
         compliance: 4,
         comments: ""
       });
+      setEditingPerformance(null);
 
       loadPerformances();
       alert("Performance rating saved successfully");
     } catch (err) {
       console.error(err);
       alert("Error saving performance rating");
+    }
+  };
+
+  const editPerformance = (perf) => {
+    setEditingPerformance(perf);
+    setPerformanceForm({
+      vendor_id: perf.vendor_id.toString(),
+      delivery_quality: perf.delivery_quality,
+      delivery_timeliness: perf.delivery_timeliness,
+      response_time: perf.response_time,
+      pricing_competitiveness: perf.pricing_competitiveness,
+      compliance: perf.compliance,
+      comments: perf.comments || ""
+    });
+  };
+
+  const deletePerformance = async (id) => {
+    if (!window.confirm("Delete this performance rating?")) return;
+    try {
+      await api.delete(`/vendors/performance/${id}`);
+      loadPerformances();
+    } catch (err) {
+      alert("Failed to delete performance rating");
     }
   };
 
@@ -423,31 +524,46 @@ export default function Vendor() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
-                  <input 
+                  <select 
                     value={vendorForm.country}
-                    onChange={(e)=>setVendorForm({...vendorForm,country:e.target.value})} 
+                    onChange={(e) => handleCountryChange(e.target.value)}
                     className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
+                  >
+                    <option value="">Select Country</option>
+                    {getCountries().map(country => (
+                      <option key={country} value={country}>{country}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">State</label>
-                  <input 
+                  <select 
                     value={vendorForm.state}
-                    onChange={(e)=>setVendorForm({...vendorForm,state:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="State"
-                  />
+                    onChange={(e) => handleStateChange(e.target.value)}
+                    disabled={!vendorForm.country}
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
+                  >
+                    <option value="">Select State</option>
+                    {availableStates.map(state => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
-                  <input 
+                  <select 
                     value={vendorForm.city}
-                    onChange={(e)=>setVendorForm({...vendorForm,city:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="City"
-                  />
+                    onChange={(e) => setVendorForm({...vendorForm, city: e.target.value})}
+                    disabled={!vendorForm.state}
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
+                  >
+                    <option value="">Select City</option>
+                    {availableCities.map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
@@ -660,12 +776,32 @@ export default function Vendor() {
                   />
                 </div>
                 
-                <button 
-                  onClick={saveQualification}
-                  className="w-full rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700"
-                >
-                  Save Qualification
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={saveQualification}
+                    className="flex-1 rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700"
+                  >
+                    {editingQualification ? 'Update' : 'Save'} Qualification
+                  </button>
+                  {editingQualification && (
+                    <button 
+                      onClick={() => {
+                        setEditingQualification(null);
+                        setQualificationForm({
+                          vendor_id: "",
+                          approval_status: "Pending",
+                          category: "",
+                          risk_category: "Low",
+                          audit_status: "Pending",
+                          notes: ""
+                        });
+                      }}
+                      className="rounded-full border border-gray-300 px-6 py-2 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -687,13 +823,27 @@ export default function Vendor() {
                             <div className="text-sm text-slate-500">{qual.category}</div>
                             <div className="text-xs text-slate-400">Risk: {qual.risk_category}</div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            qual.approval_status === 'Approved' ? 'bg-green-100 text-green-800' :
-                            qual.approval_status === 'Rejected' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {qual.approval_status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              qual.approval_status === 'Approved' ? 'bg-green-100 text-green-800' :
+                              qual.approval_status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {qual.approval_status}
+                            </span>
+                            <button
+                              onClick={() => editQualification(qual)}
+                              className="text-xs px-2 py-1 rounded border hover:bg-slate-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteQualification(qual.id)}
+                              className="text-xs px-2 py-1 rounded border text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -902,12 +1052,33 @@ export default function Vendor() {
                   />
                 </div>
                 
-                <button 
-                  onClick={savePerformance}
-                  className="w-full rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700"
-                >
-                  Save Performance Rating
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={savePerformance}
+                    className="flex-1 rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700"
+                  >
+                    {editingPerformance ? 'Update' : 'Save'} Performance Rating
+                  </button>
+                  {editingPerformance && (
+                    <button 
+                      onClick={() => {
+                        setEditingPerformance(null);
+                        setPerformanceForm({
+                          vendor_id: "",
+                          delivery_quality: 4,
+                          delivery_timeliness: 4,
+                          response_time: 4,
+                          pricing_competitiveness: 5,
+                          compliance: 4,
+                          comments: ""
+                        });
+                      }}
+                      className="rounded-full border border-gray-300 px-6 py-2 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -923,7 +1094,23 @@ export default function Vendor() {
                     const vendor = vendors.find(v => v.id === perf.vendor_id);
                     return (
                       <div key={perf.id} className="p-4 border rounded-lg">
-                        <div className="font-medium mb-2">{vendor?.vendor_name || 'Unknown Vendor'}</div>
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-medium">{vendor?.vendor_name || 'Unknown Vendor'}</div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => editPerformance(perf)}
+                              className="text-xs px-2 py-1 rounded border hover:bg-slate-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deletePerformance(perf.id)}
+                              className="text-xs px-2 py-1 rounded border text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>Quality: <span className="font-medium">{perf.delivery_quality}/5</span></div>
                           <div>Timeliness: <span className="font-medium">{perf.delivery_timeliness}/5</span></div>

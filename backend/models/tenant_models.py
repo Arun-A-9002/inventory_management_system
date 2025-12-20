@@ -1,7 +1,8 @@
 # ------------------ Department Model ------------------
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float,Date,Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float,Date,Enum,DECIMAL
 import enum
+from datetime import date
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -373,14 +374,23 @@ class Item(TenantBase):
     uom = Column(String(50))
     min_stock = Column(Integer, default=0)
     max_stock = Column(Integer, default=0)
-    reorder_level = Column(Integer, default=0)
+    
+    # 4. Pricing Information
+    fixing_price = Column(DECIMAL(10, 2), default=0.00)
+    mrp = Column(DECIMAL(10, 2), default=0.00)
+    tax = Column(Float, default=0.0)
 
-    # 4. Batch & Expiry Management
+    # 5. Batch & Expiry Management
     is_batch_managed = Column(Boolean, default=False)
     has_expiry = Column(Boolean, default=False)
     expiry_date = Column(Date, nullable=True)
+    
+    # 6. Warranty Management
+    has_warranty = Column(Boolean, default=False)
+    warranty_start_date = Column(Date, nullable=True)
+    warranty_end_date = Column(Date, nullable=True)
 
-    # 5. Barcode / QR
+    # 7. Barcode / QR
     barcode = Column(String(100), unique=True, nullable=True)
     qr_code = Column(String(100), unique=True, nullable=True)
 
@@ -498,3 +508,195 @@ class VendorLeadTime(TenantBase):
     avg_days = Column(Integer)
     min_days = Column(Integer)
     max_days = Column(Integer)
+
+
+
+#---------------porchse order models ---------------
+
+
+# ---------------- ENUMS ----------------
+class PRStatus(str, enum.Enum):
+    draft = "Draft"
+    submitted = "Submitted"
+    approved = "Approved"
+    rejected = "Rejected"
+
+
+class POStatus(str, enum.Enum):
+    draft = "Draft"
+    pending = "Pending Approval"
+    approved = "Approved"
+
+
+class DeliveryStatus(str, enum.Enum):
+    dispatched = "Dispatched"
+    in_transit = "In Transit"
+    delivered = "Delivered"
+
+
+# ---------------- PURCHASE REQUEST ----------------
+class PurchaseRequest(TenantBase):
+    __tablename__ = "purchase_requests"
+
+    id = Column(Integer, primary_key=True)
+    pr_number = Column(String(50), unique=True)
+    requested_by = Column(String(100))
+    request_date = Column(Date, default=date.today)
+    status = Column(Enum(PRStatus), default=PRStatus.draft)
+
+    items = relationship("PurchaseRequestItem", back_populates="pr")
+
+
+class PurchaseRequestItem(TenantBase):
+    __tablename__ = "purchase_request_items"
+
+    id = Column(Integer, primary_key=True)
+    pr_id = Column(Integer, ForeignKey("purchase_requests.id"))
+    item_name = Column(String(100))
+    quantity = Column(Float)
+    uom = Column(String(20))
+    priority = Column(String(20))
+    remarks = Column(String(255))
+
+    pr = relationship("PurchaseRequest", back_populates="items")
+
+
+# ---------------- PURCHASE ORDER ----------------
+class PurchaseOrder(TenantBase):
+    __tablename__ = "purchase_orders"
+
+    id = Column(Integer, primary_key=True)
+    po_number = Column(String(50), unique=True)
+    pr_number = Column(String(50))
+    vendor = Column(String(100))
+    po_date = Column(Date, default=date.today)
+    status = Column(Enum(POStatus), default=POStatus.draft)
+
+    items = relationship("PurchaseOrderItem", back_populates="po")
+
+
+class PurchaseOrderItem(TenantBase):
+    __tablename__ = "purchase_order_items"
+
+    id = Column(Integer, primary_key=True)
+    po_id = Column(Integer, ForeignKey("purchase_orders.id"))
+    item_name = Column(String(100))
+    quantity = Column(Float)
+    rate = Column(Float)
+    tax = Column(Float)
+    discount = Column(Float)
+
+    po = relationship("PurchaseOrder", back_populates="items")
+
+
+# ---------------- QUOTATION ----------------
+class VendorQuotation(TenantBase):
+    __tablename__ = "vendor_quotations"
+
+    id = Column(Integer, primary_key=True)
+    pr_number = Column(String(50))
+    vendor = Column(String(100))
+    item_name = Column(String(100))
+    rate = Column(Float)
+    tax = Column(Float)
+    discount = Column(Float)
+
+
+# ---------------- RATE CONTRACT ----------------
+class RateContract(TenantBase):
+    __tablename__ = "rate_contracts"
+
+    id = Column(Integer, primary_key=True)
+    vendor = Column(String(100))
+    item_name = Column(String(100))
+    contract_rate = Column(Float)
+    currency = Column(String(10))
+    moq = Column(Integer)
+
+
+# ---------------- PO TRACKING ----------------
+class POTracking(TenantBase):
+    __tablename__ = "po_tracking"
+
+    id = Column(Integer, primary_key=True)
+    po_number = Column(String(50))
+    dispatch_date = Column(Date)
+    transporter = Column(String(100))
+    tracking_number = Column(String(100))
+    expected_delivery = Column(Date)
+    status = Column(Enum(DeliveryStatus))
+    remarks = Column(String(255))
+
+
+
+#gnr model
+
+
+# ---------------- ENUMS ----------------
+class GRNStatus(str, enum.Enum):
+    pending = "Pending"
+    approved = "Approved"
+    rejected = "Rejected"
+
+class QCStatus(str, enum.Enum):
+    accepted = "Accepted"
+    rejected = "Rejected"
+    conditional = "Conditional"
+
+# ---------------- GRN MASTER ----------------
+class GRN(TenantBase):
+    __tablename__ = "grns"
+
+    id = Column(Integer, primary_key=True)
+    grn_number = Column(String(50), unique=True, index=True)
+    grn_date = Column(Date)
+    po_number = Column(String(50))
+    vendor_name = Column(String(100))
+    store = Column(String(100))
+    status = Column(Enum(GRNStatus), default=GRNStatus.pending)
+
+    items = relationship("GRNItem", back_populates="grn")
+    qc = relationship("QCInspection", back_populates="grn", uselist=False)
+
+# ---------------- GRN ITEMS ----------------
+class GRNItem(TenantBase):
+    __tablename__ = "grn_items"
+
+    id = Column(Integer, primary_key=True)
+    grn_id = Column(Integer, ForeignKey("grns.id"))
+    item_name = Column(String(100))
+    po_qty = Column(Float)
+    received_qty = Column(Float)
+    uom = Column(String(20))
+    rate = Column(Float)
+
+    grn = relationship("GRN", back_populates="items")
+    batches = relationship("Batch", back_populates="item")
+
+# ---------------- BATCH & EXPIRY ----------------
+class Batch(TenantBase):
+    __tablename__ = "batches"
+
+    id = Column(Integer, primary_key=True)
+    grn_item_id = Column(Integer, ForeignKey("grn_items.id"))
+    batch_no = Column(String(50))
+    mfg_date = Column(Date, nullable=True)
+    expiry_date = Column(Date, nullable=True)
+    qty = Column(Float)
+
+    item = relationship("GRNItem", back_populates="batches")
+
+# ---------------- QC INSPECTION ----------------
+class QCInspection(TenantBase):
+    __tablename__ = "qc_inspections"
+
+    id = Column(Integer, primary_key=True)
+    grn_id = Column(Integer, ForeignKey("grns.id"))
+    qc_required = Column(Boolean, default=True)
+    qc_status = Column(Enum(QCStatus))
+    qc_by = Column(String(100))
+    qc_date = Column(Date)
+    remarks = Column(String(255))
+    rejected_qty = Column(Float, default=0)
+
+    grn = relationship("GRN", back_populates="qc")

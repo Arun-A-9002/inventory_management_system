@@ -52,6 +52,28 @@ def qualify_vendor(data: VendorQualificationCreate, db: Session = Depends(get_te
     db.commit()
     return {"message": "Vendor qualification saved"}
 
+@router.put("/qualification/{qualification_id}")
+def update_qualification(qualification_id: int, data: VendorQualificationCreate, db: Session = Depends(get_tenant_session)):
+    qualification = db.query(VendorQualification).filter(VendorQualification.id == qualification_id).first()
+    if not qualification:
+        raise HTTPException(status_code=404, detail="Qualification not found")
+    
+    for key, value in data.dict().items():
+        setattr(qualification, key, value)
+    
+    db.commit()
+    return {"message": "Qualification updated"}
+
+@router.delete("/qualification/{qualification_id}")
+def delete_qualification(qualification_id: int, db: Session = Depends(get_tenant_session)):
+    qualification = db.query(VendorQualification).filter(VendorQualification.id == qualification_id).first()
+    if not qualification:
+        raise HTTPException(status_code=404, detail="Qualification not found")
+    
+    db.delete(qualification)
+    db.commit()
+    return {"message": "Qualification deleted"}
+
 # ---------------- STEP 3: CONTRACT ----------------
 @router.get("/contract")
 def get_contracts(db: Session = Depends(get_tenant_session)):
@@ -85,6 +107,28 @@ def save_performance(data: VendorPerformanceCreate, db: Session = Depends(get_te
     db.add(performance)
     db.commit()
     return {"message": "Vendor performance saved"}
+
+@router.put("/performance/{performance_id}")
+def update_performance(performance_id: int, data: VendorPerformanceCreate, db: Session = Depends(get_tenant_session)):
+    performance = db.query(VendorPerformance).filter(VendorPerformance.id == performance_id).first()
+    if not performance:
+        raise HTTPException(status_code=404, detail="Performance not found")
+    
+    for key, value in data.dict().items():
+        setattr(performance, key, value)
+    
+    db.commit()
+    return {"message": "Performance updated"}
+
+@router.delete("/performance/{performance_id}")
+def delete_performance(performance_id: int, db: Session = Depends(get_tenant_session)):
+    performance = db.query(VendorPerformance).filter(VendorPerformance.id == performance_id).first()
+    if not performance:
+        raise HTTPException(status_code=404, detail="Performance not found")
+    
+    db.delete(performance)
+    db.commit()
+    return {"message": "Performance deleted"}
 
 @router.post("/lead-time")
 def save_lead_time(data: VendorLeadTimeCreate, db: Session = Depends(get_tenant_session)):

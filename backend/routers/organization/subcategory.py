@@ -48,6 +48,14 @@ def list_subcategories(db: Session = Depends(get_tenant_db)):
 
 
 # --------------------------
+# GET SUBCATEGORIES BY CATEGORY
+# --------------------------
+@router.get("/by-category/{category_id}", response_model=list[SubCategoryResponse])
+def get_subcategories_by_category(category_id: int, db: Session = Depends(get_tenant_db)):
+    return db.query(SubCategory).filter(SubCategory.category_id == category_id).all()
+
+
+# --------------------------
 # GET SUBCATEGORY
 # --------------------------
 @router.get("/{sub_id}", response_model=SubCategoryResponse)
