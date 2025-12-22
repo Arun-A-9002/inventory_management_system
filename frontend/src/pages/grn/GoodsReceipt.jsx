@@ -356,368 +356,447 @@ export default function GoodsReceipt() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      {/* HEADER */}
-      <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-500 p-6 text-white shadow-md">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* MODERN HEADER */}
+      <div className="bg-white shadow-sm border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm uppercase opacity-80">Goods Receipt & Inspection</div>
-              <h1 className="text-3xl font-semibold mt-2">GRN Management</h1>
-              <p className="mt-2 opacity-90">Create GRN, manage batches, QC & stock updates</p>
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Goods Receipt Management</h1>
+                <p className="text-sm text-slate-600">Manage incoming inventory, quality control & stock updates</p>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
-                <span className="text-sm font-medium">📦 Goods Receipt</span>
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-50 px-4 py-2 rounded-lg">
+                <span className="text-sm font-medium text-blue-700">📦 Active GRNs: {grnList.length}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
-        {/* LEFT SIDE - GRN FORM */}
-        <div className="col-span-2 bg-white rounded-2xl p-6 shadow-sm border">
-          <h2 className="text-xl font-semibold mb-4">
-            {editMode.isEditing ? 'Edit Goods Receipt Note' : 'Create Goods Receipt Note'}
-          </h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">GRN Date *</label>
-              <input
-                type="date"
-                value={form.grn_date}
-                onChange={(e) => setForm({ ...form, grn_date: e.target.value })}
-                className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">PO Number *</label>
-              <select
-                value={form.po_number}
-                onChange={(e) => handlePOSelect(e.target.value)}
-                className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="">Select Purchase Order</option>
-                {poList.map((po) => (
-                  <option key={po.id} value={po.po_number}>
-                    {po.po_number} - {po.vendor}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Name</label>
-              <input
-                value={form.vendor_name}
-                readOnly
-                className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                placeholder="Auto-filled from PO"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Store / Warehouse *</label>
-              <select
-                value={form.store}
-                onChange={(e) => setForm({ ...form, store: e.target.value })}
-                className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="">Select Store</option>
-                <option value="Main Store">Main Store</option>
-                <option value="Warehouse A">Warehouse A</option>
-                <option value="Warehouse B">Warehouse B</option>
-                <option value="Pharmacy Store">Pharmacy Store</option>
-              </select>
-            </div>
-
-            {/* ITEM ENTRY SECTION */}
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-slate-700">Items to Receive</h3>
-                <button
-                  onClick={addItemRow}
-                  className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200"
-                >
-                  + Add Item
-                </button>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-12 gap-8">
+          {/* LEFT PANEL - GRN FORM */}
+          <div className="col-span-5">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+              {/* Form Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                <h2 className="text-xl font-semibold text-white flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  {editMode.isEditing ? 'Edit Goods Receipt Note' : 'Create New GRN'}
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">Fill in the details to process goods receipt</p>
               </div>
+              
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">GRN Date *</label>
+                    <input
+                      type="date"
+                      value={form.grn_date}
+                      onChange={(e) => setForm({ ...form, grn_date: e.target.value })}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Store / Warehouse *</label>
+                    <select
+                      value={form.store}
+                      onChange={(e) => setForm({ ...form, store: e.target.value })}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="">Select Store</option>
+                      <option value="Main Store">Main Store</option>
+                      <option value="Warehouse A">Warehouse A</option>
+                      <option value="Warehouse B">Warehouse B</option>
+                      <option value="Pharmacy Store">Pharmacy Store</option>
+                    </select>
+                  </div>
+                </div>
 
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {grnItems.map((item, idx) => (
-                  <div key={idx} className="border rounded-lg p-3 bg-slate-50">
-                    {/* Item Name Row */}
-                    <div className="mb-2">
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Item Name *</label>
-                      <input
-                        placeholder="Enter item name"
-                        value={item.item_name}
-                        onChange={(e) => updateItem(idx, 'item_name', e.target.value)}
-                        className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                      />
-                    </div>
-                    
-                    {/* Quantity, Price, MRP & Tax Row */}
-                    <div className="grid grid-cols-4 gap-2 mb-2">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Quantity *</label>
-                        <input
-                          type="number"
-                          placeholder="Quantity"
-                          value={item.po_qty}
-                          onChange={(e) => updateItem(idx, 'po_qty', parseFloat(e.target.value) || 0)}
-                          className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Price *</label>
-                        <input
-                          type="number"
-                          placeholder="Price"
-                          value={item.price}
-                          onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value) || 0)}
-                          className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">MRP *</label>
-                        <input
-                          type="number"
-                          placeholder="MRP"
-                          value={item.mrp}
-                          onChange={(e) => updateItem(idx, 'mrp', parseFloat(e.target.value) || 0)}
-                          className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
-                        <input
-                          type="number"
-                          placeholder="Tax %"
-                          value={item.tax}
-                          onChange={(e) => updateItem(idx, 'tax', parseFloat(e.target.value) || 0)}
-                          className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Batch & Expiry Row */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Batch Number *</label>
-                        <input
-                          placeholder="Batch/Lot number"
-                          value={item.batch_no}
-                          onChange={(e) => updateItem(idx, 'batch_no', e.target.value)}
-                          className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                        />
-                      </div>
-                      <div className="flex gap-1">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-slate-600 mb-1">Expiry Date</label>
-                          <input
-                            type="date"
-                            value={item.expiry_date}
-                            onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
-                            className="text-sm rounded border px-2 py-1 focus:ring-1 focus:ring-purple-500 w-full"
-                          />
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Purchase Order *</label>
+                  <select
+                    value={form.po_number}
+                    onChange={(e) => handlePOSelect(e.target.value)}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Purchase Order</option>
+                    {poList.map((po) => (
+                      <option key={po.id} value={po.po_number}>
+                        {po.po_number} - {po.vendor}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name</label>
+                  <input
+                    value={form.vendor_name}
+                    readOnly
+                    className="w-full rounded-xl border-2 border-slate-100 px-4 py-3 bg-slate-50 text-slate-600"
+                    placeholder="Auto-filled from selected PO"
+                  />
+                </div>
+
+                {/* Items Section */}
+                <div className="border-t-2 border-slate-100 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-800 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Items to Receive
+                    </h3>
+                    <button
+                      onClick={addItemRow}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add Item
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
+                    {grnItems.map((item, idx) => (
+                      <div key={idx} className="bg-slate-50 rounded-xl p-4 border-2 border-slate-200">
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="text-sm font-semibold text-slate-600">Item #{idx + 1}</span>
+                          {grnItems.length > 1 && (
+                            <button
+                              onClick={() => removeItem(idx)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                              title="Remove Item"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
-                        {grnItems.length > 1 && (
-                          <button
-                            onClick={() => removeItem(idx)}
-                            className="text-red-600 hover:text-red-800 px-2 mt-5"
-                            title="Remove Item"
-                          >
-                            ×
-                          </button>
-                        )}
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Item Name *</label>
+                            <input
+                              placeholder="Enter item name (e.g., Laptop, Medicine, Raw Material)"
+                              value={item.item_name}
+                              onChange={(e) => updateItem(idx, 'item_name', e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                          
+                          <div className="grid grid-cols-4 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Quantity *</label>
+                              <input
+                                type="number"
+                                placeholder="Quantity"
+                                value={item.po_qty}
+                                onChange={(e) => updateItem(idx, 'po_qty', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price *</label>
+                              <input
+                                type="number"
+                                placeholder="Unit Price"
+                                value={item.price}
+                                onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">MRP</label>
+                              <input
+                                type="number"
+                                placeholder="MRP"
+                                value={item.mrp}
+                                onChange={(e) => updateItem(idx, 'mrp', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
+                              <input
+                                type="number"
+                                placeholder="Tax %"
+                                value={item.tax}
+                                onChange={(e) => updateItem(idx, 'tax', parseFloat(e.target.value) || 0)}
+                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Batch/Lot Number *</label>
+                              <input
+                                placeholder="Batch/Lot number (e.g., BT001, LOT2024)"
+                                value={item.batch_no}
+                                onChange={(e) => updateItem(idx, 'batch_no', e.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Expiry Date</label>
+                              <input
+                                type="date"
+                                placeholder="Expiry Date"
+                                value={item.expiry_date}
+                                onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Price Summary */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <h3 className="font-semibold text-slate-800 mb-3 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Price Summary
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Subtotal:</span>
+                      <span className="font-medium">₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0)), 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Tax Amount:</span>
+                      <span className="font-medium">₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0) * (item.tax || 0) / 100), 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Total Items:</span>
+                      <span className="font-medium">{grnItems.reduce((sum, item) => sum + (item.po_qty || 0), 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold border-t pt-2 border-blue-200">
+                      <span className="text-slate-800">Grand Total:</span>
+                      <span className="text-blue-600">₹{calculateTotalAmount().toFixed(2)}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* PRICE CALCULATION SECTION */}
-            <div className="border-t pt-4">
-              <h3 className="font-medium text-slate-700 mb-3">Price Summary</h3>
-              <div className="bg-slate-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span>₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0)), 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Tax Amount:</span>
-                  <span>₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0) * (item.tax || 0) / 100), 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Total Items:</span>
-                  <span>{grnItems.reduce((sum, item) => sum + (item.po_qty || 0), 0)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-medium border-t pt-2">
-                  <span>Total Amount:</span>
-                  <span>₹{calculateTotalAmount().toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
 
-            <button
-              onClick={handleSubmit}
-              className="w-full rounded-lg bg-purple-600 text-white px-6 py-2 hover:bg-purple-700 transition-colors font-medium"
-            >
-              {editMode.isEditing ? 'Update GRN' : 'Create GRN'}
-            </button>
-            
-            {editMode.isEditing && (
-              <button
-                onClick={() => {
-                  setEditMode({ isEditing: false, grnId: null });
-                  setForm({
-                    grn_date: new Date().toISOString().split('T')[0],
-                    po_number: "",
-                    vendor_name: "",
-                    store: "",
-                  });
-                  setGrnItems([{
-                    item_name: "",
-                    po_qty: 0,
-                    price: 0,
-                    mrp: 0,
-                    tax: 0,
-                    batch_no: "",
-                    expiry_date: ""
-                  }]);
-                }}
-                className="w-full rounded-lg bg-gray-500 text-white px-6 py-2 hover:bg-gray-600 transition-colors font-medium mt-2"
-              >
-                Cancel Edit
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT SIDE - GRN LIST */}
-        <div className="col-span-3 bg-white rounded-2xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Goods Receipt List</h2>
-            <button
-              onClick={fetchGRNList}
-              className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="text-slate-500">Loading...</div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">GRN Number</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">PO Number</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">Vendor</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">Date</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">Total Amount</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">QC Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">Status</th>
-                    <th className="text-center py-3 px-4 font-medium text-slate-700">View/Print</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {grnList.length === 0 ? (
-                    <tr>
-                      <td colSpan="9" className="text-center py-8 text-slate-500">
-                        No goods receipts found
-                      </td>
-                    </tr>
-                  ) : (
-                    grnList.map((grn) => (
-                      <tr key={grn.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-4 font-medium text-slate-900">{grn.grn_number}</td>
-                        <td className="py-3 px-4">{grn.po_number}</td>
-                        <td className="py-3 px-4">{grn.vendor_name}</td>
-                        <td className="py-3 px-4">{new Date(grn.grn_date).toLocaleDateString()}</td>
-                        <td className="py-3 px-4 font-medium text-green-600">₹{(grn.total_amount || 0).toFixed(2)}</td>
-                        <td className="py-3 px-4">
-                          <select
-                            className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 border-0"
-                            defaultValue="Pending"
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Accepted">Accepted</option>
-                            <option value="Rejected">Rejected</option>
-                            <option value="Conditional">Conditional</option>
-                          </select>
-                        </td>
-                        <td className="py-3 px-4">
-                          <select
-                            value={grn.status || 'Pending'}
-                            onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
-                            className={`px-2 py-1 rounded text-xs border-0 ${
-                              grn.status === 'Approved' ? 'bg-green-100 text-green-700' : 
-                              grn.status === 'Rejected' ? 'bg-red-100 text-red-700' :
-                              'bg-yellow-100 text-yellow-700'
-                            }`}
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Rejected">Rejected</option>
-                          </select>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex justify-center gap-3">
-                            <button 
-                              onClick={() => handleViewGRN(grn)}
-                              className="text-blue-600 hover:text-blue-800" 
-                              title="View"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            <button 
-                              onClick={() => handlePrintGRN(grn)}
-                              className="text-gray-600 hover:text-gray-800" 
-                              title="Print"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleEditGRN(grn)}
-                              className="text-green-600 hover:text-green-800 text-sm"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteGRN(grn)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <button
+                    onClick={handleSubmit}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {editMode.isEditing ? 'Update GRN' : 'Create GRN'}
+                  </button>
+                  
+                  {editMode.isEditing && (
+                    <button
+                      onClick={() => {
+                        setEditMode({ isEditing: false, grnId: null });
+                        setForm({
+                          grn_date: new Date().toISOString().split('T')[0],
+                          po_number: "",
+                          vendor_name: "",
+                          store: "",
+                        });
+                        setGrnItems([{
+                          item_name: "",
+                          po_qty: 0,
+                          price: 0,
+                          mrp: 0,
+                          tax: 0,
+                          batch_no: "",
+                          expiry_date: ""
+                        }]);
+                      }}
+                      className="w-full bg-slate-500 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Edit
+                    </button>
                   )}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* RIGHT PANEL - GRN LIST */}
+          <div className="col-span-7">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+              {/* Table Header */}
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                      Goods Receipt Records
+                    </h2>
+                    <p className="text-sm text-slate-600 mt-1">Manage and track all GRN transactions</p>
+                  </div>
+                  <button
+                    onClick={fetchGRNList}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-slate-500">Loading GRN records...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">GRN Details</th>
+                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Vendor & PO</th>
+                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Amount</th>
+                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Status</th>
+                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {grnList.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="text-center py-16">
+                            <div className="text-slate-400">
+                              <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                              </svg>
+                              <p className="text-lg font-medium text-slate-500">No GRN records found</p>
+                              <p className="text-sm text-slate-400 mt-1">Create your first goods receipt note to get started</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        grnList.map((grn) => (
+                          <tr key={grn.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-4 px-6">
+                              <div>
+                                <div className="font-semibold text-slate-900">{grn.grn_number}</div>
+                                <div className="text-sm text-slate-500">{new Date(grn.grn_date).toLocaleDateString()}</div>
+                                <div className="text-xs text-slate-400 mt-1">{grn.store}</div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div>
+                                <div className="font-medium text-slate-800">{grn.vendor_name}</div>
+                                <div className="text-sm text-slate-500">PO: {grn.po_number}</div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <div className="font-bold text-green-600 text-lg">₹{(grn.total_amount || 0).toFixed(2)}</div>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <div className="space-y-2">
+                                <select
+                                  value={grn.status || 'Pending'}
+                                  onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                    grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                                    grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Approved">Approved</option>
+                                  <option value="Rejected">Rejected</option>
+                                </select>
+                                <select
+                                  className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border-0"
+                                  defaultValue="Pending"
+                                >
+                                  <option value="Pending">QC Pending</option>
+                                  <option value="Accepted">QC Passed</option>
+                                  <option value="Rejected">QC Failed</option>
+                                  <option value="Conditional">Conditional</option>
+                                </select>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-center justify-center space-x-2">
+                                <button 
+                                  onClick={() => handleViewGRN(grn)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                  title="View Details"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                </button>
+                                <button 
+                                  onClick={() => handlePrintGRN(grn)}
+                                  className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors" 
+                                  title="Print GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                  </svg>
+                                </button>
+                                <button 
+                                  onClick={() => handleEditGRN(grn)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Edit GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteGRN(grn)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
