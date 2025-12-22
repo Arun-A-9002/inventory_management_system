@@ -311,7 +311,7 @@ export default function PurchaseManagement() {
     try {
       if (editingPR) {
         // Update existing PR
-        const res = await api.put(`/purchase/${editingPR.id}`, {
+        await api.put(`/purchase/${editingPR.id}`, {
           requested_by: requestedBy,
           items: selectedItems.map(item => ({
             item_name: item.item_name,

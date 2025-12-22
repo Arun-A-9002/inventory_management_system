@@ -86,6 +86,34 @@ def get_purchase_requests_pr(db: Session = Depends(get_tenant_session)):
     prs = db.query(PurchaseRequest).all()
     return prs
 
+@router.get("/po/{po_number}")
+def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_session)):
+    """Get PO details with items"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    
+    # Get PO with items
+    po_data = {
+        "id": po.id,
+        "po_number": po.po_number,
+        "pr_number": po.pr_number,
+        "vendor": po.vendor,
+        "po_date": po.po_date,
+        "items": [
+            {
+                "id": item.id,
+                "item_name": item.item_name,
+                "quantity": item.quantity,
+                "rate": item.rate,
+                "tax": item.tax,
+                "discount": item.discount
+            }
+            for item in po.items
+        ]
+    }
+    return po_data
+
 @router.get("/po")
 def list_purchase_orders(db: Session = Depends(get_tenant_session)):
     pos = db.query(PurchaseOrder).all()
@@ -136,6 +164,26 @@ def create_purchase_order(data: POCreate, db: Session = Depends(get_tenant_sessi
     db.commit()
     db.refresh(po)
 
+    # If PR number is provided, copy items from PR to PO
+    if data.pr_number:
+        pr = db.query(PurchaseRequest).filter(PurchaseRequest.pr_number == data.pr_number).first()
+        if pr and pr.items:
+            print(f"Found PR {data.pr_number} with {len(pr.items)} items")
+            for pr_item in pr.items:
+                print(f"Adding item: {pr_item.item_name} qty: {pr_item.quantity}")
+                po_item = PurchaseOrderItem(
+                    po_id=po.id,
+                    item_name=pr_item.item_name,
+                    quantity=pr_item.quantity,
+                    rate=0,  # Will be updated later
+                    tax=0,
+                    discount=0
+                )
+                db.add(po_item)
+        else:
+            print(f"No PR found for {data.pr_number} or PR has no items")
+    
+    # Also add any additional items from the request
     for item in data.items:
         po_item = PurchaseOrderItem(
             po_id=po.id,
@@ -411,11 +459,29 @@ def get_po_tracking_list(db: Session = Depends(get_tenant_session)):
         print(f"Error fetching tracking: {str(e)}")
         return []
 
-@router.get("/po-tracking/{po_number}")
-def get_po_tracking_by_number(po_number: str, db: Session = Depends(get_tenant_session)):
-    return db.query(POTracking).filter(
-        POTracking.po_number == po_number
-    ).all()
+@router.get("/po/{po_id}/items")
+def get_po_items(po_id: int, db: Session = Depends(get_tenant_session)):
+    """Get items for a specific PO"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    
+    # Return PO items if they exist
+    if po.items:
+        return po.items
+    
+    # Fallback: Get items from related PR
+    if po.pr_number:
+        pr = db.query(PurchaseRequest).filter(PurchaseRequest.pr_number == po.pr_number).first()
+        if pr and pr.items:
+            return [{
+                "item_name": item.item_name,
+                "quantity": item.quantity,
+                "uom": item.uom,
+                "rate": 0  # Default rate
+            } for item in pr.items]
+    
+    return []
 
 
 # =====================================================

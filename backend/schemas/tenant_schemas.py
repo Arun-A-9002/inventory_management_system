@@ -706,7 +706,12 @@ class GRNCreate(BaseModel):
     po_number: str
     vendor_name: str
     store: str
+    total_amount: Optional[float] = 0.0
     items: List[GRNItemCreate]
+
+# -------- GRN STATUS UPDATE --------
+class GRNStatusUpdate(BaseModel):
+    status: GRNStatus
 
 # -------- QC --------
 class QCCreate(BaseModel):
@@ -716,3 +721,51 @@ class QCCreate(BaseModel):
     qc_date: date
     remarks: Optional[str]
     rejected_qty: float = 0
+
+
+
+
+# ---------- STOCK ----------
+class StockResponse(BaseModel):
+    id: int
+    item_name: str
+    sku: Optional[str]
+    category: Optional[str]
+    uom: Optional[str]
+    total_qty: float
+    available_qty: float
+    reserved_qty: float
+
+    class Config:
+        orm_mode = True
+
+
+# ---------- ADJUSTMENT ----------
+class StockAdjustmentCreate(BaseModel):
+    stock_id: int
+    adjustment_type: str
+    store: str
+    batch_no: Optional[str]
+    quantity: float
+    reason: str
+
+
+# ---------- TRANSFER ----------
+class StockTransferCreate(BaseModel):
+    stock_id: int
+    from_store: str
+    to_store: str
+    qty: float
+    batch_no: Optional[str]
+    transport_mode: str
+    remarks: Optional[str]
+
+
+# ---------- ISSUE ----------
+class StockIssueCreate(BaseModel):
+    stock_id: int
+    department: str
+    requested_by: str
+    qty: float
+    batch_no: Optional[str]
+    reason: str

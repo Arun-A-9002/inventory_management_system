@@ -654,6 +654,9 @@ class GRN(TenantBase):
     vendor_name = Column(String(100))
     store = Column(String(100))
     status = Column(Enum(GRNStatus), default=GRNStatus.pending)
+    
+    # Total amount field
+    total_amount = Column(DECIMAL(10, 2), default=0.00)
 
     items = relationship("GRNItem", back_populates="grn")
     qc = relationship("QCInspection", back_populates="grn", uselist=False)
@@ -700,3 +703,104 @@ class QCInspection(TenantBase):
     rejected_qty = Column(Float, default=0)
 
     grn = relationship("GRN", back_populates="qc")
+
+
+#stock
+
+
+# ---------------- ENUMS ----------------
+class StockTxnType(str, enum.Enum):
+    OPENING = "OPENING"
+    ADJUST_IN = "ADJUST_IN"
+    ADJUST_OUT = "ADJUST_OUT"
+    TRANSFER = "TRANSFER"
+    ISSUE = "ISSUE"
+
+# ---------------- STOCK MASTER ----------------
+class Stock(TenantBase):
+    __tablename__ = "stocks"
+
+    id = Column(Integer, primary_key=True)
+    item_name = Column(String(150), nullable=False)
+    sku = Column(String(50), unique=True)
+    category = Column(String(100))
+    uom = Column(String(50))
+
+    total_qty = Column(Float, default=0)
+    available_qty = Column(Float, default=0)
+    reserved_qty = Column(Float, default=0)
+
+    reorder_level = Column(Float, default=0)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- BATCH ----------------
+class StockBatch(TenantBase):
+    __tablename__ = "stock_batches"
+
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"))
+    batch_no = Column(String(100))
+    expiry_date = Column(Date)
+    qty = Column(Float, default=0)
+    store = Column(String(100))
+
+
+# ---------------- LEDGER ----------------
+class StockLedger(TenantBase):
+    __tablename__ = "stock_ledger"
+
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer)
+    batch_no = Column(String(100), nullable=True)
+
+    txn_type = Column(Enum(StockTxnType))
+    qty_in = Column(Float, default=0)
+    qty_out = Column(Float, default=0)
+    balance = Column(Float)
+
+    ref_no = Column(String(100))
+    remarks = Column(String(255))
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- TRANSFER ----------------
+class StockTransfer(TenantBase):
+    __tablename__ = "stock_transfers"
+
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer)
+
+    from_store = Column(String(100))
+    to_store = Column(String(100))
+
+    qty = Column(Float)
+    batch_no = Column(String(100), nullable=True)
+
+    status = Column(String(50), default="PENDING")
+    transport_mode = Column(String(50))
+    remarks = Column(String(255))
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- ISSUE ----------------
+class StockIssue(TenantBase):
+    __tablename__ = "stock_issues"
+
+    id = Column(Integer, primary_key=True)
+    issue_no = Column(String(100), unique=True)
+
+    stock_id = Column(Integer)
+    department = Column(String(100))
+    requested_by = Column(String(100))
+
+    qty = Column(Float)
+    batch_no = Column(String(100), nullable=True)
+
+    reason = Column(String(255))
+    status = Column(String(50), default="ISSUED")
+
+    created_at = Column(DateTime, server_default=func.now())

@@ -96,7 +96,7 @@ app.include_router(vendor_router)
 app.include_router(purchase_order_router)
 
 # ✅ Goods Receipt & Inspection
-app.include_router(grn_router, prefix="/api")
+app.include_router(grn_router)
 
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
