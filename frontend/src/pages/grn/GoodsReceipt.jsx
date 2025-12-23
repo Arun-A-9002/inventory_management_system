@@ -28,7 +28,13 @@ export default function GoodsReceipt() {
       mrp: 0,
       tax: 0,
       batch_no: "",
-      expiry_date: ""
+      expiry_date: "",
+      showPieceCalc: false,
+      container: 0,
+      package: 0,
+      piece: 0,
+      package_cost: 0,
+      package_mrp: 0
     }
   ]);
 
@@ -174,15 +180,70 @@ export default function GoodsReceipt() {
       mrp: 0,
       tax: 0,
       batch_no: "",
-      expiry_date: ""
+      expiry_date: "",
+      showPieceCalc: false,
+      container: 0,
+      package: 0,
+      piece: 0,
+      package_cost: 0,
+      package_mrp: 0
     }]);
   };
 
-  // Update item
+  // Save price to item master
+  const savePriceToItemMaster = async (index) => {
+    const item = grnItems[index];
+    
+    if (!item.item_name || !item.price) {
+      showToast('Please enter item name and unit price', 'error');
+      return;
+    }
+    
+    try {
+      await api.post('/grn/save-price', {
+        item_name: item.item_name,
+        unit_price: item.price,
+        mrp: item.mrp || 0
+      });
+      showToast(`Prices saved to item master for ${item.item_name}`, 'success');
+    } catch (err) {
+      showToast('Failed to save prices to item master', 'error');
+    }
+  };
   const updateItem = (index, field, value) => {
-    const updatedItems = grnItems.map((item, idx) => 
-      idx === index ? { ...item, [field]: value } : item
-    );
+    const updatedItems = grnItems.map((item, idx) => {
+      if (idx === index) {
+        const newItem = { ...item, [field]: value };
+        
+        // Calculate total pieces from container × package × piece
+        const totalPieces = (newItem.container || 0) * (newItem.package || 0) * (newItem.piece || 0);
+        
+        // Auto-update quantity with calculated total when piece calculation changes
+        if (totalPieces > 0) {
+          newItem.po_qty = totalPieces; // Override quantity with calculated total
+        }
+        
+        // Auto-calculate and update unit price and MRP when piece calculation changes
+        if (totalPieces > 0 && (newItem.package_cost > 0 || newItem.package_mrp > 0)) {
+          const totalPackage = (newItem.container || 0) * (newItem.package || 0);
+          
+          if (newItem.package_cost > 0) {
+            const subtotal = totalPackage * newItem.package_cost;
+            const costPerPiece = subtotal / totalPieces;
+            newItem.price = parseFloat(costPerPiece.toFixed(2));
+          }
+          
+          if (newItem.package_mrp > 0) {
+            const mrpTotal = totalPackage * newItem.package_mrp;
+            const mrpPerPiece = mrpTotal / totalPieces;
+            newItem.mrp = parseFloat(mrpPerPiece.toFixed(2));
+          }
+        }
+        
+        return newItem;
+      }
+      return item;
+    });
     setGrnItems(updatedItems);
   };
 
@@ -197,8 +258,42 @@ export default function GoodsReceipt() {
   const calculateTotalAmount = () => {
     return grnItems.reduce((sum, item) => {
       const subtotal = (item.po_qty || 0) * (item.price || 0);
-      const tax = subtotal * (item.tax || 0) / 100;
-      return sum + subtotal + tax;
+      return sum + subtotal;
+    }, 0);
+  };
+
+  // Calculate subtotal without tax
+  const calculateSubtotal = () => {
+    return grnItems.reduce((sum, item) => {
+      const totalPackage = (item.container || 0) * (item.package || 0);
+      if (totalPackage > 0 && item.package_cost > 0) {
+        return sum + (totalPackage * item.package_cost);
+      }
+      return sum + ((item.po_qty || 0) * (item.price || 0));
+    }, 0);
+  };
+
+  // Calculate MRP total
+  const calculateMRPTotal = () => {
+    return grnItems.reduce((sum, item) => {
+      const totalPackage = (item.container || 0) * (item.package || 0);
+      if (totalPackage > 0 && item.package_mrp > 0) {
+        return sum + (totalPackage * item.package_mrp);
+      }
+      return sum + ((item.po_qty || 0) * (item.mrp || 0));
+    }, 0);
+  };
+
+  // Calculate tax amount
+  const calculateTaxAmount = () => {
+    return grnItems.reduce((sum, item) => {
+      const totalPieces = (item.container || 0) * (item.package || 0) * (item.piece || 0);
+      if (totalPieces > 0 && item.package_cost > 0) {
+        const taxRate = item.tax || 0;
+        return sum + (item.package_cost * taxRate / 100);
+      }
+      const subtotal = (item.po_qty || 0) * (item.price || 0);
+      return sum + (subtotal * (item.tax || 0) / 100);
     }, 0);
   };
 
@@ -508,8 +603,29 @@ export default function GoodsReceipt() {
                                 placeholder="Quantity"
                                 value={item.po_qty}
                                 onChange={(e) => updateItem(idx, 'po_qty', parseFloat(e.target.value) || 0)}
-                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className={`w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                  ((item.container || 0) * (item.package || 0) * (item.piece || 0)) > 0 ? 'bg-yellow-100 font-bold' : ''
+                                }`}
+                                readOnly={((item.container || 0) * (item.package || 0) * (item.piece || 0)) > 0}
+                                title={((item.container || 0) * (item.package || 0) * (item.piece || 0)) > 0 ? 'Auto-calculated from Container × Package × Piece' : 'Enter quantity manually'}
                               />
+                            </div>
+                            <div>
+                              <div 
+                                className="text-xs font-medium text-slate-600 mb-1 cursor-pointer hover:text-blue-600 flex items-center"
+                                onClick={() => updateItem(idx, 'showPieceCalc', !item.showPieceCalc)}
+                              >
+                                <span>Piece Calculation</span>
+                                <svg 
+                                  className={`w-3 h-3 ml-1 transition-transform ${item.showPieceCalc ? 'rotate-180' : ''}`}
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                              <div className="h-8"></div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price *</label>
@@ -531,6 +647,116 @@ export default function GoodsReceipt() {
                                 className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
                             </div>
+                          </div>
+                          
+                          {item.showPieceCalc && (
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-5 gap-2 p-2 border border-slate-300 rounded-lg bg-blue-50">
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Container</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Container"
+                                    value={item.container}
+                                    onChange={(e) => updateItem(idx, 'container', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Package</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Package"
+                                    value={item.package}
+                                    onChange={(e) => updateItem(idx, 'package', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Total Package</label>
+                                  <div className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm bg-blue-100 font-bold text-center">
+                                    {(item.container || 0) * (item.package || 0)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Piece</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Piece"
+                                    value={item.piece}
+                                    onChange={(e) => updateItem(idx, 'piece', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Total</label>
+                                  <div className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm bg-yellow-100 font-bold text-center">
+                                    {(item.container || 0) * (item.package || 0) * (item.piece || 0)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-5 gap-2 p-2 border border-slate-300 rounded-lg bg-green-50">
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Package Cost</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Package Cost"
+                                    value={item.package_cost}
+                                    onChange={(e) => updateItem(idx, 'package_cost', parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Package MRP</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Package MRP"
+                                    value={item.package_mrp}
+                                    onChange={(e) => updateItem(idx, 'package_mrp', parseFloat(e.target.value) || 0)}
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">MRP Total</label>
+                                  <div className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm bg-purple-100 font-bold text-center">
+                                    {((item.container || 0) * (item.package || 0) * (item.package_mrp || 0)).toFixed(2)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Cost Per Piece</label>
+                                  <div className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm bg-orange-100 font-bold text-center">
+                                    {(() => {
+                                      const totalPieces = (item.container || 0) * (item.package || 0) * (item.piece || 0);
+                                      const totalPackage = (item.container || 0) * (item.package || 0);
+                                      const subtotal = totalPackage > 0 && item.package_cost > 0 ? (totalPackage * item.package_cost) : 0;
+                                      return totalPieces > 0 && subtotal > 0 ? (subtotal / totalPieces).toFixed(2) : '0.00';
+                                    })()}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">MRP Per Piece</label>
+                                  <div className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm bg-purple-100 font-bold text-center">
+                                    {(() => {
+                                      const totalPieces = (item.container || 0) * (item.package || 0) * (item.piece || 0);
+                                      const totalPackage = (item.container || 0) * (item.package || 0);
+                                      const mrpTotal = totalPackage > 0 && item.package_mrp > 0 ? (totalPackage * item.package_mrp) : 0;
+                                      return totalPieces > 0 && mrpTotal > 0 ? (mrpTotal / totalPieces).toFixed(2) : '0.00';
+                                    })()}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex justify-center mt-2">
+                                <button
+                                  onClick={() => savePriceToItemMaster(idx)}
+                                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+                                >
+                                  Save Price
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="grid grid-cols-1 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
                               <input
@@ -581,11 +807,15 @@ export default function GoodsReceipt() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-600">Subtotal:</span>
-                      <span className="font-medium">₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0)), 0).toFixed(2)}</span>
+                      <span className="font-medium">₹{calculateSubtotal().toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">MRP Total:</span>
+                      <span className="font-medium text-purple-600">₹{calculateMRPTotal().toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-600">Tax Amount:</span>
-                      <span className="font-medium">₹{grnItems.reduce((sum, item) => sum + ((item.po_qty || 0) * (item.price || 0) * (item.tax || 0) / 100), 0).toFixed(2)}</span>
+                      <span className="font-medium">₹{calculateTaxAmount().toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-600">Total Items:</span>
@@ -593,7 +823,7 @@ export default function GoodsReceipt() {
                     </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2 border-blue-200">
                       <span className="text-slate-800">Grand Total:</span>
-                      <span className="text-blue-600">₹{calculateTotalAmount().toFixed(2)}</span>
+                      <span className="text-blue-600">₹{(calculateSubtotal() + calculateTaxAmount()).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -857,6 +1087,8 @@ export default function GoodsReceipt() {
                           <th className="border px-3 py-2 text-center">UOM</th>
                           <th className="border px-3 py-2 text-right">Rate</th>
                           <th className="border px-3 py-2 text-right">Amount</th>
+                          <th className="border px-3 py-2 text-center">Cost/Piece</th>
+                          <th className="border px-3 py-2 text-center">MRP/Piece</th>
                           <th className="border px-3 py-2 text-left">Batch Details</th>
                         </tr>
                       </thead>
@@ -872,6 +1104,16 @@ export default function GoodsReceipt() {
                               <td className="border px-3 py-2 text-center">{item.uom}</td>
                               <td className="border px-3 py-2 text-right">₹{item.rate}</td>
                               <td className="border px-3 py-2 text-right">₹{itemAmount.toFixed(2)}</td>
+                              <td className="border px-3 py-2 text-center bg-orange-50">
+                                <span className="font-semibold text-orange-700">
+                                  ₹{item.cost_per_piece ? item.cost_per_piece.toFixed(2) : '0.00'}
+                                </span>
+                              </td>
+                              <td className="border px-3 py-2 text-center bg-purple-50">
+                                <span className="font-semibold text-purple-700">
+                                  ₹{item.mrp_per_piece ? item.mrp_per_piece.toFixed(2) : '0.00'}
+                                </span>
+                              </td>
                               <td className="border px-3 py-2">
                                 {item.batches.map((batch, bIdx) => (
                                   <div key={bIdx} className="text-sm mb-1">
@@ -984,6 +1226,8 @@ export default function GoodsReceipt() {
                         <th className="border border-gray-400 px-3 py-2 text-center font-semibold">UOM</th>
                         <th className="border border-gray-400 px-3 py-2 text-right font-semibold">Rate</th>
                         <th className="border border-gray-400 px-3 py-2 text-right font-semibold">Amount</th>
+                        <th className="border border-gray-400 px-3 py-2 text-center font-semibold">Cost/Pc</th>
+                        <th className="border border-gray-400 px-3 py-2 text-center font-semibold">MRP/Pc</th>
                         <th className="border border-gray-400 px-3 py-2 text-left font-semibold">Batch Details</th>
                       </tr>
                     </thead>
@@ -999,6 +1243,12 @@ export default function GoodsReceipt() {
                             <td className="border border-gray-400 px-3 py-2 text-center">{item.uom}</td>
                             <td className="border border-gray-400 px-3 py-2 text-right">₹{item.rate}</td>
                             <td className="border border-gray-400 px-3 py-2 text-right">₹{itemAmount.toFixed(2)}</td>
+                            <td className="border border-gray-400 px-3 py-2 text-center">
+                              ₹{item.cost_per_piece ? item.cost_per_piece.toFixed(2) : '0.00'}
+                            </td>
+                            <td className="border border-gray-400 px-3 py-2 text-center">
+                              ₹{item.mrp_per_piece ? item.mrp_per_piece.toFixed(2) : '0.00'}
+                            </td>
                             <td className="border border-gray-400 px-3 py-2">
                               {item.batches.map((batch, bIdx) => (
                                 <div key={bIdx} className="text-sm mb-1">

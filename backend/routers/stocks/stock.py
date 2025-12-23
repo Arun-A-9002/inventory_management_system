@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_tenant_db
-from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue
+from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue, Item, GRNItem
 from schemas.tenant_schemas import *
+from datetime import datetime
 
 router = APIRouter(prefix="/stocks", tags=["Stock Management"])
 DEFAULT_DB = "arun"
@@ -11,9 +13,40 @@ def get_db():
     yield from get_tenant_db(DEFAULT_DB)
 
 # ---------------- OVERVIEW ----------------
-@router.get("/", response_model=list[StockResponse])
+@router.get("/")
 def list_stock(db: Session = Depends(get_db)):
-    return db.query(Stock).all()
+    # Get all items from item master
+    items = db.query(Item).filter(Item.is_active == True).all()
+    
+    result = []
+    for item in items:
+        # Check if stock exists for this item
+        stock = db.query(Stock).filter(Stock.item_name == item.name).first()
+        
+        # Get latest GRN item for cost per piece and MRP per piece
+        latest_grn_item = db.query(GRNItem).filter(
+            GRNItem.item_name == item.name
+        ).order_by(GRNItem.id.desc()).first()
+        
+        stock_data = {
+            "id": stock.id if stock else item.id,
+            "item_name": item.name,
+            "item_code": item.item_code,
+            "sku": stock.sku if stock else f"SKU-{item.item_code}",
+            "category": item.category,
+            "brand": item.brand,
+            "uom": item.uom,
+            "total_qty": stock.total_qty if stock else 0,
+            "available_qty": stock.available_qty if stock else 0,
+            "reserved_qty": stock.reserved_qty if stock else 0,
+            "min_stock": item.min_stock,
+            "mrp": float(item.mrp) if item.mrp else 0.0,
+            "cost_per_piece": float(latest_grn_item.cost_per_piece) if latest_grn_item and latest_grn_item.cost_per_piece else float(item.fixing_price) if item.fixing_price else 0.0,
+            "mrp_per_piece": float(latest_grn_item.mrp_per_piece) if latest_grn_item and latest_grn_item.mrp_per_piece else float(item.mrp) if item.mrp else 0.0
+        }
+        result.append(stock_data)
+    
+    return result
 
 
 # ---------------- ADJUSTMENT ----------------

@@ -4,7 +4,7 @@ from datetime import date
 import uuid
 
 from database import get_tenant_db
-from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus
+from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, UOM, Stock, StockLedger
 from schemas.tenant_schemas import GRNCreate, QCCreate, GRNStatusUpdate
 
 router = APIRouter(prefix="/grn", tags=["Goods Receipt & Inspection"])
@@ -42,6 +42,37 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
         db.add(grn_item)
         db.commit()
         db.refresh(grn_item)
+
+        # Update stock immediately when GRN is created
+        stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
+        if stock:
+            stock.total_qty += item.received_qty
+            stock.available_qty += item.received_qty
+        else:
+            new_stock = Stock(
+                item_name=item.item_name,
+                sku=f"SKU-{item.item_name[:3].upper()}",
+                uom=item.uom or "PCS",
+                total_qty=item.received_qty,
+                available_qty=item.received_qty,
+                reserved_qty=0,
+                reorder_level=0
+            )
+            db.add(new_stock)
+            db.flush()
+            stock = new_stock
+
+        # Create stock ledger entry
+        ledger = StockLedger(
+            stock_id=stock.id,
+            txn_type="OPENING",
+            qty_in=item.received_qty,
+            qty_out=0,
+            balance=stock.available_qty,
+            ref_no=grn.grn_number,
+            remarks=f"GRN Receipt from {data.vendor_name}"
+        )
+        db.add(ledger)
 
         for b in item.batches:
             batch = Batch(
@@ -92,6 +123,12 @@ def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session)):
     
     for item in items:
         batches = db.query(Batch).filter(Batch.grn_item_id == item.id).all()
+        
+        # Get cost per piece and MRP per piece from item master
+        master_item = db.query(Item).filter(Item.name == item.item_name).first()
+        cost_per_piece = float(master_item.fixing_price) if master_item and master_item.fixing_price else 0.0
+        mrp_per_piece = float(master_item.mrp) if master_item and master_item.mrp else 0.0
+        
         item_data = {
             "id": item.id,
             "item_name": item.item_name,
@@ -99,6 +136,8 @@ def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session)):
             "received_qty": item.received_qty,
             "uom": item.uom,
             "rate": item.rate,
+            "cost_per_piece": cost_per_piece,
+            "mrp_per_piece": mrp_per_piece,
             "batches": [{
                 "batch_no": batch.batch_no,
                 "mfg_date": batch.mfg_date,
@@ -175,6 +214,29 @@ def extract_invoice_data(data: dict):
             }]
         }
 
+# ---------------- SAVE PRICE TO ITEM MASTER ----------------
+@router.post("/save-price")
+def save_price_to_item_master(data: dict, db: Session = Depends(get_tenant_session)):
+    item_name = data.get('item_name')
+    unit_price = data.get('unit_price')
+    mrp = data.get('mrp', 0)
+    
+    if not item_name or unit_price is None:
+        raise HTTPException(400, "Item name and unit price are required")
+    
+    # Find item in item master
+    item = db.query(Item).filter(Item.name == item_name).first()
+    if not item:
+        raise HTTPException(404, f"Item '{item_name}' not found in item master")
+    
+    # Update fixing price and MRP
+    item.fixing_price = float(unit_price)
+    if mrp > 0:
+        item.mrp = float(mrp)
+    
+    db.commit()
+    return {"message": f"Prices updated for {item_name}"}
+
 # ---------------- QC ----------------
 @router.post("/{grn_id}/qc")
 def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_session)):
@@ -201,12 +263,52 @@ def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_
 
 # ---------------- APPROVAL ----------------
 @router.post("/{grn_id}/approve")
-def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session)):
+def approve_grn(grn_id: int, db: Session = Depends(get_tenant_db)):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
 
+    # Update GRN status
     grn.status = GRNStatus.approved
+    
+    # Get GRN items and update stock
+    grn_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
+    
+    for item in grn_items:
+        # Check if stock exists for this item
+        stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
+        
+        if stock:
+            # Update existing stock
+            stock.total_qty += item.received_qty
+            stock.available_qty += item.received_qty
+        else:
+            # Create new stock entry
+            new_stock = Stock(
+                item_name=item.item_name,
+                sku=f"SKU-{item.item_name[:3].upper()}",
+                uom=item.uom or "PCS",
+                total_qty=item.received_qty,
+                available_qty=item.received_qty,
+                reserved_qty=0,
+                reorder_level=0
+            )
+            db.add(new_stock)
+            db.flush()
+            stock = new_stock
+        
+        # Create stock ledger entry
+        ledger = StockLedger(
+            stock_id=stock.id,
+            txn_type="OPENING",
+            qty_in=item.received_qty,
+            qty_out=0,
+            balance=stock.available_qty,
+            ref_no=grn.grn_number,
+            remarks=f"GRN Receipt from {grn.vendor_name}"
+        )
+        db.add(ledger)
+    
     db.commit()
     return {"message": "GRN Approved & Stock Updated"}
 

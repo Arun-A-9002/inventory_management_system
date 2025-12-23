@@ -26,6 +26,9 @@ import Vendor from "./pages/vendors/vendor";
 // Purchase Management
 import PurchaseManagement from "./pages/purchase/PurchaseManagement";
 
+// stocks
+import StockManagement from "./pages/stocks/StockManagement";
+
 // Goods Receipt Note (GRN) - New Module to be added later
 import GoodsReceipt from "./pages/grn/GoodsReceipt";
 function App() {
@@ -68,6 +71,9 @@ function App() {
 
            {/* GRN */}
           <Route path="grn" element={<GoodsReceipt />} />
+
+          {/* Stocks */}
+          <Route path="stocks" element={<StockManagement />} />
         </Route>
 
       </Routes>

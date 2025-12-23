@@ -698,6 +698,14 @@ class GRNItemCreate(BaseModel):
     received_qty: float
     uom: str
     rate: float
+    container: Optional[int] = 0
+    package: Optional[int] = 0
+    piece: Optional[int] = 0
+    package_cost: Optional[float] = 0.0
+    package_mrp: Optional[float] = 0.0
+    total_pieces: Optional[int] = 0
+    cost_per_piece: Optional[float] = 0.0
+    mrp_per_piece: Optional[float] = 0.0
     batches: List[BatchCreate]
 
 # -------- GRN --------

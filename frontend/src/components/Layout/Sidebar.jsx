@@ -15,6 +15,7 @@ export default function Sidebar() {
   const menu = [
     { name: "Dashboard", path: "/app/dashboard" },
 
+    // ---------------- USER MANAGEMENT ----------------
     {
       name: "User Management",
       submenu: [
@@ -24,6 +25,7 @@ export default function Sidebar() {
       ],
     },
 
+    // ---------------- ORGANIZATION SETUP ----------------
     {
       name: "Organization Setup",
       submenu: [
@@ -33,14 +35,17 @@ export default function Sidebar() {
       ],
     },
 
+    // ---------------- CORE MODULES ----------------
     { name: "Item Master", path: "/app/items" },
 
     { name: "Vendor Management", path: "/app/vendor" },
 
     { name: "Purchase Management", path: "/app/purchase-management" },
 
-    // ✅ SINGLE PAGE GRN (NO SUBMENU)
     { name: "Goods Receipt & Inspection", path: "/app/grn" },
+
+    // ================= SINGLE PAGE STOCK =================
+    { name: "Stock Management", path: "/app/stocks" },
   ];
 
   return (

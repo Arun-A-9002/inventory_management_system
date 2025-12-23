@@ -45,6 +45,11 @@ from routers.purchase_order.purchase import router as purchase_order_router
 # ----------------------------------------------------------
 from routers.GRN.grn import router as grn_router
 
+#----------------------------------------------------------
+# STOCKS
+#----------------------------------------------------------
+from routers.stocks.stock import router as stock_router
+
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -98,6 +103,8 @@ app.include_router(purchase_order_router)
 # ✅ Goods Receipt & Inspection
 app.include_router(grn_router)
 
+# Stocks
+app.include_router(stock_router)
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------
