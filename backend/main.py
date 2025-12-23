@@ -50,6 +50,17 @@ from routers.GRN.grn import router as grn_router
 #----------------------------------------------------------
 from routers.stocks.stock import router as stock_router
 
+#----------------------------------------------------------
+# INVENTORY LOCATIONS
+#----------------------------------------------------------
+from routers.inventory.location import router as location_router
+
+#----------------------------------------------------------
+# CONSUMPTION & ISSUE
+#----------------------------------------------------------
+from routers.consumption.issue import router as consumption_router
+
+
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -105,6 +116,12 @@ app.include_router(grn_router)
 
 # Stocks
 app.include_router(stock_router)
+
+# Inventory Locations
+app.include_router(location_router)
+
+# Consumption & Issue
+app.include_router(consumption_router)
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------

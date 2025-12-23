@@ -14,6 +14,43 @@ DEFAULT_TENANT_DB = "arun"
 def get_tenant_session():
     yield from get_tenant_db(DEFAULT_TENANT_DB)
 
+# Helper function to update stock from GRN
+def _update_stock_from_grn(grn_id: int, db: Session):
+    grn_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
+    grn = db.query(GRN).filter(GRN.id == grn_id).first()
+    
+    for item in grn_items:
+        stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
+        
+        if stock:
+            stock.total_qty += item.received_qty
+            stock.available_qty += item.received_qty
+        else:
+            new_stock = Stock(
+                item_name=item.item_name,
+                sku=f"SKU-{item.item_name[:3].upper()}",
+                uom=item.uom or "PCS",
+                total_qty=item.received_qty,
+                available_qty=item.received_qty,
+                reserved_qty=0,
+                reorder_level=0
+            )
+            db.add(new_stock)
+            db.flush()
+            stock = new_stock
+        
+        # Create stock ledger entry
+        ledger = StockLedger(
+            stock_id=stock.id,
+            txn_type="OPENING",
+            qty_in=item.received_qty,
+            qty_out=0,
+            balance=stock.available_qty,
+            ref_no=grn.grn_number,
+            remarks=f"GRN Receipt from {grn.vendor_name}"
+        )
+        db.add(ledger)
+
 # ---------------- CREATE GRN ----------------
 @router.post("/create")
 def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
@@ -23,7 +60,8 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
         po_number=data.po_number,
         vendor_name=data.vendor_name,
         store=data.store,
-        total_amount=data.total_amount
+        total_amount=data.total_amount,
+        status=data.status if hasattr(data, 'status') else GRNStatus.pending
     )
 
     db.add(grn)
@@ -43,37 +81,6 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
         db.commit()
         db.refresh(grn_item)
 
-        # Update stock immediately when GRN is created
-        stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
-        if stock:
-            stock.total_qty += item.received_qty
-            stock.available_qty += item.received_qty
-        else:
-            new_stock = Stock(
-                item_name=item.item_name,
-                sku=f"SKU-{item.item_name[:3].upper()}",
-                uom=item.uom or "PCS",
-                total_qty=item.received_qty,
-                available_qty=item.received_qty,
-                reserved_qty=0,
-                reorder_level=0
-            )
-            db.add(new_stock)
-            db.flush()
-            stock = new_stock
-
-        # Create stock ledger entry
-        ledger = StockLedger(
-            stock_id=stock.id,
-            txn_type="OPENING",
-            qty_in=item.received_qty,
-            qty_out=0,
-            balance=stock.available_qty,
-            ref_no=grn.grn_number,
-            remarks=f"GRN Receipt from {data.vendor_name}"
-        )
-        db.add(ledger)
-
         for b in item.batches:
             batch = Batch(
                 grn_item_id=grn_item.id,
@@ -83,6 +90,10 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
                 qty=b.qty
             )
             db.add(batch)
+
+    # If GRN is created with approved status, update stock immediately
+    if grn.status == GRNStatus.approved:
+        _update_stock_from_grn(grn.id, db)
 
     db.commit()
     return {"message": "GRN Created", "grn_number": grn.grn_number}
@@ -263,7 +274,7 @@ def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_
 
 # ---------------- APPROVAL ----------------
 @router.post("/{grn_id}/approve")
-def approve_grn(grn_id: int, db: Session = Depends(get_tenant_db)):
+def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session)):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -271,43 +282,8 @@ def approve_grn(grn_id: int, db: Session = Depends(get_tenant_db)):
     # Update GRN status
     grn.status = GRNStatus.approved
     
-    # Get GRN items and update stock
-    grn_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
-    
-    for item in grn_items:
-        # Check if stock exists for this item
-        stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
-        
-        if stock:
-            # Update existing stock
-            stock.total_qty += item.received_qty
-            stock.available_qty += item.received_qty
-        else:
-            # Create new stock entry
-            new_stock = Stock(
-                item_name=item.item_name,
-                sku=f"SKU-{item.item_name[:3].upper()}",
-                uom=item.uom or "PCS",
-                total_qty=item.received_qty,
-                available_qty=item.received_qty,
-                reserved_qty=0,
-                reorder_level=0
-            )
-            db.add(new_stock)
-            db.flush()
-            stock = new_stock
-        
-        # Create stock ledger entry
-        ledger = StockLedger(
-            stock_id=stock.id,
-            txn_type="OPENING",
-            qty_in=item.received_qty,
-            qty_out=0,
-            balance=stock.available_qty,
-            ref_no=grn.grn_number,
-            remarks=f"GRN Receipt from {grn.vendor_name}"
-        )
-        db.add(ledger)
+    # Update stock using helper function
+    _update_stock_from_grn(grn_id, db)
     
     db.commit()
     return {"message": "GRN Approved & Stock Updated"}
@@ -319,12 +295,24 @@ def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_se
     if not grn:
         raise HTTPException(404, "GRN not found")
     
+    old_status = grn.status
+    
+    # If GRN was already approved, reverse stock changes first
+    if old_status == GRNStatus.approved:
+        existing_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
+        for item in existing_items:
+            stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
+            if stock:
+                stock.total_qty -= item.received_qty
+                stock.available_qty -= item.received_qty
+    
     # Update GRN details
     grn.grn_date = data.grn_date
     grn.po_number = data.po_number
     grn.vendor_name = data.vendor_name
     grn.store = data.store
     grn.total_amount = data.total_amount
+    grn.status = data.status if hasattr(data, 'status') else grn.status
     
     # Delete existing items and batches
     existing_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
@@ -355,6 +343,10 @@ def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_se
                 qty=b.qty
             )
             db.add(batch)
+    
+    # If GRN status is approved, update stock with new quantities
+    if grn.status == GRNStatus.approved:
+        _update_stock_from_grn(grn_id, db)
 
     db.commit()
     return {"message": "GRN Updated", "grn_number": grn.grn_number}

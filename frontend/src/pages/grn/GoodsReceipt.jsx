@@ -39,6 +39,7 @@ export default function GoodsReceipt() {
   ]);
 
   const [itemList, setItemList] = useState([]);
+  const [locations, setLocations] = useState([]);
 
   // Fetch item list
   const fetchItemList = async () => {
@@ -56,6 +57,17 @@ export default function GoodsReceipt() {
       setPoList(res.data || []);
     } catch (err) {
       console.error("Failed to fetch PO list:", err);
+    }
+  };
+
+  // Fetch locations
+  const fetchLocations = async () => {
+    try {
+      const res = await api.get("/inventory/locations/");
+      setLocations(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch locations:", err);
+      setLocations([]);
     }
   };
 
@@ -77,6 +89,7 @@ export default function GoodsReceipt() {
     fetchPOList();
     fetchGRNList();
     fetchItemList();
+    fetchLocations();
   }, []);
 
 
@@ -505,17 +518,18 @@ export default function GoodsReceipt() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Store / Warehouse *</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Location *</label>
                     <select
                       value={form.store}
                       onChange={(e) => setForm({ ...form, store: e.target.value })}
                       className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     >
-                      <option value="">Select Store</option>
-                      <option value="Main Store">Main Store</option>
-                      <option value="Warehouse A">Warehouse A</option>
-                      <option value="Warehouse B">Warehouse B</option>
-                      <option value="Pharmacy Store">Pharmacy Store</option>
+                      <option value="">Select Location</option>
+                      {locations.map(location => (
+                        <option key={location.id} value={location.name}>
+                          {location.name} ({location.code})
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

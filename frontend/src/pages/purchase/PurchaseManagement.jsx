@@ -42,6 +42,7 @@ export default function PurchaseManagement() {
     message: ''
   });
   const [vendors, setVendors] = useState([]);
+  const [locations, setLocations] = useState([]);
 
   // Fetch PR list
   const fetchPRList = async () => {
@@ -101,6 +102,7 @@ export default function PurchaseManagement() {
       fetchPRList();
       fetchItemList();
       fetchVendors();
+      fetchLocations();
     } else if (activeTab === "PO") {
       fetchPOList();
     } else if (activeTab === "Tracking") {
@@ -116,6 +118,16 @@ export default function PurchaseManagement() {
       setVendors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+    }
+  };
+
+  // Fetch locations for email
+  const fetchLocations = async () => {
+    try {
+      const res = await api.get('/inventory/locations/');
+      setLocations(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch locations:', err);
     }
   };
 
@@ -250,10 +262,10 @@ export default function PurchaseManagement() {
       const poNumber = `PO-${Date.now().toString().slice(-6)}`;
       setEmailForm({
         vendor_email: '',
-        location: 'Mumbai',
+        location: locations.length > 0 ? locations[0].name : '',
         po_number: poNumber,
         subject: `Purchase Order ${poNumber} for PR ${pr.pr_number}`,
-        message: `Dear Vendor,\n\nPlease find Purchase Order ${poNumber} for Purchase Request ${pr.pr_number}:\n\n${itemsList}\n\nLocation: Mumbai\n\nPlease confirm receipt and delivery schedule.\n\nThank you.`
+        message: `Dear Vendor,\n\nPlease find Purchase Order ${poNumber} for Purchase Request ${pr.pr_number}:\n\n${itemsList}\n\nLocation: ${locations.length > 0 ? locations[0].name : 'TBD'}\n\nPlease confirm receipt and delivery schedule.\n\nThank you.`
       });
       setShowEmailModal(true);
     } catch (err) {
@@ -1101,10 +1113,12 @@ export default function PurchaseManagement() {
                   onChange={(e) => setEmailForm({...emailForm, location: e.target.value})}
                   className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="Mumbai">Mumbai</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Bangalore">Bangalore</option>
-                  <option value="Chennai">Chennai</option>
+                  <option value="">Select location</option>
+                  {locations.map(location => (
+                    <option key={location.id} value={location.name}>
+                      {location.name} ({location.code})
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">

@@ -29,8 +29,14 @@ import PurchaseManagement from "./pages/purchase/PurchaseManagement";
 // stocks
 import StockManagement from "./pages/stocks/StockManagement";
 
+// inventory
+import InventoryLocations from "./pages/inventory/InventoryLocations";
+
 // Goods Receipt Note (GRN) - New Module to be added later
 import GoodsReceipt from "./pages/grn/GoodsReceipt";
+
+//consumption & issue
+import ConsumptionIssue from "./pages/consuption/ConsuptionIssue";
 function App() {
   return (
     <BrowserRouter>
@@ -74,6 +80,13 @@ function App() {
 
           {/* Stocks */}
           <Route path="stocks" element={<StockManagement />} />
+          
+          {/* Inventory Locations */}
+          <Route path="inventory/locations" element={<InventoryLocations />} />
+
+          {/* Consumption & Issue */}
+          <Route path="consumption" element={<ConsumptionIssue />} />
+
         </Route>
 
       </Routes>

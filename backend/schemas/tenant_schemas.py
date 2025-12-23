@@ -750,30 +750,72 @@ class StockResponse(BaseModel):
 
 # ---------- ADJUSTMENT ----------
 class StockAdjustmentCreate(BaseModel):
-    stock_id: int
+    item_name: str
     adjustment_type: str
-    store: str
-    batch_no: Optional[str]
+    batch_no: Optional[str] = None
     quantity: float
-    reason: str
+    reason: Optional[str] = None
 
 
 # ---------- TRANSFER ----------
 class StockTransferCreate(BaseModel):
-    stock_id: int
+    item_name: str
     from_store: str
     to_store: str
     qty: float
-    batch_no: Optional[str]
-    transport_mode: str
-    remarks: Optional[str]
+    batch_no: Optional[str] = None
+    transport_mode: Optional[str] = "Internal"
+    remarks: Optional[str] = None
 
 
 # ---------- ISSUE ----------
 class StockIssueCreate(BaseModel):
-    stock_id: int
+    item_name: str
     department: str
     requested_by: str
     qty: float
+    batch_no: Optional[str] = None
+    reason: Optional[str] = None
+
+# ============================================================
+#                   INVENTORY LOCATION SCHEMAS
+# ============================================================
+class InventoryLocationBase(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+
+class InventoryLocationCreate(InventoryLocationBase):
+    pass
+
+class InventoryLocationResponse(InventoryLocationBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+# ============================================================
+#                   INVENTORY ISSUE SCHEMAS
+# ============================================================
+
+
+class IssueItemCreate(BaseModel):
+    item_name: str
+    qty: float
+    uom: str
     batch_no: Optional[str]
-    reason: str
+    item_type: str
+    remarks: Optional[str]
+
+class IssueCreate(BaseModel):
+    issue_type: str
+    department: Optional[str]
+    project_code: Optional[str]
+    external_ref: Optional[str]
+    issue_date: date
+    requested_by: Optional[str]
+    remarks: Optional[str]
+    items: List[IssueItemCreate]

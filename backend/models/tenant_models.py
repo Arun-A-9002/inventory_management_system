@@ -804,3 +804,67 @@ class StockIssue(TenantBase):
     status = Column(String(50), default="ISSUED")
 
     created_at = Column(DateTime, server_default=func.now())
+
+# ============================================================
+#                   INVENTORY LOCATIONS
+# ============================================================
+class InventoryLocation(TenantBase):
+    __tablename__ = "inventory_locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(191), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+# ============================================================
+#                   INVENTORY ISSUES    
+
+
+# ---------------- ENUMS ----------------
+class IssueTypeEnum(str, enum.Enum):
+    DEPARTMENT = "DEPARTMENT"
+    PROJECT = "PROJECT"
+    EXTERNAL = "EXTERNAL"
+
+class ItemTypeEnum(str, enum.Enum):
+    CONSUMABLE = "CONSUMABLE"
+    NON_CONSUMABLE = "NON_CONSUMABLE"
+
+# ---------------- ISSUE HEADER ----------------
+class IssueHeader(TenantBase):
+    __tablename__ = "issue_headers"
+
+    id = Column(Integer, primary_key=True)
+    issue_no = Column(String(50), unique=True, nullable=False)
+    issue_type = Column(Enum(IssueTypeEnum), nullable=False)
+
+    department = Column(String(100), nullable=True)
+    project_code = Column(String(50), nullable=True)
+    external_ref = Column(String(150), nullable=True)
+
+    issue_date = Column(Date, nullable=False)
+    requested_by = Column(String(100), nullable=True)
+    remarks = Column(String(255), nullable=True)
+
+    status = Column(String(50), default="DRAFT")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- ISSUE ITEMS ----------------
+class IssueItem(TenantBase):
+    __tablename__ = "issue_items"
+
+    id = Column(Integer, primary_key=True)
+    issue_id = Column(Integer, ForeignKey("issue_headers.id"))
+
+    item_name = Column(String(150))
+    qty = Column(Float)
+    uom = Column(String(50))
+    batch_no = Column(String(100), nullable=True)
+
+    item_type = Column(Enum(ItemTypeEnum))
+    remarks = Column(String(255))
