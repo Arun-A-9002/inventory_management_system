@@ -122,12 +122,16 @@ export default function Sidebar() {
     { name: "Goods Receipt & Inspection", path: "/app/grn" },
 
     // ================= SINGLE MENU ITEMS =================
-    { name: "Stock Management", path: "/app/stocks" },
+    { name: "Stock Ledger", path: "/app/stocks" },
     { name: "Locations", path: "/app/inventory/locations" },
+    { name: "Consumption & Issue", path: "/app/consumption" },
+    { name: "Return & Disposal", path: "/app/returns" },
+    { name: "Customer Management", path: "/app/customers" },
+    { name: "Vendor Ledger", path: "/app/supplier-ledger" },
   ];
 
   return (
-    <div className="w-64 bg-cyan-700 text-white min-h-screen p-5">
+    <div className="w-64 bg-cyan-700 text-white min-h-screen p-5 overflow-y-auto">
       <h2 className="text-2xl font-bold mb-8">NUTRYAH IMS</h2>
 
       <ul className="space-y-3">

@@ -49,6 +49,7 @@ from routers.GRN.grn import router as grn_router
 # STOCKS
 #----------------------------------------------------------
 from routers.stocks.stock import router as stock_router
+from routers.stocks.stock_overview import router as stock_overview_router
 
 #----------------------------------------------------------
 # INVENTORY LOCATIONS
@@ -60,6 +61,21 @@ from routers.inventory.location import router as location_router
 #----------------------------------------------------------
 from routers.consumption.issue import router as consumption_router
 
+#----------------------------------------------------------
+#  RETURN & DISPOSAL
+#----------------------------------------------------------
+from routers.returns.return_disposal import router as return_router
+
+#----------------------------------------------------------
+#  CUSTOMERS
+#----------------------------------------------------------
+from routers.customers.customer import router as customer_router
+
+
+# ----------------------------------------------------------
+# SUPPLIERS
+# ----------------------------------------------------------
+from routers.suppliers.payments import router as payments_router
 
 # ----------------------------------------------------------
 # LOGGER
@@ -116,12 +132,23 @@ app.include_router(grn_router)
 
 # Stocks
 app.include_router(stock_router)
+app.include_router(stock_overview_router)
 
 # Inventory Locations
 app.include_router(location_router)
 
 # Consumption & Issue
 app.include_router(consumption_router)
+
+# Return & Disposal
+app.include_router(return_router)
+
+# Customer Management
+app.include_router(customer_router)
+
+# Suppliers
+app.include_router(payments_router)
+
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------

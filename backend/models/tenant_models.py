@@ -653,6 +653,8 @@ class GRN(TenantBase):
     po_number = Column(String(50))
     vendor_name = Column(String(100))
     store = Column(String(100))
+    invoice_number = Column(String(50), nullable=True)
+    invoice_date = Column(Date, nullable=True)
     status = Column(Enum(GRNStatus), default=GRNStatus.pending)
     
     # Total amount field
@@ -685,6 +687,8 @@ class Batch(TenantBase):
     batch_no = Column(String(50))
     mfg_date = Column(Date, nullable=True)
     expiry_date = Column(Date, nullable=True)
+    warranty_start_date = Column(Date, nullable=True)
+    warranty_end_date = Column(Date, nullable=True)
     qty = Column(Float)
 
     item = relationship("GRNItem", back_populates="batches")
@@ -868,3 +872,161 @@ class IssueItem(TenantBase):
 
     item_type = Column(Enum(ItemTypeEnum))
     remarks = Column(String(255))
+
+
+#============================================================
+#                  RETURN & DISPOSAL
+#===========================================================
+
+# ---------------- ENUMS ----------------
+class ReturnTypeEnum(str, enum.Enum):
+    TO_VENDOR = "TO_VENDOR"
+    FROM_DEPARTMENT = "FROM_DEPARTMENT"
+    TO_CUSTOMER = "TO_CUSTOMER"
+
+class ItemConditionEnum(str, enum.Enum):
+    GOOD = "GOOD"
+    DAMAGED = "DAMAGED"
+    EXPIRED = "EXPIRED"
+
+class DisposalMethodEnum(str, enum.Enum):
+    INCINERATION = "INCINERATION"
+    VENDOR_RETURN = "VENDOR_RETURN"
+    SCRAP = "SCRAP"
+
+class DepreciationMethodEnum(str, enum.Enum):
+    SLM = "SLM"
+    WDV = "WDV"
+
+# ---------------- RETURN HEADER ----------------
+class ReturnHeader(TenantBase):
+    __tablename__ = "return_headers"
+
+    id = Column(Integer, primary_key=True)
+    return_no = Column(String(50), unique=True, nullable=False)
+    return_type = Column(Enum(ReturnTypeEnum), nullable=False)
+
+    vendor = Column(String(150), nullable=True)
+    department = Column(String(150), nullable=True)
+    reference_no = Column(String(100), nullable=True)
+
+    reason = Column(String(255))
+    return_date = Column(Date)
+
+    status = Column(String(50), default="DRAFT")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- RETURN ITEMS ----------------
+class ReturnItem(TenantBase):
+    __tablename__ = "return_items"
+
+    id = Column(Integer, primary_key=True)
+    return_id = Column(Integer, ForeignKey("return_headers.id"))
+
+    item_name = Column(String(150))
+    batch_no = Column(String(100), nullable=True)
+    qty = Column(Float)
+    uom = Column(String(50))
+
+    condition = Column(Enum(ItemConditionEnum))
+    remarks = Column(String(255))
+
+
+# ---------------- DISPOSAL ----------------
+class DisposalTransaction(TenantBase):
+    __tablename__ = "disposal_transactions"
+
+    id = Column(Integer, primary_key=True)
+    transaction_no = Column(String(50), unique=True)
+
+    item_name = Column(String(150))
+    batch_no = Column(String(100))
+    qty = Column(Float)
+
+    condition = Column(Enum(ItemConditionEnum))
+    disposal_method = Column(Enum(DisposalMethodEnum))
+    approval_required = Column(Boolean, default=False)
+
+    reason = Column(String(255))
+    transaction_date = Column(Date)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- SALVAGE VALUATION ----------------
+class SalvageValuation(TenantBase):
+    __tablename__ = "salvage_valuations"
+
+    id = Column(Integer, primary_key=True)
+    salvage_no = Column(String(50), unique=True)
+
+    item_name = Column(String(150))
+    condition = Column(String(50))
+
+    original_cost = Column(Float)
+    useful_life = Column(Float)
+    age_of_item = Column(Float)
+
+    depreciation_method = Column(Enum(DepreciationMethodEnum))
+    current_book_value = Column(Float)
+    scrap_value = Column(Float)
+    financial_loss = Column(Float)
+
+    remarks = Column(String(255))
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ============================================================
+#                   STOCK OVERVIEW
+# ============================================================
+class StockOverview(TenantBase):
+    __tablename__ = "stock_overview"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_name = Column(String(150), nullable=False)
+    item_code = Column(String(50), nullable=False)
+    location = Column(String(100), nullable=False)
+    available_qty = Column(Integer, default=0)
+    min_stock = Column(Integer, default=0)
+    warranty = Column(String(50), default="—")
+    expiry_date = Column(String(50), default="—")
+    batch_no = Column(String(100), nullable=True)
+    status = Column(String(50), nullable=False)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+# ============================================================
+#                   CUSTOMERS
+# ============================================================
+class Customer(TenantBase):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_type = Column(String(50), nullable=False)  # organization, self, optional
+    
+    # Organization fields
+    org_name = Column(String(191), nullable=True)
+    org_address = Column(Text, nullable=True)
+    org_pan = Column(String(20), nullable=True)
+    org_gst = Column(String(20), nullable=True)
+    org_mobile = Column(String(20), nullable=True)
+    org_type = Column(String(50), nullable=True)
+    
+    # Self fields
+    name = Column(String(191), nullable=True)
+    address = Column(Text, nullable=True)
+    pan = Column(String(20), nullable=True)
+    gst = Column(String(20), nullable=True)
+    mobile = Column(String(20), nullable=True)
+    type = Column(String(50), nullable=True)
+    
+    # Common fields
+    email = Column(String(191), nullable=True)
+    reference_source = Column(String(100), nullable=True)
+    reference_details = Column(Text, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())

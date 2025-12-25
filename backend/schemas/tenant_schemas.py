@@ -714,6 +714,8 @@ class GRNCreate(BaseModel):
     po_number: str
     vendor_name: str
     store: str
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[date] = None
     total_amount: Optional[float] = 0.0
     items: List[GRNItemCreate]
 
@@ -819,3 +821,89 @@ class IssueCreate(BaseModel):
     requested_by: Optional[str]
     remarks: Optional[str]
     items: List[IssueItemCreate]
+
+
+#===========================================================
+#                  RETURN & DISPOSAL SCHEMAS
+#===========================================================
+
+
+# ---------- RETURN ----------
+class ReturnItemCreate(BaseModel):
+    item_name: str
+    batch_no: Optional[str]
+    qty: float
+    uom: str
+    condition: str
+    remarks: Optional[str]
+
+class ReturnCreate(BaseModel):
+    return_type: str
+    vendor: Optional[str]
+    department: Optional[str]
+    reference_no: Optional[str]
+    reason: str
+    return_date: date
+    items: List[ReturnItemCreate]
+
+
+# ---------- DISPOSAL ----------
+class DisposalCreate(BaseModel):
+    item_name: str
+    batch_no: str
+    qty: float
+    condition: str
+    disposal_method: str
+    approval_required: bool
+    reason: str
+    transaction_date: date
+
+
+# ---------- SALVAGE ----------
+class SalvageCreate(BaseModel):
+    item_name: str
+    condition: str
+    original_cost: float
+    useful_life: float
+    age_of_item: float
+    depreciation_method: str
+    scrap_value: float
+    remarks: Optional[str]
+
+# ============================================================
+#                   CUSTOMER SCHEMAS
+# ============================================================
+class CustomerBase(BaseModel):
+    customer_type: str  # organization, self, optional
+    
+    # Organization fields
+    org_name: Optional[str] = None
+    org_address: Optional[str] = None
+    org_pan: Optional[str] = None
+    org_gst: Optional[str] = None
+    org_mobile: Optional[str] = None
+    org_type: Optional[str] = None
+    
+    # Self fields
+    name: Optional[str] = None
+    address: Optional[str] = None
+    pan: Optional[str] = None
+    gst: Optional[str] = None
+    mobile: Optional[str] = None
+    type: Optional[str] = None
+    
+    # Common fields
+    email: Optional[str] = None
+    reference_source: Optional[str] = None
+    reference_details: Optional[str] = None
+
+class CustomerCreate(CustomerBase):
+    pass
+
+class CustomerResponse(CustomerBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        orm_mode = True

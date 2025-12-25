@@ -37,6 +37,16 @@ import GoodsReceipt from "./pages/grn/GoodsReceipt";
 
 //consumption & issue
 import ConsumptionIssue from "./pages/consuption/ConsuptionIssue";
+
+//return & disposal
+import ReturnDisposal from "./pages/returns/ReturnDisposal";
+
+//customers
+import CustomerRegistration from "./pages/customers/CustomerRegistration";
+
+//supplier ledger
+import SupplierLedger from "./pages/suppliers/SupplierLedger";
+
 function App() {
   return (
     <BrowserRouter>
@@ -86,6 +96,15 @@ function App() {
 
           {/* Consumption & Issue */}
           <Route path="consumption" element={<ConsumptionIssue />} />
+
+          {/* Return & Disposal */}
+          <Route path="returns" element={<ReturnDisposal />} />
+
+          {/* Customer Management */}
+          <Route path="customers" element={<CustomerRegistration />} />
+
+          {/* Supplier Ledger */}
+          <Route path="supplier-ledger" element={<SupplierLedger />} />
 
         </Route>
 

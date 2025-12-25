@@ -146,8 +146,11 @@ def get_tenant_db(tenant_db_name: str = "arun"):
         # 3️⃣ Ensure tables exist
         from models.tenant_models import TenantBase
         TenantBase.metadata.create_all(bind=engine)
+        
+        # 4️⃣ Add missing columns to existing tables
+        ensure_missing_columns(engine)
 
-        # 4️⃣ Return DB session
+        # 5️⃣ Return DB session
         SessionLocal = get_tenant_sessionmaker(tenant_db_name)
         db = SessionLocal()
 
@@ -167,3 +170,21 @@ def get_tenant_db(tenant_db_name: str = "arun"):
 # RUN DEFAULT TENANT INITIALIZATION
 # -------------------------------------------------------
 # Removed init_tenant_db() to prevent startup errors
+
+
+def ensure_missing_columns(engine):
+    """Add missing columns to existing tables"""
+    try:
+        with engine.connect() as conn:
+            # Add warranty columns to batches table
+            try:
+                conn.execute(text("ALTER TABLE batches ADD COLUMN warranty_start_date DATE NULL"))
+                conn.execute(text("ALTER TABLE batches ADD COLUMN warranty_end_date DATE NULL"))
+                conn.commit()
+                print("Added warranty columns to batches table")
+            except Exception as e:
+                if "Duplicate column name" not in str(e):
+                    print(f"Error adding warranty columns: {e}")
+                
+    except Exception as e:
+        print(f"Error in ensure_missing_columns: {e}")

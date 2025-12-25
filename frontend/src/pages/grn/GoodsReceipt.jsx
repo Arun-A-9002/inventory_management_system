@@ -11,6 +11,7 @@ export default function GoodsReceipt() {
   const [loading, setLoading] = useState(false);
   const [viewModal, setViewModal] = useState({ isOpen: false, grn: null });
   const [printModal, setPrintModal] = useState({ isOpen: false, grn: null });
+  const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
   const [editMode, setEditMode] = useState({ isEditing: false, grnId: null });
 
   const [form, setForm] = useState({
@@ -18,6 +19,9 @@ export default function GoodsReceipt() {
     po_number: "",
     vendor_name: "",
     store: "",
+    invoice_number: "",
+    invoice_date: "",
+    with_po: true
   });
 
   const [grnItems, setGrnItems] = useState([
@@ -40,6 +44,7 @@ export default function GoodsReceipt() {
 
   const [itemList, setItemList] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [vendors, setVendors] = useState([]);
 
   // Fetch item list
   const fetchItemList = async () => {
@@ -71,15 +76,35 @@ export default function GoodsReceipt() {
     }
   };
 
+  // Fetch vendors
+  const fetchVendors = async () => {
+    try {
+      const res = await api.get("/vendors/");
+      setVendors(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch vendors:", err);
+      setVendors([]);
+    }
+  };
+
   // Fetch GRN list
   const fetchGRNList = async () => {
     try {
       setLoading(true);
       const res = await api.get("/grn/list");
+      console.log('GRN API Response:', res.data);
       setGrnList(res.data || []);
     } catch (err) {
       console.error("Failed to fetch GRN list:", err);
-      setGrnList([]);
+      // Try alternative endpoint
+      try {
+        const res = await api.get("/grn/");
+        console.log('GRN Alternative API Response:', res.data);
+        setGrnList(res.data || []);
+      } catch (err2) {
+        console.error("Both GRN endpoints failed:", err2);
+        setGrnList([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -90,6 +115,7 @@ export default function GoodsReceipt() {
     fetchGRNList();
     fetchItemList();
     fetchLocations();
+    fetchVendors();
   }, []);
 
 
@@ -341,6 +367,16 @@ export default function GoodsReceipt() {
     }
   };
 
+  // Handle Invoice GRN
+  const handleInvoiceGRN = async (grn) => {
+    try {
+      const res = await api.get(`/grn/${grn.id}`);
+      setInvoiceModal({ isOpen: true, grn: res.data });
+    } catch (err) {
+      showToast('Failed to fetch GRN details for invoice', 'error');
+    }
+  };
+
   // Print function
   const printGRN = () => {
     window.print();
@@ -360,7 +396,9 @@ export default function GoodsReceipt() {
         grn_date: grnData.grn_date,
         po_number: grnData.po_number,
         vendor_name: grnData.vendor_name,
-        store: grnData.store
+        store: grnData.store,
+        invoice_number: grnData.invoice_number || "",
+        invoice_date: grnData.invoice_date || ""
       });
       
       // Load items into form
@@ -396,8 +434,18 @@ export default function GoodsReceipt() {
   };
 
   const handleSubmit = async () => {
-    if (!form.po_number || !form.vendor_name || !form.store) {
-      showToast("Please fill all required fields", 'error');
+    if (!form.store) {
+      showToast("Please select location", 'error');
+      return;
+    }
+
+    if (form.with_po && !form.po_number) {
+      showToast("Please select Purchase Order", 'error');
+      return;
+    }
+
+    if (!form.with_po && !form.vendor_name) {
+      showToast("Please enter vendor name", 'error');
       return;
     }
 
@@ -406,11 +454,22 @@ export default function GoodsReceipt() {
       return;
     }
 
+    // Validate that each item has either expiry date or warranty date
+    const itemsWithoutDates = grnItems.filter(item => 
+      item.item_name && (!item.expiry_date && !item.start_date)
+    );
+    
+    if (itemsWithoutDates.length > 0) {
+      showToast("Each item must have either an expiry date or warranty date", 'error');
+      return;
+    }
+
     try {
       const totalAmount = calculateTotalAmount();
       
       const grnData = {
         ...form,
+        invoice_date: form.invoice_date || null,
         total_amount: totalAmount,
         items: grnItems.map(item => ({
           item_name: item.item_name,
@@ -444,6 +503,8 @@ export default function GoodsReceipt() {
         po_number: "",
         vendor_name: "",
         store: "",
+        invoice_number: "",
+        invoice_date: ""
       });
       setGrnItems([{
         item_name: "",
@@ -534,31 +595,101 @@ export default function GoodsReceipt() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Purchase Order *</label>
-                  <select
-                    value={form.po_number}
-                    onChange={(e) => handlePOSelect(e.target.value)}
-                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Select Purchase Order</option>
-                    {poList.map((po) => (
-                      <option key={po.id} value={po.po_number}>
-                        {po.po_number} - {po.vendor}
-                      </option>
-                    ))}
-                  </select>
+                {/* PO Toggle */}
+                <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-xl">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="po_type"
+                      checked={form.with_po}
+                      onChange={() => setForm({ ...form, with_po: true, po_number: "", vendor_name: "" })}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-slate-700">With PO</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="po_type"
+                      checked={!form.with_po}
+                      onChange={() => setForm({ ...form, with_po: false, po_number: "", vendor_name: "" })}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Without PO</span>
+                  </label>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name</label>
-                  <input
-                    value={form.vendor_name}
-                    readOnly
-                    className="w-full rounded-xl border-2 border-slate-100 px-4 py-3 bg-slate-50 text-slate-600"
-                    placeholder="Auto-filled from selected PO"
-                  />
+                {form.with_po && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Purchase Order *</label>
+                    <select
+                      value={form.po_number}
+                      onChange={(e) => handlePOSelect(e.target.value)}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="">Select Purchase Order</option>
+                      {poList.map((po) => (
+                        <option key={po.id} value={po.po_number}>
+                          {po.po_number} - {po.vendor}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {!form.with_po && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name *</label>
+                    <select
+                      value={form.vendor_name}
+                      onChange={(e) => setForm({ ...form, vendor_name: e.target.value })}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="">Select vendor</option>
+                      {vendors.map((vendor) => (
+                        <option key={vendor.id} value={vendor.vendor_name}>
+                          {vendor.vendor_name} ({vendor.vendor_code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {form.with_po && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name</label>
+                    <input
+                      value={form.vendor_name}
+                      readOnly
+                      className="w-full rounded-xl border-2 border-slate-100 px-4 py-3 bg-slate-50 text-slate-600"
+                      placeholder="Auto-filled from selected PO"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Invoice Number</label>
+                    <input
+                      type="text"
+                      value={form.invoice_number}
+                      onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="Enter invoice number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Invoice Date</label>
+                    <input
+                      type="date"
+                      value={form.invoice_date}
+                      onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
+                      className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
                 </div>
+
+
 
                 {/* Items Section */}
                 <div className="border-t-2 border-slate-100 pt-6">
@@ -601,12 +732,44 @@ export default function GoodsReceipt() {
                         <div className="space-y-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1">Item Name *</label>
-                            <input
-                              placeholder="Enter item name (e.g., Laptop, Medicine, Raw Material)"
-                              value={item.item_name}
-                              onChange={(e) => updateItem(idx, 'item_name', e.target.value)}
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
+                            {form.with_po ? (
+                              <input
+                                placeholder="Enter item name (e.g., Laptop, Medicine, Raw Material)"
+                                value={item.item_name}
+                                onChange={(e) => updateItem(idx, 'item_name', e.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            ) : (
+                              <select
+                                value={item.item_name}
+                                onChange={(e) => {
+                                  const selectedItemName = e.target.value;
+                                  const selectedItem = itemList.find(i => i.name === selectedItemName);
+                                  
+                                  const updatedItems = grnItems.map((grnItem, grnIdx) => {
+                                    if (grnIdx === idx) {
+                                      return {
+                                        ...grnItem,
+                                        item_name: selectedItemName,
+                                        price: selectedItem?.fixing_price || grnItem.price,
+                                        mrp: selectedItem?.mrp || grnItem.mrp,
+                                        tax: selectedItem?.tax || grnItem.tax
+                                      };
+                                    }
+                                    return grnItem;
+                                  });
+                                  setGrnItems(updatedItems);
+                                }}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                <option value="">Select item</option>
+                                {itemList.map((masterItem) => (
+                                  <option key={masterItem.id} value={masterItem.name}>
+                                    {masterItem.name} ({masterItem.item_code})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                           
                           <div className="grid grid-cols-4 gap-2">
@@ -783,25 +946,59 @@ export default function GoodsReceipt() {
                             </div>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-2">
                             <div>
                               <label className="block text-xs font-medium text-slate-600 mb-1">Batch/Lot Number *</label>
                               <input
-                                placeholder="Batch/Lot number (e.g., BT001, LOT2024)"
+                                placeholder={`Batch/Lot number (e.g., BT${Date.now().toString().slice(-6)}, LOT${new Date().getFullYear()})`}
                                 value={item.batch_no}
                                 onChange={(e) => updateItem(idx, 'batch_no', e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Expiry Date</label>
-                              <input
-                                type="date"
-                                placeholder="Expiry Date"
-                                value={item.expiry_date}
-                                onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Date Type</label>
+                              <select
+                                value={item.date_type || 'expiry'}
+                                onChange={(e) => updateItem(idx, 'date_type', e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
+                              >
+                                <option value="expiry">Expiry Date</option>
+                                <option value="warranty">Warranty Date</option>
+                              </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
+                                  {item.date_type === 'warranty' ? 'Manufacturing Date' : 'Manufacturing Date'}
+                                </label>
+                                <input
+                                  type="date"
+                                  value={item.start_date || ''}
+                                  onChange={(e) => updateItem(idx, 'start_date', e.target.value)}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
+                                  {item.date_type === 'warranty' ? 'Warranty (MM/YYYY)' : 'Expiry Date'}
+                                </label>
+                                {item.date_type === 'warranty' ? (
+                                  <input
+                                    type="month"
+                                    value={item.expiry_date}
+                                    onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                ) : (
+                                  <input
+                                    type="date"
+                                    value={item.expiry_date}
+                                    onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -863,6 +1060,8 @@ export default function GoodsReceipt() {
                           po_number: "",
                           vendor_name: "",
                           store: "",
+                          invoice_number: "",
+                          invoice_date: ""
                         });
                         setGrnItems([{
                           item_name: "",
@@ -928,6 +1127,7 @@ export default function GoodsReceipt() {
                       <tr>
                         <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">GRN Details</th>
                         <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Vendor & PO</th>
+                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Invoice Details</th>
                         <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Amount</th>
                         <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Status</th>
                         <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Actions</th>
@@ -936,7 +1136,7 @@ export default function GoodsReceipt() {
                     <tbody className="divide-y divide-slate-100">
                       {grnList.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="text-center py-16">
+                          <td colSpan="6" className="text-center py-16">
                             <div className="text-slate-400">
                               <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -962,6 +1162,20 @@ export default function GoodsReceipt() {
                                 <div className="text-sm text-slate-500">PO: {grn.po_number}</div>
                               </div>
                             </td>
+                            <td className="py-4 px-6">
+                              <div>
+                                {grn.invoice_number ? (
+                                  <div className="font-medium text-slate-800">{grn.invoice_number}</div>
+                                ) : (
+                                  <div className="text-sm text-slate-400">No Invoice</div>
+                                )}
+                                {grn.invoice_date ? (
+                                  <div className="text-sm text-slate-500">{new Date(grn.invoice_date).toLocaleDateString()}</div>
+                                ) : (
+                                  <div className="text-sm text-slate-400">No Date</div>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-4 px-6 text-center">
                               <div className="font-bold text-green-600 text-lg">₹{(grn.total_amount || 0).toFixed(2)}</div>
                             </td>
@@ -980,15 +1194,6 @@ export default function GoodsReceipt() {
                                   <option value="Approved">Approved</option>
                                   <option value="Rejected">Rejected</option>
                                 </select>
-                                <select
-                                  className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border-0"
-                                  defaultValue="Pending"
-                                >
-                                  <option value="Pending">QC Pending</option>
-                                  <option value="Accepted">QC Passed</option>
-                                  <option value="Rejected">QC Failed</option>
-                                  <option value="Conditional">Conditional</option>
-                                </select>
                               </div>
                             </td>
                             <td className="py-4 px-6">
@@ -1005,7 +1210,7 @@ export default function GoodsReceipt() {
                                 </button>
                                 <button 
                                   onClick={() => handlePrintGRN(grn)}
-                                  className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors" 
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                   title="Print GRN"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1014,7 +1219,7 @@ export default function GoodsReceipt() {
                                 </button>
                                 <button 
                                   onClick={() => handleEditGRN(grn)}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                   title="Edit GRN"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1034,7 +1239,7 @@ export default function GoodsReceipt() {
                             </td>
                           </tr>
                         ))
-                      )}
+                      )}}
                     </tbody>
                   </table>
                 </div>
@@ -1328,6 +1533,155 @@ export default function GoodsReceipt() {
                 Print
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Modal */}
+      {invoiceModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold flex items-center">
+                <svg className="w-6 h-6 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Invoice - {invoiceModal.grn?.grn_number}
+              </h2>
+              <button 
+                onClick={() => setInvoiceModal({ isOpen: false, grn: null })}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {invoiceModal.grn && (
+              <div className="space-y-6">
+                {/* Invoice Header */}
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-lg border border-green-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-2xl font-bold text-green-700 mb-2">INVOICE</h3>
+                      <div className="space-y-1 text-sm">
+                        <p><strong>Invoice No:</strong> INV-{invoiceModal.grn.grn_number}</p>
+                        <p><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                        <p><strong>GRN Reference:</strong> {invoiceModal.grn.grn_number}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="bg-green-100 px-4 py-2 rounded-lg">
+                        <p className="text-sm text-green-600 font-medium">Amount</p>
+                        <p className="text-2xl font-bold text-green-700">₹{invoiceModal.grn.total_amount.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Billing Information */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="border border-gray-200 p-4 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-3 border-b pb-2">Bill To:</h4>
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium">{invoiceModal.grn.vendor_name}</p>
+                      <p className="text-gray-600">Vendor Address Line 1</p>
+                      <p className="text-gray-600">City, State - 000000</p>
+                      <p className="text-gray-600">Phone: +91 XXXXXXXXXX</p>
+                    </div>
+                  </div>
+                  <div className="border border-gray-200 p-4 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-3 border-b pb-2">Ship To:</h4>
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium">{invoiceModal.grn.store}</p>
+                      <p className="text-gray-600">Store Address Line 1</p>
+                      <p className="text-gray-600">City, State - 000000</p>
+                      <p className="text-gray-600">Phone: +91 XXXXXXXXXX</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Invoice Items Table */}
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-3 text-lg">Items</h4>
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700 border-b">S.No</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-700 border-b">Description</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-700 border-b">Qty</th>
+                          <th className="text-right py-3 px-4 font-semibold text-gray-700 border-b">Rate</th>
+                          <th className="text-right py-3 px-4 font-semibold text-gray-700 border-b">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {invoiceModal.grn.items.map((item, idx) => {
+                          const itemAmount = (item.received_qty || 0) * (item.rate || 0);
+                          return (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="py-3 px-4 text-center text-sm">{idx + 1}</td>
+                              <td className="py-3 px-4">
+                                <div>
+                                  <p className="font-medium text-gray-900">{item.item_name}</p>
+                                  <p className="text-xs text-gray-500">Batch: {item.batches[0]?.batch_no || 'N/A'}</p>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-center text-sm">{item.received_qty}</td>
+                              <td className="py-3 px-4 text-right text-sm">₹{item.rate}</td>
+                              <td className="py-3 px-4 text-right text-sm font-medium">₹{itemAmount.toFixed(2)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Invoice Summary */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="font-medium">₹{invoiceModal.grn.items.reduce((sum, item) => sum + ((item.received_qty || 0) * (item.rate || 0)), 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600">Tax (0%):</span>
+                    <span className="font-medium">₹0.00</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-300">
+                    <span className="text-lg font-semibold text-gray-800">Total Amount:</span>
+                    <span className="text-xl font-bold text-green-600">₹{invoiceModal.grn.total_amount.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Invoice Footer */}
+                <div className="text-center text-sm text-gray-500 border-t pt-4">
+                  <p>Thank you for your business!</p>
+                  <p className="mt-2">Generated on: {new Date().toLocaleString()}</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-center space-x-4 pt-4">
+                  <button 
+                    onClick={() => window.print()}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print Invoice
+                  </button>
+                  <button 
+                    onClick={() => showToast('Invoice saved successfully!', 'success')}
+                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Save Invoice
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
