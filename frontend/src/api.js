@@ -3,7 +3,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: "http://localhost:8000", // Change this if backend runs on different port
+  timeout: 10000, // 10 second timeout
 });
 
 // 🔥 Add Authorization header automatically to ALL requests

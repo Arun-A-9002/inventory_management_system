@@ -902,8 +902,15 @@ class CustomerCreate(CustomerBase):
 
 class CustomerResponse(CustomerBase):
     id: int
+    status: Optional[str] = None
     is_active: bool
     created_at: datetime
     
     class Config:
         orm_mode = True
+
+
+# ============================================================
+#                   BILLING SCHEMAS 
+# ============================================================
+

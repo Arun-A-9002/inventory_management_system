@@ -1026,7 +1026,34 @@ class Customer(TenantBase):
     email = Column(String(191), nullable=True)
     reference_source = Column(String(100), nullable=True)
     reference_details = Column(Text, nullable=True)
+    status = Column(String(50), default="pending")
     
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+
+# ============================================================
+#                   VENDOR PAYMENTS
+# ============================================================
+class VendorPayment(TenantBase):
+    __tablename__ = "vendor_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    grn_number = Column(String(50), nullable=False)
+    vendor_name = Column(String(150), nullable=False)
+    invoice_number = Column(String(50), nullable=True)
+    total_amount = Column(DECIMAL(10, 2), nullable=False)
+    paid_amount = Column(DECIMAL(10, 2), default=0.00)
+    outstanding_amount = Column(DECIMAL(10, 2), nullable=False)
+    payment_status = Column(String(20), default="unpaid")  # unpaid, partial, paid
+    payment_date = Column(Date, nullable=True)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
+
+# ============================================================
+#                   billing SETTINGS
+# ============================================================
+

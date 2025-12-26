@@ -4,7 +4,7 @@ from datetime import date
 import uuid
 
 from database import get_tenant_db
-from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, UOM, Stock, StockLedger, StockOverview
+from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, UOM, Stock, StockLedger, StockOverview, VendorPayment
 from schemas.tenant_schemas import GRNCreate, QCCreate, GRNStatusUpdate
 
 router = APIRouter(prefix="/grn", tags=["Goods Receipt & Inspection"])
@@ -137,6 +137,18 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
     # If GRN is created with approved status, update stock immediately
     if grn.status == GRNStatus.approved:
         _update_stock_from_grn(grn.id, db)
+    
+    # Create vendor payment record
+    vendor_payment = VendorPayment(
+        grn_number=grn.grn_number,
+        vendor_name=grn.vendor_name,
+        invoice_number=grn.invoice_number,
+        total_amount=grn.total_amount,
+        paid_amount=0.00,
+        outstanding_amount=grn.total_amount,
+        payment_status="unpaid"
+    )
+    db.add(vendor_payment)
 
     db.commit()
     return {"message": "GRN Created", "grn_number": grn.grn_number}

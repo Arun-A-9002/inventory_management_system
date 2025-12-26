@@ -2,7 +2,29 @@ import { useState, useEffect } from "react";
 import api from "../../api";
 
 // Payment Form Component
-function PaymentForm({ grn, onSave, onCancel }) {
+function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
+  // Calculate total due amount for the vendor
+  const totalDueAmount = filteredGrnList.reduce((total, grnItem) => {
+    const paidAmount = payments[grnItem.id] || 0;
+    const outstanding = Math.max(0, (grnItem.total_amount || 0) - paidAmount);
+    return total + outstanding;
+  }, 0);
+
+  // Calculate advance amount for the same vendor only
+  const advanceAmount = filteredGrnList
+    .filter(grnItem => grnItem.vendor_name === grn?.vendor_name)
+    .reduce((total, grnItem) => {
+      const paidAmount = payments[grnItem.id] || 0;
+      const outstanding = (grnItem.total_amount || 0) - paidAmount;
+      if (outstanding < 0) {
+        return total + Math.abs(outstanding);
+      }
+      return total;
+    }, 0);
+
+  // Net due amount after reducing advance
+  const netDueAmount = Math.max(0, totalDueAmount - advanceAmount);
+
   const [paymentData, setPaymentData] = useState({
     date: new Date().toISOString().split('T')[0],
     method: 'Cash',
@@ -10,13 +32,25 @@ function PaymentForm({ grn, onSave, onCancel }) {
     remarks: '',
     amount: ''
   });
+  
+  const [useAdvance, setUseAdvance] = useState(false);
+  
+  const paymentAmount = parseFloat(paymentData.amount) || 0;
+  const selectedAmount = grn?.total_amount || 0;
+  const paidAmount = payments[grn?.id] || 0;
+  const outstandingAmount = Math.max(0, selectedAmount - paidAmount);
+  const advanceUsed = useAdvance ? advanceAmount : 0;
+  const totalToPay = Math.max(0, outstandingAmount - advanceUsed);
+  const totalPayment = paymentAmount + advanceUsed;
 
   const handleSave = () => {
-    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
-      alert('Please enter a valid amount');
+    const advanceUsed = useAdvance ? Math.min(advanceAmount, outstandingAmount) : 0;
+    const effectivePayment = paymentAmount + advanceUsed;
+    if (effectivePayment <= 0) {
+      alert('Please enter a valid payment amount or select advance');
       return;
     }
-    onSave(grn.id, paymentData.amount);
+    onSave(grn.id, effectivePayment, advanceUsed);
   };
 
   return (
@@ -81,12 +115,31 @@ function PaymentForm({ grn, onSave, onCancel }) {
 
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium mb-2">Allocation</h4>
-        <div className="flex items-center mb-2">
+        <div className="flex items-center mb-3">
           <input type="checkbox" id="autoAllocate" className="mr-2" defaultChecked />
           <label htmlFor="autoAllocate" className="text-sm">Auto allocate (oldest first)</label>
         </div>
-        <div className="text-sm text-gray-600">
-          Payment: ₹{paymentData.amount || '0.00'} • Selected: ₹{grn?.total_amount?.toFixed(2) || '0.00'}
+        <div className="space-y-1 text-sm text-gray-600">
+          <div>Selected: ₹{selectedAmount.toFixed(2)}</div>
+          <div>Outstanding: ₹{outstandingAmount.toFixed(2)}</div>
+          {advanceAmount > 0 && (
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                id="useAdvance" 
+                className="mr-2" 
+                checked={useAdvance}
+                onChange={(e) => setUseAdvance(e.target.checked)}
+              />
+              <label htmlFor="useAdvance" className="text-green-600">Use Advance: ₹{advanceAmount.toFixed(2)}</label>
+            </div>
+          )}
+          <div className="font-medium text-blue-600">Total to Pay: ₹{totalToPay.toFixed(2)}</div>
+          {useAdvance && advanceAmount > 0 && (
+            <div className="text-xs text-gray-500 mt-1">
+              After payment, advance will be: ₹{Math.max(0, advanceAmount - Math.min(advanceAmount, outstandingAmount)).toFixed(2)}
+            </div>
+          )}
         </div>
         <div className="text-sm text-gray-500 mt-1">
           Any extra amount becomes Advance.
@@ -125,6 +178,8 @@ export default function SupplierLedger() {
   const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
   const [paymentModal, setPaymentModal] = useState({ isOpen: false, grn: null });
   const [payments, setPayments] = useState({});
+  const [totalAdvance, setTotalAdvance] = useState(0);
+  const [usedAdvances, setUsedAdvances] = useState({});
 
   useEffect(() => {
     fetchGRNList();
@@ -156,20 +211,41 @@ export default function SupplierLedger() {
   const fetchPaymentsForGRNs = async (grnList) => {
     try {
       const paymentMap = {};
+      let advanceTotal = 0;
+      
       for (const grn of grnList) {
         try {
-          const res = await api.get(`/payments/${grn.id}`);
-          paymentMap[grn.id] = res.data.total_paid || 0;
+          const res = await api.get(`/payments/${grn.grn_number}`);
+          const paidAmount = res.data.total_paid || 0;
+          paymentMap[grn.id] = paidAmount;
+          
+          // Calculate advance (overpayment)
+          const outstanding = (grn.total_amount || 0) - paidAmount;
+          if (outstanding < 0) {
+            advanceTotal += Math.abs(outstanding);
+          }
         } catch (err) {
-          console.error(`Failed to fetch payment for GRN ${grn.id}:`, err);
+          console.error(`Failed to fetch payment for GRN ${grn.grn_number}:`, err);
           paymentMap[grn.id] = 0;
         }
       }
+      
       setPayments(paymentMap);
+      setTotalAdvance(advanceTotal);
     } catch (err) {
       console.error('Failed to fetch payments:', err);
     }
   };
+
+  // Calculate total advance amount for filtered/selected vendor
+  const totalAdvanceAmount = (filteredGrnList.length > 0 ? filteredGrnList : grnList).reduce((total, grn) => {
+    const paidAmount = payments[grn.id] || 0;
+    const outstanding = (grn.total_amount || 0) - paidAmount;
+    if (outstanding < 0) {
+      return total + Math.abs(outstanding);
+    }
+    return total;
+  }, 0) - (usedAdvances[selectedVendor] || 0);
 
   const handleViewGRN = (grn) => {
     setViewModal({ isOpen: true, grn });
@@ -195,17 +271,31 @@ export default function SupplierLedger() {
 
   const savePayment = async (grnId, amount) => {
     try {
-      await api.post('/payments', null, {
-        params: { grn_id: grnId, amount: parseFloat(amount) }
-      });
-      setPayments(prev => ({
-        ...prev,
-        [grnId]: (prev[grnId] || 0) + parseFloat(amount)
-      }));
-      setPaymentModal({ isOpen: false, grn: null });
+      const response = await api.post(`/payments?grn_id=${grnId}&amount=${parseFloat(amount)}`);
+      
+      // Only update local state if API call was successful
+      if (response.status === 200 || response.status === 201) {
+        setPayments(prev => ({
+          ...prev,
+          [grnId]: (prev[grnId] || 0) + parseFloat(amount)
+        }));
+        
+        // Recalculate advance amount
+        const updatedGrnList = filteredGrnList.length > 0 ? filteredGrnList : grnList;
+        setTimeout(() => fetchPaymentsForGRNs(updatedGrnList), 100);
+        
+        setPaymentModal({ isOpen: false, grn: null });
+      } else {
+        throw new Error('Payment API call failed with status: ' + response.status);
+      }
     } catch (err) {
       console.error('Failed to save payment:', err);
-      alert('Failed to save payment');
+      alert('Failed to save payment: ' + (err.response?.data?.detail || err.message));
+      
+      // Refetch payments to ensure data consistency
+      if (filteredGrnList.length > 0) {
+        fetchPaymentsForGRNs(filteredGrnList);
+      }
     }
   };
 
@@ -243,6 +333,10 @@ export default function SupplierLedger() {
             <p className="text-gray-600">Track vendor transactions and outstanding amounts</p>
           </div>
           <div className="flex items-center space-x-4">
+            <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+              <label className="block text-sm font-medium text-green-700 mb-1">Advance Amount</label>
+              <div className="text-lg font-semibold text-green-600">₹{totalAdvanceAmount.toFixed(2)}</div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
               <select
@@ -295,7 +389,7 @@ export default function SupplierLedger() {
                 filteredGrnList.map((grn) => {
                   const paidAmount = payments[grn.id] || 0;
                   const totalAmount = grn.total_amount || 0;
-                  const outstanding = totalAmount - paidAmount;
+                  const outstanding = Math.max(0, totalAmount - paidAmount);
                   const getPaymentStatus = () => {
                     if (paidAmount === 0) return 'Unpaid';
                     if (outstanding === 0) return 'Paid';
@@ -417,8 +511,19 @@ export default function SupplierLedger() {
             
             <PaymentForm 
               grn={paymentModal.grn}
-              onSave={savePayment}
+              onSave={(grnId, amount, advanceUsed) => {
+                savePayment(grnId, amount);
+                if (advanceUsed > 0) {
+                  const vendorName = paymentModal.grn?.vendor_name;
+                  setUsedAdvances(prev => ({
+                    ...prev,
+                    [vendorName]: (prev[vendorName] || 0) + advanceUsed
+                  }));
+                }
+              }}
               onCancel={() => setPaymentModal({ isOpen: false, grn: null })}
+              filteredGrnList={filteredGrnList}
+              payments={payments}
             />
           </div>
         </div>
@@ -444,7 +549,7 @@ export default function SupplierLedger() {
                 {(() => {
                   const paidAmount = payments[viewModal.grn.id] || 0;
                   const totalAmount = viewModal.grn.total_amount || 0;
-                  const outstanding = totalAmount - paidAmount;
+                  const outstanding = Math.max(0, totalAmount - paidAmount);
                   const getStatus = () => {
                     if (paidAmount === 0) return 'Unpaid';
                     if (outstanding === 0) return 'Paid';
@@ -685,7 +790,7 @@ export default function SupplierLedger() {
                     {(() => {
                       const paidAmount = payments[invoiceModal.grn.id] || 0;
                       const totalAmount = invoiceModal.grn.total_amount || 0;
-                      const outstanding = totalAmount - paidAmount;
+                      const outstanding = Math.max(0, totalAmount - paidAmount);
                       const getStatus = () => {
                         if (paidAmount === 0) return 'Unpaid';
                         if (outstanding === 0) return 'Paid';

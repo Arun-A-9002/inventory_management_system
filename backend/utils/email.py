@@ -3,6 +3,20 @@ import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from utils.logger import log_error, log_audit
+import threading
+
+def send_email_async(to_email: str, subject: str, body: str, is_html: bool = False):
+    """Send email asynchronously to avoid blocking"""
+    def _send():
+        try:
+            send_email(to_email, subject, body, is_html)
+        except Exception as e:
+            log_error(e, f"Async email failed to {to_email}")
+    
+    thread = threading.Thread(target=_send)
+    thread.daemon = True
+    thread.start()
+    return True
 
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
     """Send email using SMTP configuration from .env"""
@@ -26,8 +40,8 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
         # Attach body
         msg.attach(MIMEText(body, 'html' if is_html else 'plain'))
 
-        # Connect and send
-        server = smtplib.SMTP(smtp_host, smtp_port)
+        # Connect and send with timeout
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_password)
         server.send_message(msg)

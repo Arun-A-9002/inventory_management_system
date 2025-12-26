@@ -77,6 +77,12 @@ from routers.customers.customer import router as customer_router
 # ----------------------------------------------------------
 from routers.suppliers.payments import router as payments_router
 
+
+#----------------------------------------------------------
+#billing system
+#----------------------------------------------------------
+
+# from routers.billingSystem.billing import router as billing_router
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -149,6 +155,8 @@ app.include_router(customer_router)
 # Suppliers
 app.include_router(payments_router)
 
+#billing system
+# app.include_router(billing_router)  
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------

@@ -3,6 +3,7 @@ import api from '../../api';
 
 export default function CustomerRegistration() {
   const [customers, setCustomers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [customerForm, setCustomerForm] = useState({
     customer_type: '',
@@ -23,7 +24,8 @@ export default function CustomerRegistration() {
     // Optional fields
     email: '',
     reference_source: '',
-    reference_details: ''
+    reference_details: '',
+    staff_reference: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -31,20 +33,83 @@ export default function CustomerRegistration() {
 
   useEffect(() => {
     fetchCustomers();
+    fetchUsers();
   }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await api.get('/users/');
+      setUsers(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    }
+  };
 
   const fetchCustomers = async () => {
     try {
+      console.log('Fetching customers...');
       const res = await api.get('/customers/');
+      console.log('Customers response:', res.data);
       setCustomers(res.data || []);
+      
+      // If no customers found, show helpful message
+      if (!res.data || res.data.length === 0) {
+        console.log('No customers found in database');
+      }
     } catch (err) {
       console.error('Failed to fetch customers:', err);
+      console.error('Error details:', err.response?.data);
+      
+      // Check if it's a 404 or table doesn't exist error
+      if (err.response?.status === 404 || err.response?.data?.detail?.includes('table')) {
+        showMessage('Customer table not found. Please run database migrations.', 'error');
+      } else if (err.message === 'Network Error') {
+        showMessage('Backend server is not running. Please start the server.', 'error');
+      } else {
+        showMessage('Failed to load customers: ' + (err.response?.data?.detail || err.message), 'error');
+      }
+      
+      // Set empty array so UI still works
+      setCustomers([]);
     }
   };
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+  };
+
+  const updateCustomerStatus = async (customerId, status) => {
+    console.log('Updating customer status:', customerId, status);
+    try {
+      const response = await api.put(`/customers/${customerId}/status`, { status });
+      console.log('API response:', response.data);
+      console.log('API status:', response.status);
+      
+      // Only update local state if API call was successful
+      if (response.status === 200) {
+        setCustomers(customers.map(customer => 
+          customer.id === customerId ? { ...customer, status: status } : customer
+        ));
+        
+        if (status === 'approved') {
+          showMessage('Customer approved and email sent successfully');
+        } else {
+          showMessage(`Customer status updated to ${status}`);
+        }
+      } else {
+        throw new Error('API call failed with status: ' + response.status);
+      }
+      
+    } catch (err) {
+      console.error('API call failed:', err);
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      showMessage('Failed to update customer status: ' + (err.response?.data?.detail || err.message), 'error');
+      
+      // Revert to database state on error
+      fetchCustomers();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -78,7 +143,7 @@ export default function CustomerRegistration() {
         customer_type: '',
         org_name: '', org_address: '', org_pan: '', org_gst: '', org_mobile: '', org_type: '',
         name: '', address: '', pan: '', gst: '', mobile: '', type: '',
-        email: '', reference_source: '', reference_details: ''
+        email: '', reference_source: '', reference_details: '', staff_reference: ''
       });
       setShowForm(false);
       fetchCustomers();
@@ -294,12 +359,13 @@ export default function CustomerRegistration() {
                 <th className="text-left p-4 font-medium text-gray-700">Contact</th>
                 <th className="text-left p-4 font-medium text-gray-700">Reference</th>
                 <th className="text-left p-4 font-medium text-gray-700">Created</th>
+                <th className="text-left p-4 font-medium text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-8 text-gray-500">
+                  <td colSpan="6" className="text-center py-8 text-gray-500">
                     No customers found. Click "New Customer" to add one.
                   </td>
                 </tr>
@@ -331,6 +397,22 @@ export default function CustomerRegistration() {
                       <div className="text-sm text-gray-500">
                         {new Date(customer.created_at).toLocaleDateString()}
                       </div>
+                    </td>
+                    <td className="p-4">
+                      <select
+                        value={customer.status || 'pending'}
+                        onChange={(e) => updateCustomerStatus(customer.id, e.target.value)}
+                        className={`text-sm border rounded px-2 py-1 ${
+                          customer.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          customer.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="draft">Draft</option>
+                      </select>
                     </td>
                   </tr>
                 ))
@@ -403,10 +485,11 @@ export default function CustomerRegistration() {
                       className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select</option>
-                      <option value="walk-in">Walk-in</option>
-                      <option value="referral">Referral</option>
-                      <option value="online">Online</option>
+                      <option value="social-media">Social media</option>
                       <option value="advertisement">Advertisement</option>
+                      <option value="google">Google</option>
+                      <option value="other">Other</option>
+                      <option value="reference">Reference</option>
                     </select>
                   </div>
                 </div>
@@ -420,6 +503,22 @@ export default function CustomerRegistration() {
                     rows={3}
                     placeholder="Walk-in / Google / Camp / Insurance desk / Doctor referral..."
                   />
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium mb-2">Staff Reference *</label>
+                  <select
+                    value={customerForm.staff_reference || ''}
+                    onChange={(e) => setCustomerForm({...customerForm, staff_reference: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select staff member</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name} - {user.email}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </>
             )}
