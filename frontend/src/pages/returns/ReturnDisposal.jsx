@@ -130,27 +130,54 @@ export default function ReturnDisposal() {
       const item = stockData.find(stock => stock.item_name === itemName);
       
       if (item && item.batches) {
-        // Filter batches by from_location if it's an internal transfer
+        // Enhance batches with rate information from item master
+        const enhancedBatches = await Promise.all(item.batches.map(async (batch) => {
+          try {
+            // Get rate from item master
+            const itemRes = await api.get('/items/');
+            const itemsData = itemRes.data || [];
+            
+            const masterItem = itemsData.find(itm => itm.name === itemName);
+            const rate = masterItem ? (masterItem.mrp || masterItem.price || masterItem.rate || 0) : 0;
+            
+            return { ...batch, rate: rate || 30 };
+          } catch (err) {
+            console.error('Failed to fetch rate for batch:', batch.batch_no, err);
+            return { ...batch, rate: 30 };
+          }
+        }));
+        
+        // Filter batches by location
         if (returnForm.return_type === 'INTERNAL' && returnForm.from_location) {
-          const filteredBatches = item.batches.filter(batch => 
+          const filteredBatches = enhancedBatches.filter(batch => 
             batch.location === returnForm.from_location && batch.qty > 0
           );
-          console.log('Filtered batches for location:', returnForm.from_location, filteredBatches);
           return filteredBatches;
         }
-        // For non-internal returns, filter by selected location
         if (returnForm.location) {
-          return item.batches.filter(batch => 
+          return enhancedBatches.filter(batch => 
             batch.location === returnForm.location && batch.qty > 0
           );
         }
-        return item.batches.filter(batch => batch.qty > 0);
+        return enhancedBatches.filter(batch => batch.qty > 0);
       }
       return [];
     } catch (err) {
       console.error('Failed to fetch batches:', err);
       return [];
     }
+  };
+
+  const calculateItemAmount = (item, quantity) => {
+    const qty = parseFloat(quantity) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    return qty * rate;
+  };
+
+  const getTotalAmount = () => {
+    return returnForm.items.reduce((total, item) => {
+      return total + calculateItemAmount(item, item.quantity);
+    }, 0);
   };
 
   const openNewReturnModal = () => {
@@ -194,7 +221,51 @@ export default function ReturnDisposal() {
   const viewReturn = async (returnId) => {
     try {
       const res = await api.get(`/returns/${returnId}`);
-      setSelectedReturn(res.data);
+      const returnData = res.data;
+      
+      // Enhance items with rate if missing
+      if (returnData.items) {
+        for (let item of returnData.items) {
+          if (!item.rate || item.rate === 0) {
+            try {
+              // Try to get rate from stock overview
+              const stockRes = await api.get('/stock-overview/');
+              const stockData = stockRes.data || [];
+              const stockItem = stockData.find(stock => stock.item_name === item.item_name);
+              
+              if (stockItem && stockItem.batches) {
+                const batch = stockItem.batches.find(b => b.batch_no === item.batch_no);
+                if (batch && (batch.mrp || batch.rate)) {
+                  item.rate = batch.mrp || batch.rate;
+                } else {
+                  // Try to get from item master
+                  try {
+                    const itemRes = await api.get('/items/');
+                    const itemsData = itemRes.data || [];
+                    
+                    const masterItem = itemsData.find(itm => itm.name === item.item_name);
+                    if (masterItem) {
+                      item.rate = masterItem.mrp || masterItem.price || masterItem.rate || 30;
+                    }
+                  } catch (itemErr) {
+                    console.log('Item master fetch failed in view');
+                  }
+                  
+                  if (!item.rate) {
+                    item.rate = 30; // Use actual default if needed
+                  }
+                }
+              } else {
+                item.rate = 30;
+              }
+            } catch (err) {
+              item.rate = 30; // Use correct default rate
+            }
+          }
+        }
+      }
+      
+      setSelectedReturn(returnData);
       setShowViewModal(true);
     } catch (err) {
       console.error('Failed to fetch return details:', err);
@@ -401,11 +472,25 @@ export default function ReturnDisposal() {
       return;
     }
 
-    console.log('DEBUG: Sending return data:', returnForm);
+    console.log('DEBUG: Sending return data:', {
+      ...returnForm,
+      items: returnForm.items.map(item => ({
+        ...item,
+        rate: item.rate || 0,
+        amount: calculateItemAmount(item, item.quantity)
+      }))
+    });
 
     try {
       setLoading(true);
-      const res = await api.post('/returns/', returnForm);
+      const res = await api.post('/returns/', {
+        ...returnForm,
+        items: returnForm.items.map(item => ({
+          ...item,
+          rate: item.rate || 0,
+          amount: calculateItemAmount(item, item.quantity)
+        }))
+      });
       alert(`Return created successfully: ${res.data.return_number}`);
       setShowModal(false);
       fetchReturns();
@@ -829,7 +914,7 @@ export default function ReturnDisposal() {
                 ) : (
                   <div className="space-y-3">
                     {returnForm.items.map((item, index) => (
-                      <div key={`${renderKey}-${index}-${item.item_name}-${item.batch_no}`} className="grid grid-cols-5 gap-3 p-3 border rounded">
+                      <div key={`${renderKey}-${index}-${item.item_name}-${item.batch_no}`} className="grid grid-cols-6 gap-3 p-3 border rounded">
                         <select
                           value={item.item_name || ''}
                           onChange={async (e) => {
@@ -859,16 +944,14 @@ export default function ReturnDisposal() {
                         </select>
                         <select
                           value={item.batch_no || ''}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const selectedBatchNo = e.target.value;
-                            console.log('Selected batch:', selectedBatchNo);
-                            
                             const currentBatches = itemBatches[index] || [];
                             const selectedBatch = currentBatches.find(b => b.batch_no === selectedBatchNo);
                             const quantity = selectedBatch ? selectedBatch.qty : '';
+                            const rate = selectedBatch ? selectedBatch.rate : 0;
                             
-                            // Create new item object
-                            const newItem = { ...item, batch_no: selectedBatchNo, quantity: quantity };
+                            const newItem = { ...item, batch_no: selectedBatchNo, quantity: quantity, rate: rate };
                             const updatedItems = [...returnForm.items];
                             updatedItems[index] = newItem;
                             setReturnForm({ ...returnForm, items: updatedItems });
@@ -878,7 +961,7 @@ export default function ReturnDisposal() {
                           <option value="">Select batch</option>
                           {(itemBatches[index] || []).map(batch => (
                             <option key={batch.batch_no} value={batch.batch_no}>
-                              {batch.batch_no} (Qty: {batch.qty})
+                              {batch.batch_no} (Qty: {batch.qty}, Rate: ₹{batch.rate || 0})
                             </option>
                           ))}
                         </select>
@@ -889,6 +972,9 @@ export default function ReturnDisposal() {
                           onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
                           className="border rounded px-2 py-1 text-sm"
                         />
+                        <div className="border rounded px-2 py-1 text-sm bg-gray-50">
+                          ₹{calculateItemAmount(item, item.quantity).toFixed(2)}
+                        </div>
                         <input
                           type="text"
                           placeholder="Reason"
@@ -907,6 +993,16 @@ export default function ReturnDisposal() {
                   </div>
                 )}
               </div>
+              
+              {/* Total Amount Display */}
+              {returnForm.items.length > 0 && (
+                <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-700">Total Amount:</span>
+                    <span className="text-xl font-bold text-green-600">₹{getTotalAmount().toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Actions */}
@@ -991,19 +1087,35 @@ export default function ReturnDisposal() {
                         <th className="text-left p-2">Item</th>
                         <th className="text-left p-2">Batch</th>
                         <th className="text-left p-2">Quantity</th>
+                        <th className="text-left p-2">Rate</th>
+                        <th className="text-left p-2">Amount</th>
                         <th className="text-left p-2">Remarks</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedReturn.items.map((item, index) => (
-                        <tr key={index} className="border-t">
-                          <td className="p-2">{item.item_name}</td>
-                          <td className="p-2">{item.batch_no}</td>
-                          <td className="p-2">{item.qty}</td>
-                          <td className="p-2">{item.remarks || '—'}</td>
-                        </tr>
-                      ))}
+                      {selectedReturn.items.map((item, index) => {
+                        const amount = (item.qty || 0) * (item.rate || 0);
+                        return (
+                          <tr key={index} className="border-t">
+                            <td className="p-2">{item.item_name}</td>
+                            <td className="p-2">{item.batch_no}</td>
+                            <td className="p-2">{item.qty}</td>
+                            <td className="p-2">₹{(item.rate || 0).toFixed(2)}</td>
+                            <td className="p-2">₹{amount.toFixed(2)}</td>
+                            <td className="p-2">{item.remarks || '—'}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr>
+                        <td colSpan="4" className="p-2 text-right font-medium">Total Amount:</td>
+                        <td className="p-2 font-bold text-green-600">
+                          ₹{selectedReturn.items.reduce((total, item) => total + ((item.qty || 0) * (item.rate || 0)), 0).toFixed(2)}
+                        </td>
+                        <td className="p-2"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
