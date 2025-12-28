@@ -65,6 +65,7 @@ from routers.consumption.issue import router as consumption_router
 #  RETURN & DISPOSAL
 #----------------------------------------------------------
 from routers.returns.return_disposal import router as return_router
+from routers.returns.returns import router as returns_router
 
 #----------------------------------------------------------
 #  CUSTOMERS
@@ -78,11 +79,8 @@ from routers.customers.customer import router as customer_router
 from routers.suppliers.payments import router as payments_router
 
 
-#----------------------------------------------------------
 #billing system
-#----------------------------------------------------------
-
-# from routers.billingSystem.billing import router as billing_router
+from routers.billingSystem.billing import router as billing_router
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -148,6 +146,7 @@ app.include_router(consumption_router)
 
 # Return & Disposal
 app.include_router(return_router)
+app.include_router(returns_router)
 
 # Customer Management
 app.include_router(customer_router)
@@ -156,7 +155,7 @@ app.include_router(customer_router)
 app.include_router(payments_router)
 
 #billing system
-# app.include_router(billing_router)  
+app.include_router(billing_router)  
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------

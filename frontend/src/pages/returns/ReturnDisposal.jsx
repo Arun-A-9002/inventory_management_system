@@ -4,6 +4,7 @@ import api from "../../api";
 export default function ReturnDisposal() {
   const [returns, setReturns] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [customerInvoices, setCustomerInvoices] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState(null);
@@ -12,6 +13,7 @@ export default function ReturnDisposal() {
   const [locations, setLocations] = useState([]);
   const [items, setItems] = useState([]);
   const [itemBatches, setItemBatches] = useState({});
+  const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState(null);
   const [renderKey, setRenderKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -21,6 +23,7 @@ export default function ReturnDisposal() {
     location: '',
     supplier: '',
     customer_id: '',
+    selected_invoice_id: '',
     reason: '',
     items: []
   });
@@ -41,9 +44,65 @@ export default function ReturnDisposal() {
     }
   };
 
+  const updateReturnQuantity = (item, quantity) => {
+    const updatedItems = [...returnForm.items];
+    const existingIndex = updatedItems.findIndex(i => i.item_name === item.item_name && i.batch_no === item.batch_no);
+    
+    if (quantity > 0) {
+      const returnItem = {
+        item_name: item.item_name,
+        batch_no: item.batch_no,
+        quantity: quantity,
+        rate: item.rate,
+        reason: returnForm.reason || 'Customer return'
+      };
+      
+      if (existingIndex >= 0) {
+        updatedItems[existingIndex] = returnItem;
+      } else {
+        updatedItems.push(returnItem);
+      }
+    } else {
+      if (existingIndex >= 0) {
+        updatedItems.splice(existingIndex, 1);
+      }
+    }
+    
+    setReturnForm({...returnForm, items: updatedItems});
+  };
+
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+  };
+
+  const calculateRefundAmount = () => {
+    return returnForm.items.reduce((total, item) => {
+      return total + (item.quantity * item.rate);
+    }, 0).toFixed(2);
+  };
+
+  const fetchInvoiceDetails = async (billingId) => {
+    try {
+      const res = await api.get(`/billing/invoice-details/${billingId}`);
+      setSelectedInvoiceDetails(res.data);
+      // Clear previous return items when selecting new invoice
+      setReturnForm({...returnForm, items: []});
+    } catch (err) {
+      console.error('Failed to fetch invoice details:', err);
+    }
+  };
+
+  const fetchCustomerInvoices = async (customerId) => {
+    try {
+      console.log('Fetching invoices for customer ID:', customerId);
+      const res = await api.get(`/billing/customer/${customerId}/paid-invoices`);
+      console.log('Customer invoices response:', res.data);
+      setCustomerInvoices(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch customer invoices:', err);
+      setCustomerInvoices([]);
+    }
   };
 
   const fetchReturns = async () => {
@@ -82,28 +141,16 @@ export default function ReturnDisposal() {
 
   const fetchItemsForLocation = async (location) => {
     try {
-      const res = await api.get('/stock-overview/');
+      // Use the new location-filtered endpoint
+      const res = await api.get(`/stock-overview/by-location/${encodeURIComponent(location)}`);
       const stockData = res.data || [];
       
-      // Filter items that have batches in the specified location
-      const locationItems = [];
-      
-      stockData.forEach(stock => {
-        if (stock.batches && stock.batches.length > 0) {
-          // Check if any batch exists in the specified location
-          const hasLocationBatch = stock.batches.some(batch => 
-            batch.location === location && batch.qty > 0
-          );
-          
-          if (hasLocationBatch) {
-            locationItems.push({
-              id: stock.id,
-              name: stock.item_name,
-              item_code: stock.item_code
-            });
-          }
-        }
-      });
+      // Convert stock data to items format
+      const locationItems = stockData.map(stock => ({
+        id: stock.id,
+        name: stock.item_name,
+        item_code: stock.item_code
+      }));
       
       console.log('Items for location', location, ':', locationItems);
       return locationItems;
@@ -124,16 +171,26 @@ export default function ReturnDisposal() {
 
   const fetchBatchesForItem = async (itemName) => {
     try {
-      // Get stock overview data and find the item
+      // If we have a selected location, get batches from that location only
+      if (returnForm.location) {
+        const res = await api.get(`/stock-overview/by-location/${encodeURIComponent(returnForm.location)}`);
+        const stockData = res.data || [];
+        const item = stockData.find(stock => stock.item_name === itemName);
+        
+        if (item && item.batches) {
+          return item.batches.filter(batch => batch.qty > 0);
+        }
+        return [];
+      }
+      
+      // Fallback to original method if no location selected
       const res = await api.get('/stock-overview/');
       const stockData = res.data || [];
       const item = stockData.find(stock => stock.item_name === itemName);
       
       if (item && item.batches) {
-        // Enhance batches with rate information from item master
         const enhancedBatches = await Promise.all(item.batches.map(async (batch) => {
           try {
-            // Get rate from item master
             const itemRes = await api.get('/items/');
             const itemsData = itemRes.data || [];
             
@@ -147,13 +204,6 @@ export default function ReturnDisposal() {
           }
         }));
         
-        // Filter batches by location
-        if (returnForm.return_type === 'INTERNAL' && returnForm.from_location) {
-          const filteredBatches = enhancedBatches.filter(batch => 
-            batch.location === returnForm.from_location && batch.qty > 0
-          );
-          return filteredBatches;
-        }
         if (returnForm.location) {
           return enhancedBatches.filter(batch => 
             batch.location === returnForm.location && batch.qty > 0
@@ -186,6 +236,7 @@ export default function ReturnDisposal() {
       location: '',
       supplier: '',
       customer_id: '',
+      selected_invoice_id: '',
       reason: '',
       items: []
     });
@@ -193,6 +244,7 @@ export default function ReturnDisposal() {
     setEditMode(false);
     setSelectedReturn(null);
     setItemBatches({});
+    setCustomerInvoices([]);
     setShowModal(true);
   };
 
@@ -371,8 +423,35 @@ export default function ReturnDisposal() {
   const updateReturnStatus = async (returnId, status) => {
     try {
       await api.patch(`/returns/${returnId}/status?status=${status}`);
+      
+      // Auto-create invoice when status changes to APPROVED (but skip for INTERNAL returns)
+      if (status === 'APPROVED') {
+        // Check if this is an internal return
+        const returnItem = returns.find(r => r.id === returnId);
+        
+        if (returnItem && returnItem.return_type === 'INTERNAL') {
+          // Skip billing for internal returns
+          showMessage(`Internal return ${status.toLowerCase()} successfully - no billing required`);
+        } else {
+          // Create billing for external returns
+          try {
+            console.log('Creating invoice for return ID:', returnId);
+            const res = await api.post('/billing/return', {
+              return_id: returnId
+            });
+            console.log('Invoice created:', res.data);
+            showMessage(`Return ${status.toLowerCase()} and invoice created: INV-${res.data.id.toString().padStart(4, '0')}`);
+          } catch (invoiceErr) {
+            console.error('Invoice creation failed:', invoiceErr);
+            console.error('Error details:', invoiceErr.response?.data);
+            showMessage(`Return ${status.toLowerCase()} successfully, but invoice creation failed: ${invoiceErr.response?.data?.detail || invoiceErr.message}`, 'error');
+          }
+        }
+      } else {
+        showMessage(`Return ${status.toLowerCase()} successfully`);
+      }
+      
       fetchReturns();
-      showMessage(`Return ${status.toLowerCase()} successfully`);
     } catch (err) {
       console.error('Failed to update status:', err);
       showMessage('Failed to update status: ' + (err.response?.data?.detail || err.message), 'error');
@@ -385,6 +464,43 @@ export default function ReturnDisposal() {
       return;
     }
 
+    // Handle FROM CUSTOMER returns
+    if (returnForm.return_type === 'FROM CUSTOMER') {
+      if (!returnForm.customer_id) {
+        alert('Please select customer');
+        return;
+      }
+      
+      if (!selectedInvoiceDetails) {
+        alert('Please select an invoice');
+        return;
+      }
+      
+      if (returnForm.items.length === 0) {
+        alert('Please specify return quantities for at least one item');
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        const res = await api.post('/returns/', {
+          return_type: 'FROM_CUSTOMER',
+          customer_id: returnForm.customer_id,
+          invoice_id: selectedInvoiceDetails.id,
+          reason: returnForm.reason,
+          items: returnForm.items
+        });
+        alert(`Customer return created successfully: ${res.data.return_number}`);
+        setShowModal(false);
+        fetchReturns();
+      } catch (err) {
+        console.error('Failed to create customer return:', err);
+        alert('Failed to create customer return: ' + (err.response?.data?.detail || err.message));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     // Handle Internal transfers differently
     if (returnForm.return_type === 'INTERNAL') {
       if (!returnForm.from_location || !returnForm.to_location) {
@@ -497,6 +613,21 @@ export default function ReturnDisposal() {
     } catch (err) {
       console.error('Failed to create return:', err);
       alert('Failed to create return: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createInvoiceForReturn = async (returnId) => {
+    try {
+      setLoading(true);
+      const res = await api.post('/billing/return', {
+        return_id: returnId
+      });
+      showMessage(`Invoice created successfully: INV-${res.data.id.toString().padStart(4, '0')}`);
+    } catch (err) {
+      console.error('Failed to create invoice:', err);
+      showMessage('Failed to create invoice: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -745,7 +876,7 @@ export default function ReturnDisposal() {
             
             <div className="space-y-4">
               {/* Return Type and Location */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${returnForm.return_type === 'FROM CUSTOMER' ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 <div>
                   <label className="block text-sm font-medium mb-2">Return type</label>
                   <select
@@ -788,7 +919,7 @@ export default function ReturnDisposal() {
                     </select>
                   </div>
                   </>
-                ) : (
+                ) : returnForm.return_type !== 'FROM CUSTOMER' && (
                   <div>
                     <label className="block text-sm font-medium mb-2">Location</label>
                     <select
@@ -797,15 +928,12 @@ export default function ReturnDisposal() {
                         const selectedLocation = e.target.value;
                         setReturnForm({...returnForm, location: selectedLocation});
                         
-                        // Load location-specific items for TO_CUSTOMER returns
+                        // Load location-specific items
                         if (selectedLocation) {
-                          if (returnForm.return_type === 'TO_CUSTOMER') {
-                            const locationItems = await fetchItemsForLocation(selectedLocation);
-                            setItems(locationItems);
-                          } else {
-                            // Load all items for other return types
-                            fetchItems();
-                          }
+                          const locationItems = await fetchItemsForLocation(selectedLocation);
+                          setItems(locationItems);
+                        } else {
+                          setItems([]);
                         }
                       }}
                       className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
@@ -840,48 +968,172 @@ export default function ReturnDisposal() {
                 </div>
               )}
 
-              {/* Customer Selection for TO_CUSTOMER returns */}
-              {returnForm.return_type === 'TO_CUSTOMER' && (
+              {/* Vendor Selection - Hide for FROM CUSTOMER */}
+              {returnForm.return_type !== 'FROM CUSTOMER' && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">Customer *</label>
+                  <label className="block text-sm font-medium mb-2">Vendor (for return)</label>
                   <select
-                    value={returnForm.customer_id}
-                    onChange={(e) => setReturnForm({...returnForm, customer_id: e.target.value})}
+                    value={returnForm.supplier}
+                    onChange={(e) => setReturnForm({...returnForm, supplier: e.target.value})}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select customer</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.customer_type === 'organization' ? customer.org_name : customer.name}
-                        {customer.customer_type === 'organization' && customer.org_mobile ? ` - ${customer.org_mobile}` : ''}
-                        {customer.customer_type !== 'organization' && customer.mobile ? ` - ${customer.mobile}` : ''}
+                    <option value="">Select vendor</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.vendor_name}>
+                        {supplier.vendor_name}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
 
-              {/* Vendor - Optional for Internal and TO_CUSTOMER */}
+              {/* Customer Selection */}
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Vendor (for return) 
-                  {(returnForm.return_type === 'INTERNAL' || returnForm.return_type === 'TO_CUSTOMER') && 
-                    <span className="text-gray-500">(optional)</span>
-                  }
-                </label>
+                <label className="block text-sm font-medium mb-2">Customer</label>
                 <select
-                  value={returnForm.supplier}
-                  onChange={(e) => setReturnForm({...returnForm, supplier: e.target.value})}
+                  value={returnForm.customer_id}
+                  onChange={async (e) => {
+                    const customerId = e.target.value;
+                    console.log('Customer selected:', customerId);
+                    setReturnForm({...returnForm, customer_id: customerId});
+                    if (customerId) {
+                      await fetchCustomerInvoices(customerId);
+                    } else {
+                      setCustomerInvoices([]);
+                    }
+                  }}
                   className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Select vendor</option>
-                  {suppliers.map(supplier => (
-                    <option key={supplier.id} value={supplier.vendor_name}>
-                      {supplier.vendor_name}
+                  <option value="">Select customer</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.customer_type === 'organization' ? customer.org_name : customer.name}
+                      {customer.customer_type === 'organization' && customer.org_mobile ? ` - ${customer.org_mobile}` : ''}
+                      {customer.customer_type !== 'organization' && customer.mobile ? ` - ${customer.mobile}` : ''}
                     </option>
                   ))}
                 </select>
+                <div className="text-xs text-gray-500 mt-1">Debug: customerInvoices.length = {customerInvoices.length}</div>
               </div>
+
+              {/* Customer Invoices - Show for FROM CUSTOMER */}
+              {returnForm.return_type === 'FROM CUSTOMER' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Customer Invoices</label>
+                  <div className="min-h-32 max-h-60 overflow-y-auto border rounded-lg bg-gray-50">
+                    {customerInvoices.length > 0 ? (
+                      <div className="space-y-2 p-2">
+                        {customerInvoices.map(invoice => (
+                          <div 
+                            key={invoice.id} 
+                            className="bg-white border rounded-lg p-3 cursor-pointer hover:bg-blue-50 transition-colors"
+                            onClick={() => fetchInvoiceDetails(invoice.id)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold text-blue-600">{invoice.invoice_number}</h4>
+                                <p className="text-sm text-gray-600">{new Date(invoice.created_at).toLocaleDateString()}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-green-600">₹{invoice.total_amount}</p>
+                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                                  Paid
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-32 text-gray-500">
+                        <div className="text-center">
+                          <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <p className="text-sm">No paid invoices found</p>
+                          <p className="text-xs text-gray-400">Customer has no invoices available for refund</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {customerInvoices.length > 0 
+                      ? "Click on an invoice to view details and process refund" 
+                      : "Paid invoices will appear here when available"}
+                  </p>
+                </div>
+              )}
+
+              {/* Selected Invoice Details with Return Quantities */}
+              {selectedInvoiceDetails && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Return Items from {selectedInvoiceDetails.invoice_number}</label>
+                  <div className="border rounded-lg bg-white">
+                    <div className="p-3 bg-gray-50 border-b">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Invoice Date:</span>
+                          <p className="font-medium">{new Date(selectedInvoiceDetails.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Paid:</span>
+                          <p className="font-medium text-green-600">₹{selectedInvoiceDetails.paid_amount}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Refund Amount:</span>
+                          <p className="font-medium text-blue-600">₹{calculateRefundAmount()}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <h4 className="font-medium mb-3">Select Items to Return:</h4>
+                      <div className="space-y-3">
+                        {selectedInvoiceDetails.items.map((item, index) => {
+                          const returnQty = returnForm.items.find(i => i.item_name === item.item_name && i.batch_no === item.batch_no)?.quantity || 0;
+                          return (
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                              <div className="flex-1">
+                                <p className="font-medium">{item.item_name}</p>
+                                <p className="text-sm text-gray-600">Batch: {item.batch_no} | Rate: ₹{item.rate}</p>
+                                <p className="text-sm text-blue-600">Purchased: {item.quantity} units</p>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <div className="text-right">
+                                  <label className="block text-xs text-gray-600 mb-1">Return Qty</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.quantity}
+                                    value={returnQty}
+                                    onChange={(e) => updateReturnQuantity(item, parseInt(e.target.value) || 0)}
+                                    className="w-20 px-2 py-1 border rounded text-center"
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-600">Refund</p>
+                                  <p className="font-medium text-green-600">₹{(returnQty * item.rate).toFixed(2)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {returnForm.items.length > 0 && (
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-blue-800">Total Refund Amount:</span>
+                            <span className="text-xl font-bold text-blue-600">₹{calculateRefundAmount()}</span>
+                          </div>
+                          <p className="text-sm text-blue-600 mt-1">Items will be returned to stock in their original batches</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
 
               {/* Reason */}
               <div>
@@ -895,107 +1147,113 @@ export default function ReturnDisposal() {
                 />
               </div>
 
-              {/* Line Items */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="block text-sm font-medium">Line items</label>
-                  <button
-                    onClick={addLineItem}
-                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                  >
-                    + Add line
-                  </button>
-                </div>
-                
-                {returnForm.items.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4">
-                    No lines yet. Click "Add line" or use "Create return" from Expired / Quarantine batches.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {returnForm.items.map((item, index) => (
-                      <div key={`${renderKey}-${index}-${item.item_name}-${item.batch_no}`} className="grid grid-cols-6 gap-3 p-3 border rounded">
-                        <select
-                          value={item.item_name || ''}
-                          onChange={async (e) => {
-                            const selectedItemName = e.target.value;
-                            console.log('Selected item:', selectedItemName);
-                            
-                            // Create new item object
-                            const newItem = { ...item, item_name: selectedItemName, batch_no: '', quantity: '' };
-                            const updatedItems = [...returnForm.items];
-                            updatedItems[index] = newItem;
-                            setReturnForm({ ...returnForm, items: updatedItems });
-                            
-                            if (selectedItemName) {
-                              const itemBatches = await fetchBatchesForItem(selectedItemName);
-                              console.log('Fetched batches:', itemBatches);
-                              setItemBatches(prev => ({ ...prev, [index]: itemBatches }));
-                            }
-                          }}
-                          className="border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">Select item</option>
-                          {items.map(itm => (
-                            <option key={itm.id} value={itm.name}>
-                              {itm.name} ({itm.item_code || 'N/A'})
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={item.batch_no || ''}
-                          onChange={async (e) => {
-                            const selectedBatchNo = e.target.value;
-                            const currentBatches = itemBatches[index] || [];
-                            const selectedBatch = currentBatches.find(b => b.batch_no === selectedBatchNo);
-                            const quantity = selectedBatch ? selectedBatch.qty : '';
-                            const rate = selectedBatch ? selectedBatch.rate : 0;
-                            
-                            const newItem = { ...item, batch_no: selectedBatchNo, quantity: quantity, rate: rate };
-                            const updatedItems = [...returnForm.items];
-                            updatedItems[index] = newItem;
-                            setReturnForm({ ...returnForm, items: updatedItems });
-                          }}
-                          className="border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">Select batch</option>
-                          {(itemBatches[index] || []).map(batch => (
-                            <option key={batch.batch_no} value={batch.batch_no}>
-                              {batch.batch_no} (Qty: {batch.qty}, Rate: ₹{batch.rate || 0})
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          placeholder="Quantity"
-                          value={item.quantity}
-                          onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                          className="border rounded px-2 py-1 text-sm"
-                        />
-                        <div className="border rounded px-2 py-1 text-sm bg-gray-50">
-                          ₹{calculateItemAmount(item, item.quantity).toFixed(2)}
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Reason"
-                          value={item.reason}
-                          onChange={(e) => updateLineItem(index, 'reason', e.target.value)}
-                          className="border rounded px-2 py-1 text-sm"
-                        />
-                        <button
-                          onClick={() => removeLineItem(index)}
-                          className="text-red-600 hover:text-red-800 px-2"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+              {/* Line Items - Hide for FROM CUSTOMER since items come from invoice */}
+              {returnForm.return_type !== 'FROM CUSTOMER' && (
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-sm font-medium">Line items</label>
+                    <button
+                      onClick={addLineItem}
+                      className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      + Add line
+                    </button>
                   </div>
-                )}
-              </div>
+                  
+                  {returnForm.items.length === 0 ? (
+                    <p className="text-gray-500 text-sm py-4">
+                      No lines yet. Click "Add line" or use "Create return" from Expired / Quarantine batches.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {returnForm.items.map((item, index) => (
+                        <div key={`${renderKey}-${index}-${item.item_name}-${item.batch_no}`} className={`grid gap-3 p-3 border rounded ${
+                          returnForm.return_type === 'INTERNAL' ? 'grid-cols-5' : 'grid-cols-6'
+                        }`}>
+                          <select
+                            value={item.item_name || ''}
+                            onChange={async (e) => {
+                              const selectedItemName = e.target.value;
+                              console.log('Selected item:', selectedItemName);
+                              
+                              // Create new item object
+                              const newItem = { ...item, item_name: selectedItemName, batch_no: '', quantity: '' };
+                              const updatedItems = [...returnForm.items];
+                              updatedItems[index] = newItem;
+                              setReturnForm({ ...returnForm, items: updatedItems });
+                              
+                              if (selectedItemName) {
+                                const itemBatches = await fetchBatchesForItem(selectedItemName);
+                                console.log('Fetched batches:', itemBatches);
+                                setItemBatches(prev => ({ ...prev, [index]: itemBatches }));
+                              }
+                            }}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            <option value="">Select item</option>
+                            {items.map(itm => (
+                              <option key={itm.id} value={itm.name}>
+                                {itm.name} ({itm.item_code || 'N/A'})
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={item.batch_no || ''}
+                            onChange={async (e) => {
+                              const selectedBatchNo = e.target.value;
+                              const currentBatches = itemBatches[index] || [];
+                              const selectedBatch = currentBatches.find(b => b.batch_no === selectedBatchNo);
+                              const quantity = selectedBatch ? selectedBatch.qty : '';
+                              const rate = selectedBatch ? selectedBatch.rate : 0;
+                              
+                              const newItem = { ...item, batch_no: selectedBatchNo, quantity: quantity, rate: rate };
+                              const updatedItems = [...returnForm.items];
+                              updatedItems[index] = newItem;
+                              setReturnForm({ ...returnForm, items: updatedItems });
+                            }}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            <option value="">Select batch</option>
+                            {(itemBatches[index] || []).map(batch => (
+                              <option key={batch.batch_no} value={batch.batch_no}>
+                                {batch.batch_no} (Qty: {batch.qty}, Rate: ₹{batch.rate || 0})
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            placeholder="Quantity"
+                            value={item.quantity}
+                            onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                            className="border rounded px-2 py-1 text-sm"
+                          />
+                          {returnForm.return_type !== 'INTERNAL' && (
+                            <div className="border rounded px-2 py-1 text-sm bg-gray-50">
+                              ₹{calculateItemAmount(item, item.quantity).toFixed(2)}
+                            </div>
+                          )}
+                          <input
+                            type="text"
+                            placeholder="Reason"
+                            value={item.reason}
+                            onChange={(e) => updateLineItem(index, 'reason', e.target.value)}
+                            className="border rounded px-2 py-1 text-sm"
+                          />
+                          <button
+                            onClick={() => removeLineItem(index)}
+                            className="text-red-600 hover:text-red-800 px-2"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               
-              {/* Total Amount Display */}
-              {returnForm.items.length > 0 && (
+              {/* Total Amount Display - Hide for Internal returns */}
+              {returnForm.items.length > 0 && returnForm.return_type !== 'INTERNAL' && (
                 <div className="bg-gray-50 p-4 rounded-lg mt-4">
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-700">Total Amount:</span>

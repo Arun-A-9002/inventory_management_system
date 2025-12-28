@@ -106,6 +106,30 @@ def list_items(db: Session = Depends(get_db)):
     
     return result
 
+# ---------------- SEARCH ----------------
+@router.get("/search")
+def search_items(name: str = None, db: Session = Depends(get_db)):
+    """Search items by name"""
+    query = db.query(Item).filter(Item.is_active == True)
+    
+    if name:
+        query = query.filter(Item.name.ilike(f"%{name.strip()}%"))
+    
+    items = query.all()
+    
+    result = []
+    for item in items:
+        result.append({
+            "id": item.id,
+            "name": item.name,
+            "item_code": item.item_code,
+            "tax_rate": item.tax or 18,
+            "mrp": float(item.mrp) if item.mrp else 0,
+            "fixing_price": float(item.fixing_price) if item.fixing_price else 0
+        })
+    
+    return result
+
 # ---------------- GET ONE ----------------
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(item_id: int, db: Session = Depends(get_db)):
@@ -138,3 +162,27 @@ def deactivate_item(item_id: int, db: Session = Depends(get_db)):
     item.is_active = False
     db.commit()
     return {"message": "Item deactivated"}
+
+# ---------------- SEARCH ----------------
+@router.get("/search")
+def search_items(name: str = None, db: Session = Depends(get_db)):
+    """Search items by name"""
+    query = db.query(Item).filter(Item.is_active == True)
+    
+    if name:
+        query = query.filter(Item.name.ilike(f"%{name.strip()}%"))
+    
+    items = query.all()
+    
+    result = []
+    for item in items:
+        result.append({
+            "id": item.id,
+            "name": item.name,
+            "item_code": item.item_code,
+            "tax_rate": item.tax or 18,
+            "mrp": float(item.mrp) if item.mrp else 0,
+            "fixing_price": float(item.fixing_price) if item.fixing_price else 0
+        })
+    
+    return result

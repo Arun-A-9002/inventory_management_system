@@ -122,7 +122,7 @@ export default function Sidebar() {
     { name: "Goods Receipt & Inspection", path: "/app/grn" },
 
     //billing system
-    { name: "Billing System", path: "/app/billing-system" },
+    { name: "Billing System", path: "/app/billing" },
 
     // ================= SINGLE MENU ITEMS =================
     { name: "Stock Ledger", path: "/app/stocks" },

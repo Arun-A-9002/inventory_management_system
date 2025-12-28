@@ -913,4 +913,38 @@ class CustomerResponse(CustomerBase):
 # ============================================================
 #                   BILLING SCHEMAS 
 # ============================================================
+class BillingCreate(BaseModel):
+    grn_id: int
+
+class BillingResponse(BaseModel):
+    id: int
+    grn_id: int
+    gross_amount: float
+    tax_amount: float
+    net_amount: float
+    paid_amount: float
+    balance_amount: float
+    status: str
+    created_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class ReturnBillingCreate(BaseModel):
+    return_id: int
+
+class ReturnBillingResponse(BaseModel):
+    id: int
+    return_id: int
+    gross_amount: float
+    tax_amount: float
+    net_amount: float
+    paid_amount: float
+    balance_amount: float
+    status: str
+    created_at: datetime
+    
+    class Config:
+        orm_mode = True
 

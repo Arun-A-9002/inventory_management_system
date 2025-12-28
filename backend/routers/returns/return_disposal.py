@@ -12,36 +12,37 @@ from utils.email import send_email
 from typing import List, Optional
 
 router = APIRouter(prefix="/returns", tags=["Return & Disposal"])
-DEFAULT_DB = "arun"
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_DB)
-
-# ---------------- LIST RETURNS ----------------
 @router.get("/")
-def list_returns(db: Session = Depends(get_db)):
-    """Get all returns"""
-    # Add location column if it doesn't exist
-    try:
-        db.execute(text("ALTER TABLE return_headers ADD COLUMN location VARCHAR(150) NULL AFTER department"))
-        db.commit()
-    except:
-        pass  # Column already exists
-    
-    # Ensure return_type column exists and is properly set
-    try:
-        db.execute(text("ALTER TABLE return_headers MODIFY COLUMN return_type ENUM('TO_VENDOR', 'FROM_DEPARTMENT', 'TO_CUSTOMER') NOT NULL DEFAULT 'TO_VENDOR'"))
-        db.commit()
-    except Exception as e:
-        print(f"DEBUG: Failed to update enum: {e}")
-        pass  # Column already exists
-    
+def list_returns(db: Session = Depends(get_tenant_db)):
+    """Get all returns with proper location data"""
     returns = db.query(ReturnHeader).order_by(ReturnHeader.created_at.desc()).all()
-    return returns
+    
+    # Convert to dict to ensure location field is included
+    return_list = []
+    for return_item in returns:
+        return_dict = {
+            "id": return_item.id,
+            "return_no": return_item.return_no,
+            "return_type": return_item.return_type,
+            "vendor": return_item.vendor,
+            "location": return_item.location,  # Ensure location is included
+            "reason": return_item.reason,
+            "return_date": return_item.return_date,
+            "status": return_item.status,
+            "created_at": return_item.created_at,
+            "customer_id": return_item.customer_id,
+            "customer_name": return_item.customer_name,
+            "customer_phone": return_item.customer_phone,
+            "customer_email": return_item.customer_email
+        }
+        return_list.append(return_dict)
+    
+    return return_list
 
 # ---------------- CREATE RETURN ----------------
 @router.post("/")
-def create_return(return_data: dict, db: Session = Depends(get_db)):
+def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
     """Create new return"""
     # Generate return number
     return_no = f"RTN{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -51,12 +52,14 @@ def create_return(return_data: dict, db: Session = Depends(get_db)):
     
     # Create return header
     return_type_value = return_data.get('return_type', 'TO_VENDOR')
-    print(f"DEBUG: Creating return with type: {return_type_value}")
+    location_value = return_data.get('location')
+    print(f"DEBUG: Creating return with type: {return_type_value}, location: {location_value}")
     
     return_header = ReturnHeader(
         return_no=return_no,
         return_type=return_type_value,
         vendor=return_data.get('supplier'),
+        location=return_data.get('location'),
         reason=return_data.get('reason'),
         return_date=date.today(),
         status="DRAFT"
@@ -136,7 +139,7 @@ def create_return(return_data: dict, db: Session = Depends(get_db)):
 
 # ---------------- GET RETURN DETAILS ----------------
 @router.get("/{return_id}")
-def get_return_details(return_id: int, db: Session = Depends(get_db)):
+def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
     """Get return details with items"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -149,9 +152,66 @@ def get_return_details(return_id: int, db: Session = Depends(get_db)):
         "items": return_items
     }
 
+@router.get("/{return_id}/items")
+def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
+    """Get return items for a specific return with correct rates, warranty, and tax info"""
+    return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
+    
+    # Enhance items with correct rates, warranty, and tax
+    enhanced_items = []
+    for item in return_items:
+        # Use same logic as billing calculation
+        rate = 30  # Default
+        if hasattr(item, 'rate') and item.rate:
+            rate = float(item.rate)
+        else:
+            from models.tenant_models import Item
+            master_item = db.query(Item).filter(Item.name == item.item_name).first()
+            if master_item:
+                rate = float(master_item.mrp or master_item.fixing_price or 30)
+        
+        # Calculate tax (18% as used in billing)
+        item_total = item.qty * rate
+        tax_amount = item_total * 0.18
+        total_with_tax = item_total + tax_amount
+        
+        # Get actual batch number from return item
+        batch_no = item.batch_no if item.batch_no else "N/A"
+        
+        # Get warranty info
+        warranty_info = "N/A"
+        try:
+            from models.tenant_models import Item, Batch, GRNItem, GRN
+            master_item = db.query(Item).filter(Item.name == item.item_name).first()
+            if master_item and master_item.has_warranty:
+                if master_item.warranty_start_date and master_item.warranty_end_date:
+                    warranty_info = f"{master_item.warranty_start_date} to {master_item.warranty_end_date}"
+                else:
+                    warranty_info = "Warranty Available"
+        except:
+            pass
+        
+        enhanced_item = {
+            "item_name": item.item_name,
+            "batch_no": batch_no,
+            "qty": item.qty,
+            "uom": item.uom,
+            "condition": item.condition,
+            "remarks": item.remarks,
+            "rate": rate,
+            "price": rate,
+            "warranty": warranty_info,
+            "tax_rate": 18.0,
+            "tax_amount": round(tax_amount, 2),
+            "total_with_tax": round(total_with_tax, 2)
+        }
+        enhanced_items.append(enhanced_item)
+    
+    return enhanced_items
+
 # ---------------- UPDATE RETURN STATUS ----------------
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, db: Session = Depends(get_db)):
+def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):
     """Update return status and handle stock adjustments"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -163,57 +223,92 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
     
     return_header.status = status
     
-    # Handle stock reduction when return is approved
+    # Handle stock adjustments when return is approved
     if status == "APPROVED" and old_status != "APPROVED":
-        print(f"DEBUG: Processing stock reduction for approved return")
         return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
-        print(f"DEBUG: Found {len(return_items)} return items")
         
         for item in return_items:
-            print(f"DEBUG: Processing item: {item.item_name}, qty: {item.qty}")
-            # Find and update stock
-            from models.tenant_models import Stock, StockLedger
-            stock = db.query(Stock).filter(Stock.item_name == item.item_name).first()
+            qty = float(item.qty)
+            from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
             
-            if stock:
-                print(f"DEBUG: Found stock record, current qty: {stock.available_qty}")
-                qty = float(item.qty)
+            if return_header.return_type == 'TO_CUSTOMER':
+                # Reduce quantity from source location
+                batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    Batch.batch_no == item.batch_no,
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == return_header.location
+                ).first()
                 
-                if return_header.return_type == 'TO_CUSTOMER':
-                    print(f"DEBUG: Reducing stock for TO_CUSTOMER return")
-                    # Reduce stock when returning to customer (approved)
-                    stock.available_qty -= qty
-                    stock.total_qty -= qty
-                    print(f"DEBUG: New stock qty: {stock.available_qty}")
+                if batch and batch.qty >= qty:
+                    batch.qty -= qty
+                    print(f"TO_CUSTOMER: Reduced {qty} from batch {item.batch_no} in {return_header.location}")
+                    if batch.qty <= 0:
+                        db.delete(batch)
+                        
+            elif return_header.return_type == 'INTERNAL':
+                # Get from_location and to_location from return data
+                from_location = return_header.location  # or get from return data
+                to_location = return_header.department  # or get from return data
+                
+                # Reduce from source location
+                from_batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    Batch.batch_no == item.batch_no,
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == from_location
+                ).first()
+                
+                if from_batch and from_batch.qty >= qty:
+                    from_batch.qty -= qty
+                    print(f"INTERNAL: Reduced {qty} from {from_location}")
                     
-                    # Also reduce from batch quantities
-                    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
-                    if item.batch_no:
-                        batch = db.query(Batch).filter(
-                            Batch.batch_no == item.batch_no
+                    # Add to destination location (create new batch or add to existing)
+                    to_grn = db.query(GRN).filter(
+                        GRN.store == to_location,
+                        GRN.status == GRNStatus.approved
+                    ).first()
+                    
+                    if to_grn:
+                        to_grn_item = db.query(GRNItem).filter(
+                            GRNItem.grn_id == to_grn.id,
+                            GRNItem.item_name == item.item_name
                         ).first()
-                        if batch and batch.qty >= qty:
-                            batch.qty -= qty
-                            print(f"DEBUG: Reduced batch {item.batch_no} by {qty}")
+                        
+                        if to_grn_item:
+                            to_batch = db.query(Batch).filter(
+                                Batch.grn_item_id == to_grn_item.id,
+                                Batch.batch_no == item.batch_no
+                            ).first()
+                            
+                            if to_batch:
+                                to_batch.qty += qty
+                            else:
+                                # Create new batch in destination
+                                new_batch = Batch(
+                                    grn_item_id=to_grn_item.id,
+                                    batch_no=item.batch_no,
+                                    qty=qty,
+                                    expiry_date=from_batch.expiry_date,
+                                    mfg_date=from_batch.mfg_date
+                                )
+                                db.add(new_batch)
                     
-                    # Create ledger entry
-                    ledger = StockLedger(
-                        stock_id=stock.id,
-                        batch_no=item.batch_no,
-                        txn_type="RETURN_OUT",
-                        qty_out=qty,
-                        balance=stock.available_qty,
-                        ref_no=return_header.return_no,
-                        remarks=f"Return to customer approved: {return_header.return_no}"
-                    )
-                    db.add(ledger)
-                    print(f"DEBUG: Added ledger entry")
-                else:
-                    print(f"DEBUG: Not a TO_CUSTOMER return, skipping stock reduction")
-            else:
-                print(f"DEBUG: No stock record found for item: {item.item_name}")
-    else:
-        print(f"DEBUG: Not processing stock reduction - status: {status}, old_status: {old_status}")
+                    print(f"INTERNAL: Added {qty} to {to_location}")
+                    
+            elif return_header.return_type == 'FROM_CUSTOMER':
+                # Add quantity to location (customer returning items)
+                batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    Batch.batch_no == item.batch_no,
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == return_header.location
+                ).first()
+                
+                if batch:
+                    batch.qty += qty
+                    print(f"FROM_CUSTOMER: Added {qty} to batch {item.batch_no} in {return_header.location}")
+    
     
     db.commit()
     print(f"DEBUG: Changes committed")
@@ -222,7 +317,7 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
 
 # ---------------- DISPOSAL ----------------
 @router.post("/disposal")
-def process_disposal(disposal_data: dict, db: Session = Depends(get_db)):
+def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db)):
     """Process item disposal"""
     transaction_no = f"DSP{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -247,14 +342,14 @@ def process_disposal(disposal_data: dict, db: Session = Depends(get_db)):
 
 # ---------------- LIST DISPOSALS ----------------
 @router.get("/disposals")
-def list_disposals(db: Session = Depends(get_db)):
+def list_disposals(db: Session = Depends(get_tenant_db)):
     """Get all disposal transactions"""
     disposals = db.query(DisposalTransaction).order_by(DisposalTransaction.created_at.desc()).all()
     return disposals
 
 # ---------------- SALVAGE VALUATION ----------------
 @router.post("/salvage")
-def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_db)):
+def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenant_db)):
     """Create salvage valuation"""
     salvage_no = f"SAL{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -288,14 +383,14 @@ def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_db)):
 
 # ---------------- LIST SALVAGE VALUATIONS ----------------
 @router.get("/salvage")
-def list_salvage_valuations(db: Session = Depends(get_db)):
+def list_salvage_valuations(db: Session = Depends(get_tenant_db)):
     """Get all salvage valuations"""
     salvages = db.query(SalvageValuation).order_by(SalvageValuation.created_at.desc()).all()
     return salvages
 
 # ---------------- GENERATE INVOICE & SEND EMAIL ----------------
 @router.post("/generate-invoice")
-def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_db)):
+def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant_db)):
     """Generate invoice for customer return and send via email"""
     return_id = data.get('return_id')
     customer_id = data.get('customer_id')
@@ -359,19 +454,30 @@ def generate_invoice_html(return_header, return_items, customer):
     db = next(db_gen)
     
     for item in return_items:
-        # Get item MRP from Item table
+        # Get item details from Item table
         item_record = db.query(Item).filter(Item.name == item.item_name).first()
         mrp_price = float(item_record.mrp) if item_record and item_record.mrp else 100.0
+        tax_rate = float(item_record.tax) if item_record and item_record.tax else 18.0
+        
+        # Get warranty info
+        warranty_info = "N/A"
+        if item_record and item_record.has_warranty:
+            if item_record.warranty_start_date and item_record.warranty_end_date:
+                warranty_info = f"{item_record.warranty_start_date} to {item_record.warranty_end_date}"
         
         item_total = item.qty * mrp_price
-        total_amount += item_total
+        tax_amount = item_total * (tax_rate / 100)
+        total_amount += item_total + tax_amount
+        
         items_html += f"""
         <tr>
             <td>{item.item_name}</td>
             <td>{item.batch_no or 'N/A'}</td>
             <td>{item.qty}</td>
             <td>₹{mrp_price:.2f}</td>
-            <td>₹{item_total:.2f}</td>
+            <td>{warranty_info}</td>
+            <td>₹{tax_amount:.2f} ({tax_rate}%)</td>
+            <td>₹{item_total + tax_amount:.2f}</td>
         </tr>
         """
     
@@ -387,9 +493,11 @@ def generate_invoice_html(return_header, return_items, customer):
             <thead>
                 <tr style="background-color: #f0f0f0;">
                     <th>Item</th>
-                    <th>Batch</th>
+                    <th>Batch No</th>
                     <th>Quantity</th>
                     <th>Rate</th>
+                    <th>Warranty</th>
+                    <th>Tax</th>
                     <th>Amount</th>
                 </tr>
             </thead>

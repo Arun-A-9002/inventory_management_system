@@ -666,18 +666,24 @@ export default function Vendor() {
                           </span>
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
-                          <div className="flex gap-2">
+                          <div className="flex items-center justify-center space-x-2">
                             <button 
                               onClick={() => handleEdit(vendor)} 
-                              className="text-sm px-3 py-1 rounded border hover:bg-slate-100"
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                              title="Edit Vendor"
                             >
-                              Edit
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
                             </button>
                             <button 
                               onClick={() => handleDelete(vendor.id)} 
-                              className="text-sm px-3 py-1 rounded border text-red-600 hover:bg-red-50"
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Vendor"
                             >
-                              Delete
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
                             </button>
                           </div>
                         </td>

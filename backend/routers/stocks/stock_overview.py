@@ -80,6 +80,58 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
     
     return result
 
+@router.get("/by-location/{location_name}")
+def get_stock_by_location(location_name: str, db: Session = Depends(get_tenant_db)):
+    """Get stock overview records filtered by location"""
+    from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
+    
+    # Get all active items that have stock in the specified location
+    items = db.query(Item).filter(Item.is_active == True).all()
+    
+    result = []
+    for item in items:
+        # Get batches for this item from approved GRNs in the specified location
+        approved_grn_items = db.query(GRNItem).join(GRN).filter(
+            GRNItem.item_name == item.name,
+            GRN.status == GRNStatus.approved,
+            GRN.store == location_name
+        ).all()
+        
+        if not approved_grn_items:
+            continue  # Skip items not in this location
+        
+        # Get all batches for this item in this location
+        location_batches = []
+        total_qty = 0
+        
+        for grn_item in approved_grn_items:
+            batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id, Batch.qty > 0).all()
+            for batch in batches:
+                batch_info = {
+                    "batch_no": batch.batch_no,
+                    "qty": batch.qty,
+                    "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
+                    "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
+                    "location": location_name,
+                    "rate": float(item.mrp or item.fixing_price or 30)
+                }
+                location_batches.append(batch_info)
+                total_qty += batch.qty
+        
+        if total_qty > 0:  # Only include items with available stock
+            result.append({
+                "id": item.id,
+                "item_name": item.name,
+                "item_code": item.item_code,
+                "location": location_name,
+                "available_qty": int(total_qty),
+                "min_stock": item.min_stock or 0,
+                "status": "Good" if total_qty > (item.min_stock or 0) else "Low Stock",
+                "batches": location_batches
+            })
+    
+    return result
+
 @router.put("/increase-stock/{batch_no}")
 def increase_stock_by_batch(batch_no: str, quantity: int, db: Session = Depends(get_tenant_db)):
     """Increase stock quantity for items with specific batch number"""

@@ -185,6 +185,15 @@ def ensure_missing_columns(engine):
             except Exception as e:
                 if "Duplicate column name" not in str(e):
                     print(f"Error adding warranty columns: {e}")
+            
+            # Add location column to return_headers table
+            try:
+                conn.execute(text("ALTER TABLE return_headers ADD COLUMN location VARCHAR(150) NULL AFTER department"))
+                conn.commit()
+                print("Added location column to return_headers table")
+            except Exception as e:
+                if "Duplicate column name" not in str(e):
+                    print(f"Error adding location column: {e}")
                 
     except Exception as e:
         print(f"Error in ensure_missing_columns: {e}")

@@ -676,3 +676,121 @@ def dispense_expired_stock(data: dict, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": f"Expired batch {batch_no} marked for disposal"}
+@router.post("/add-batch-stock")
+def add_batch_stock(data: dict, db: Session = Depends(get_db)):
+    """Add returned stock back to batch"""
+    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
+    
+    item_name = data.get('item_name')
+    batch_no = data.get('batch_no') 
+    quantity = int(data.get('quantity', 0))
+    
+    # Find batch in approved GRNs
+    batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        Batch.batch_no == batch_no,
+        GRN.status == GRNStatus.approved
+    ).first()
+    
+    if not batch:
+        raise HTTPException(404, "Batch not found")
+    
+    # Add ONLY the return quantity back to batch
+    batch.qty += quantity
+    
+    db.commit()
+    
+    return {"message": f"Added {quantity} units back to stock", "updated_qty": batch.qty}
+    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus, StockLedger
+    from datetime import datetime
+    
+    item_name = data.get('item_name')
+    batch_no = data.get('batch_no') 
+    quantity = int(data.get('quantity', 0))
+    
+    # Find batch in approved GRNs
+    batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        Batch.batch_no == batch_no,
+        GRN.status == GRNStatus.approved
+    ).first()
+    
+    if not batch:
+        raise HTTPException(404, "Batch not found")
+    
+    # Add quantity back to batch
+    batch.qty += quantity
+    
+    # Update GRN item
+    grn_item = db.query(GRNItem).filter(GRNItem.id == batch.grn_item_id).first()
+    if grn_item:
+        grn_item.received_qty += quantity
+    
+    # Update stock if exists
+    stock = db.query(Stock).filter(Stock.item_name == item_name).first()
+    if stock:
+        stock.total_qty += quantity
+        stock.available_qty += quantity
+        
+        ledger = StockLedger(
+            stock_id=stock.id,
+            batch_no=batch_no,
+            txn_type="ADJUST_IN",
+            qty_in=quantity,
+            qty_out=0,
+            balance=stock.available_qty,
+            ref_no=f"RTN-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            remarks="Item return"
+        )
+        db.add(ledger)
+    
+    db.commit()
+    
+    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus, StockLedger, Stock
+    
+    item_name = data.get('item_name')
+    batch_no = data.get('batch_no') 
+    quantity = int(data.get('quantity', 0))
+    return_id = data.get('return_id')  # Add return_id to track processed returns
+    
+    # Simple duplicate prevention using return_id
+    if return_id:
+        # Check if this return was already processed by looking for a specific remark
+        existing_return = db.query(StockLedger).filter(
+            StockLedger.remarks.like(f"%return_id:{return_id}%")
+        ).first()
+        
+        if existing_return:
+            return {"message": "Return already processed", "updated_qty": 0}
+    
+    # Find batch in approved GRNs
+    batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        Batch.batch_no == batch_no,
+        GRN.status == GRNStatus.approved
+    ).first()
+    
+    if not batch:
+        raise HTTPException(404, "Batch not found")
+    
+    # Add ONLY the return quantity back to batch
+    batch.qty += quantity
+    
+    # Create a tracking record to prevent duplicates
+    if return_id:
+        stock = db.query(Stock).filter(Stock.item_name == item_name).first()
+        if stock:
+            ledger = StockLedger(
+                stock_id=stock.id,
+                batch_no=batch_no,
+                txn_type="ADJUST_IN",
+                qty_in=quantity,
+                qty_out=0,
+                balance=stock.available_qty + quantity,
+                remarks=f"Return processed - return_id:{return_id}"
+            )
+            db.add(ledger)
+    
+    db.commit()
+    
+    return {"message": f"Added {quantity} units back to stock", "updated_qty": batch.qty}

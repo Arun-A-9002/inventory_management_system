@@ -908,13 +908,23 @@ class ReturnHeader(TenantBase):
 
     vendor = Column(String(150), nullable=True)
     department = Column(String(150), nullable=True)
+    location = Column(String(150), nullable=True)
     reference_no = Column(String(100), nullable=True)
+    
+    # Customer information fields
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(191), nullable=True)
+    customer_phone = Column(String(20), nullable=True)
+    customer_email = Column(String(191), nullable=True)
 
     reason = Column(String(255))
     return_date = Column(Date)
 
     status = Column(String(50), default="DRAFT")
     created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationship
+    customer = relationship("Customer", foreign_keys=[customer_id])
 
 
 # ---------------- RETURN ITEMS ----------------
@@ -1054,6 +1064,52 @@ class VendorPayment(TenantBase):
 
 
 # ============================================================
-#                   billing SETTINGS
+#                   BILLING MODELS
 # ============================================================
+class BillingStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    PARTIAL = "PARTIAL"
+    PAID = "PAID"
+
+class PaymentMode(str, enum.Enum):
+    CASH = "Cash"
+    BANK = "Bank"
+    UPI = "UPI"
+    CHEQUE = "Cheque"
+
+class Billing(TenantBase):
+    __tablename__ = "billing"
+
+    id = Column(Integer, primary_key=True, index=True)
+    grn_id = Column(Integer, ForeignKey("grns.id"), nullable=False)
+    gross_amount = Column(DECIMAL(10, 2), nullable=False)
+    tax_amount = Column(DECIMAL(10, 2), default=0.00)
+    net_amount = Column(DECIMAL(10, 2), nullable=False)
+    paid_amount = Column(DECIMAL(10, 2), default=0.00)
+    balance_amount = Column(DECIMAL(10, 2), nullable=False)
+    status = Column(Enum(BillingStatus), default=BillingStatus.DRAFT)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    grn = relationship("GRN")
+
+
+class ReturnBilling(TenantBase):
+    __tablename__ = "return_billing"
+
+    id = Column(Integer, primary_key=True, index=True)
+    return_id = Column(Integer, ForeignKey("return_headers.id"), nullable=False)
+    gross_amount = Column(DECIMAL(10, 2), nullable=False)
+    tax_amount = Column(DECIMAL(10, 2), default=0.00)
+    net_amount = Column(DECIMAL(10, 2), nullable=False)
+    paid_amount = Column(DECIMAL(10, 2), default=0.00)
+    balance_amount = Column(DECIMAL(10, 2), nullable=False)
+    status = Column(Enum(BillingStatus), default=BillingStatus.DRAFT)
+    due_date = Column(Date, nullable=True)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    return_header = relationship("ReturnHeader")
 
