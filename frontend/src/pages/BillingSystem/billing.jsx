@@ -70,35 +70,38 @@ export default function Billing() {
     try {
       let res;
       if (billingType === 'RETURN') {
+        // Always fetch fresh data from API
         res = await api.get(`/billing/return-invoices`);
         const returnBilling = res.data.find(b => b.id === billingId);
         if (returnBilling) {
           setSelectedBilling(returnBilling);
           setIsFinalized(returnBilling.status === 'PAID');
           
-          // Fetch actual return items
+          // Fetch actual return items with database IDs
           try {
-            console.log('Fetching items for return_id:', returnBilling.return_id);
-            const itemsRes = await api.get(`/returns/${returnBilling.return_id}/items`);
+            console.log('Fetching items for billing_id:', billingId);
+            const itemsRes = await api.get(`/billing/invoice-items/${billingId}`);
             console.log('API Response:', itemsRes);
             console.log('Items data:', itemsRes.data);
             
             if (itemsRes.data && itemsRes.data.length > 0) {
-              const items = itemsRes.data.map((item, index) => ({
-                id: index + 1,
-                name: item.item_name,
-                batch_no: item.batch_no,
-                qty: item.qty,
-                rate: parseFloat(item.rate || item.price || 30),
-                warranty: item.warranty || "N/A",
-                tax_rate: item.tax_rate || 18,
-                tax_amount: item.tax_amount || 0,
-                total: item.qty * parseFloat(item.rate || item.price || 30),
-                total_with_tax: item.total_with_tax || (item.qty * parseFloat(item.rate || item.price || 30)),
-                status: item.status || 'pending',
-                returned: item.returned || false
+              // Log the structure of the first item to understand ID mapping
+              console.log('First item structure:', itemsRes.data[0]);
+              console.log('Available ID fields:', Object.keys(itemsRes.data[0]).filter(key => key.toLowerCase().includes('id')));
+              
+              setInvoiceItems(itemsRes.data);
+              
+              // Update billing totals with correct tax
+              const totalGross = itemsRes.data.reduce((sum, item) => sum + item.total, 0);
+              const totalTax = itemsRes.data.reduce((sum, item) => sum + item.tax_amount, 0);
+              
+              setSelectedBilling(prev => ({
+                ...prev,
+                gross_amount: totalGross,
+                tax_amount: totalTax,
+                net_amount: totalGross + totalTax,
+                balance_amount: (totalGross + totalTax) - parseFloat(prev.paid_amount)
               }));
-              setInvoiceItems(items);
             } else {
               console.log('No items found in response');
               setInvoiceItems([]);
@@ -142,14 +145,18 @@ export default function Billing() {
     try {
       setLoading(true);
       const paymentData = {
-        paid_amount: parseFloat(paymentForm.amount)
+        paid_amount: parseFloat(paymentForm.amount),
+        payment_mode: paymentForm.payment_mode,
+        reference_no: paymentForm.reference_no,
+        notes: paymentForm.notes
       };
       
       await api.put(`/billing/return-payment/${selectedBilling.id}`, paymentData);
       showMessage('Payment processed successfully');
       setShowPaymentModal(false);
-      // Refresh the current invoice details to show updated amounts
+      // Refresh both the invoice details and the billing list
       await viewBillingDetails(selectedBilling.id, 'RETURN');
+      await fetchBillings(); // Refresh the main list to show updated totals
     } catch (err) {
       console.error('Payment failed:', err);
       showMessage('Payment processing failed', 'error');
@@ -216,45 +223,79 @@ export default function Billing() {
   
   const handleItemEdit = async (item) => {
     try {
-      // Fetch item master data to get the actual tax rate
-      const itemMasterRes = await api.get(`/items/search?name=${encodeURIComponent(item.name)}`);
-      const itemMaster = itemMasterRes.data.find(i => i.name === item.name);
-      const masterTaxRate = itemMaster?.tax_rate || item.tax_rate || 18;
+      // Fetch tax rate from item master
+      const taxRes = await api.get(`/billing/get-item-tax/${encodeURIComponent(item.name)}`);
+      const itemMasterTax = taxRes.data.tax_rate || 0;
+      
+      console.log('Setting up item edit:', {
+        item,
+        itemId: item.id,
+        itemName: item.name,
+        itemMasterTax
+      });
       
       setEditingItem({ 
         ...item, 
-        tax_rate: masterTaxRate,
+        tax_rate: itemMasterTax,
         status: item.status || 'pending',
-        returned: item.returned || false
+        returned: item.returned || false,
+        // Ensure we have the correct database ID
+        database_id: item.id  // Use the ID from the API response directly
       });
     } catch (err) {
-      console.error('Failed to fetch item master data:', err);
-      // Fallback to current item tax rate or 18%
+      console.error('Failed to fetch item tax rate:', err);
       setEditingItem({ 
         ...item, 
-        tax_rate: item.tax_rate || 18,
+        tax_rate: 0,
         status: item.status || 'pending',
-        returned: item.returned || false
+        returned: item.returned || false,
+        database_id: item.id  // Use the ID from the API response directly
       });
     }
   };
   
   const saveItemEdit = async () => {
-    const updatedItem = {
-      ...editingItem,
-      total: editingItem.qty * editingItem.rate,
-      tax_amount: (editingItem.qty * editingItem.rate) * ((editingItem.tax_rate || 18) / 100),
-      total_with_tax: (editingItem.qty * editingItem.rate) + ((editingItem.qty * editingItem.rate) * ((editingItem.tax_rate || 18) / 100))
-    };
-    
     try {
-      // Save to backend - ONLY update invoice, no stock changes
-      await api.put(`/returns/${selectedBilling.return_id}/items/${editingItem.id}`, {
+      // Use the database ID - prioritize database_id, then id
+      const itemId = editingItem.database_id || editingItem.id;
+      
+      console.log('Attempting to save item edit:', {
+        editingItem,
+        itemId,
+        availableFields: Object.keys(editingItem)
+      });
+      
+      // Validate that we have a valid item ID
+      if (!itemId || itemId <= 0) {
+        throw new Error('Invalid item ID - cannot save changes');
+      }
+      
+      // Validate that the item ID exists in the available items
+      const currentItem = invoiceItems.find(item => item.id === itemId);
+      if (!currentItem) {
+        console.error('Item not found in current invoice items:', {
+          searchingForId: itemId,
+          availableItems: invoiceItems.map(item => ({ id: item.id, name: item.name }))
+        });
+        throw new Error(`Item with ID ${itemId} not found in current invoice`);
+      }
+      
+      // Save with correct tax calculation from edit modal
+      const response = await api.put(`/billing/save-item-edit/${itemId}`, {
         qty: editingItem.qty,
         rate: editingItem.rate,
-        tax_rate: editingItem.tax_rate || 18,
-        status: editingItem.status || 'pending'
+        tax_rate: editingItem.tax_rate
       });
+      
+      console.log('Item edit saved successfully:', response.data);
+      
+      // Update local state with correct values
+      const updatedItem = {
+        ...editingItem,
+        total: editingItem.qty * editingItem.rate,
+        tax_amount: editingItem.qty * (editingItem.tax_rate || 0),
+        total_with_tax: (editingItem.qty * editingItem.rate) + (editingItem.qty * (editingItem.tax_rate || 0))
+      };
       
       const updatedItems = invoiceItems.map(item => 
         item.id === editingItem.id ? updatedItem : item
@@ -262,12 +303,12 @@ export default function Billing() {
       
       setInvoiceItems(updatedItems);
       
-      // Recalculate billing totals based on updated quantities
+      // Recalculate billing totals
       const grossAmount = updatedItems.reduce((sum, item) => sum + item.total, 0);
       const taxAmount = updatedItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
       const netAmount = grossAmount + taxAmount;
       
-      // Update selectedBilling with new amounts
+      // Update selectedBilling
       setSelectedBilling(prev => ({
         ...prev,
         gross_amount: grossAmount,
@@ -276,18 +317,17 @@ export default function Billing() {
         balance_amount: netAmount - parseFloat(prev.paid_amount)
       }));
       
-      // Update backend billing totals
-      await api.put(`/billing/return-payment/${selectedBilling.id}`, {
-        gross_amount: grossAmount,
-        tax_amount: taxAmount,
-        net_amount: netAmount
-      });
-      
       setEditingItem(null);
-      showMessage('Invoice updated successfully - stock changes require separate Return action');
+      showMessage('Item updated with correct tax calculation');
     } catch (err) {
-      console.error('Failed to save item edit:', err);
-      showMessage('Failed to save invoice changes', 'error');
+      console.error('Failed to save item edit:', {
+        error: err,
+        response: err.response?.data,
+        status: err.response?.status,
+        editingItem,
+        itemId: editingItem.database_id || editingItem.return_item_id || editingItem.id
+      });
+      showMessage(`Failed to save item changes: ${err.response?.data?.detail || err.message}`, 'error');
     }
   };
 
@@ -421,6 +461,7 @@ export default function Billing() {
                     <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Batch No</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Quantity</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Rate</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Tax/Unit</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Warranty</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Gross Amount</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Total Tax</th>
@@ -435,10 +476,11 @@ export default function Billing() {
                       <td className="px-4 py-3 text-center text-sm text-slate-900">{item.batch_no || "N/A"}</td>
                       <td className="px-4 py-3 text-center text-sm text-slate-900">{item.qty}</td>
                       <td className="px-4 py-3 text-right text-sm text-slate-900">₹{item.rate.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center text-sm text-slate-900">₹{(item.tax_amount / item.qty).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center text-sm text-slate-900">{item.warranty}</td>
                       <td className="px-4 py-3 text-right text-sm text-slate-900">₹{item.total.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-slate-900">₹{(item.tax_amount || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">₹{(item.total_with_tax || item.total).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-sm text-slate-900">₹{item.tax_amount.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">₹{item.total_with_tax.toFixed(2)}</td>
                       {!isFinalized && (
                         <td className="px-4 py-3 text-center">
                           <button
@@ -475,13 +517,7 @@ export default function Billing() {
                   <span className="font-semibold">₹{parseFloat(selectedBilling.gross_amount).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tax ({(() => {
-                    if (invoiceItems.length > 0) {
-                      const avgTaxRate = invoiceItems.reduce((sum, item) => sum + (item.tax_rate || 18), 0) / invoiceItems.length;
-                      return avgTaxRate.toFixed(0);
-                    }
-                    return '18';
-                  })()}%):</span>
+                  <span>Tax:</span>
                   <span className="font-semibold">₹{parseFloat(selectedBilling.tax_amount).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-semibold">
@@ -497,11 +533,15 @@ export default function Billing() {
             <h4 className="font-semibold text-slate-900 mb-3">Payment Summary</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span>Paid Amount:</span>
+                <span>Net Amount:</span>
+                <span className="font-semibold text-blue-600">₹{parseFloat(selectedBilling.net_amount).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Paid:</span>
                 <span className="font-semibold text-green-600">₹{parseFloat(selectedBilling.paid_amount).toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Balance Due:</span>
+                <span>Remaining Balance:</span>
                 <span className="font-semibold text-red-600">₹{Math.max(0, parseFloat(selectedBilling.net_amount) - parseFloat(selectedBilling.paid_amount)).toFixed(2)}</span>
               </div>
               {selectedBilling.status === 'PARTIAL' && selectedBilling.due_date && (
@@ -916,8 +956,8 @@ export default function Billing() {
                 <input
                   type="number"
                   step="0.01"
-                  value={editingItem.tax_rate || 18}
-                  onChange={(e) => setEditingItem({...editingItem, tax_rate: parseFloat(e.target.value) || 18})}
+                  value={editingItem.tax_rate || 0}
+                  onChange={(e) => setEditingItem({...editingItem, tax_rate: parseFloat(e.target.value) || 0})}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   min="0"
                 />
@@ -930,12 +970,12 @@ export default function Billing() {
                     <span>₹{(editingItem.qty * editingItem.rate).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Tax ({editingItem.tax_rate || 18}%):</span>
-                    <span>₹{((editingItem.qty * editingItem.rate) * ((editingItem.tax_rate || 18) / 100)).toFixed(2)}</span>
+                    <span>Tax ({editingItem.tax_rate || 0}/unit × {editingItem.qty}):</span>
+                    <span>₹{(editingItem.qty * (editingItem.tax_rate || 0)).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center font-bold border-t pt-1">
                     <span>Total:</span>
-                    <span>₹{((editingItem.qty * editingItem.rate) + ((editingItem.qty * editingItem.rate) * ((editingItem.tax_rate || 18) / 100))).toFixed(2)}</span>
+                    <span>₹{((editingItem.qty * editingItem.rate) + (editingItem.qty * (editingItem.tax_rate || 0))).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1035,5 +1075,8 @@ export default function Billing() {
         </div>
       )}
     </div>
-  );
+
+
+
+);
 }

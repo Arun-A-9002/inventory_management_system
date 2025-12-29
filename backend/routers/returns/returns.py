@@ -129,7 +129,7 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
 @router.patch("/{return_id}/status")
 def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):
     """Update return status and adjust inventory if approved"""
-    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus
+    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
     
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -160,10 +160,30 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
                     if return_header.return_type == "FROM_CUSTOMER":
                         batch.qty += item.qty
                         print(f"Added {item.qty} to batch {item.batch_no} for customer return approval")
+                        
+                        # Update StockOverview table if it exists
+                        stock_overview = db.query(StockOverview).filter(
+                            StockOverview.item_name == item.item_name,
+                            StockOverview.batch_no == item.batch_no
+                        ).first()
+                        if stock_overview:
+                            stock_overview.available_qty += int(item.qty)
+                            if stock_overview.available_qty >= stock_overview.min_stock:
+                                stock_overview.status = "Good"
                     else:
                         # For other returns (TO_VENDOR, etc.), REDUCE quantity from stock
                         if batch.qty >= item.qty:
                             batch.qty -= item.qty
+                            
+                            # Update StockOverview table if it exists
+                            stock_overview = db.query(StockOverview).filter(
+                                StockOverview.item_name == item.item_name,
+                                StockOverview.batch_no == item.batch_no
+                            ).first()
+                            if stock_overview:
+                                stock_overview.available_qty -= int(item.qty)
+                                if stock_overview.available_qty < stock_overview.min_stock:
+                                    stock_overview.status = "Low Stock"
                             
                             # Remove batch if quantity becomes 0
                             if batch.qty == 0:
@@ -210,7 +230,7 @@ def update_return_item(return_id: int, item_id: int, item_data: dict, db: Sessio
 @router.post("/{return_id}/process-return")
 def process_item_return(return_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
     """Process item return - add stock back and mark as returned"""
-    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus
+    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
     from sqlalchemy import text
     
     item_name = return_data.get('item_name')
@@ -229,6 +249,16 @@ def process_item_return(return_id: int, return_data: dict, db: Session = Depends
     
     # Add returned quantity back to batch
     batch.qty += quantity
+    
+    # Update StockOverview table if it exists
+    stock_overview = db.query(StockOverview).filter(
+        StockOverview.item_name == item_name,
+        StockOverview.batch_no == batch_no
+    ).first()
+    if stock_overview:
+        stock_overview.available_qty += quantity
+        if stock_overview.available_qty >= stock_overview.min_stock:
+            stock_overview.status = "Good"
     
     # Mark return item as returned using text() wrapper
     db.execute(

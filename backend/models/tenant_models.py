@@ -938,6 +938,9 @@ class ReturnItem(TenantBase):
     batch_no = Column(String(100), nullable=True)
     qty = Column(Float)
     uom = Column(String(50))
+    rate = Column(DECIMAL(10, 2), default=0.00)
+    total_tax = Column(DECIMAL(10, 2), default=0.00)
+    gross_amount = Column(DECIMAL(10, 2), default=0.00)
 
     condition = Column(Enum(ItemConditionEnum))
     remarks = Column(String(255))
@@ -1112,4 +1115,20 @@ class ReturnBilling(TenantBase):
     
     # Relationships
     return_header = relationship("ReturnHeader")
+
+
+class ReturnBillingPayment(TenantBase):
+    __tablename__ = "return_billing_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    billing_id = Column(Integer, ForeignKey("return_billing.id"), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
+    payment_mode = Column(Enum(PaymentMode), default=PaymentMode.CASH)
+    reference_no = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    billing = relationship("ReturnBilling")
 
