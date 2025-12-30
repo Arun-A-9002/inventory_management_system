@@ -168,23 +168,23 @@ def get_all_billing(db: Session = Depends(get_tenant_db)):
 @router.get("/customer/{customer_id}/paid-invoices")
 def get_customer_paid_invoices(customer_id: int, db: Session = Depends(get_tenant_db)):
     """Get all paid invoices for a customer with detailed information for refunds"""
-    billings = []
-    
-    # Query ReturnBilling records with PAID or PARTIAL status (both can have payments)
+    # Query ReturnBilling records with PAID status for this customer
     return_billings = db.query(ReturnBilling).filter(
-        ReturnBilling.status.in_([BillingStatus.PAID, BillingStatus.PARTIAL])
+        ReturnBilling.status == BillingStatus.PAID
     ).all()
     
     # Filter by customer through return header
-    from models.tenant_models import ReturnHeader, Customer
+    from models.tenant_models import ReturnHeader
     customer_billings = []
     
     for billing in return_billings:
         return_header = db.query(ReturnHeader).filter(ReturnHeader.id == billing.return_id).first()
-        if return_header and (return_header.customer_id == str(customer_id) or return_header.customer_id == customer_id):
-            # Only include if there's actual payment made
-            if float(billing.paid_amount) > 0:
-                customer_billings.append(billing)
+        if return_header and return_header.return_type == "TO_CUSTOMER":
+            # Check if this return was for the selected customer
+            if (return_header.customer_id == str(customer_id) or return_header.customer_id == customer_id):
+                # Only include if there's actual payment made
+                if float(billing.paid_amount) > 0:
+                    customer_billings.append(billing)
     
     return [{
         "id": billing.id,
@@ -200,6 +200,45 @@ def get_customer_paid_invoices(customer_id: int, db: Session = Depends(get_tenan
 @router.get("/invoice-details/{billing_id}")
 def get_invoice_details(billing_id: int, db: Session = Depends(get_tenant_db)):
     """Get detailed invoice information including items purchased"""
+    # Handle sample invoice IDs (1001, 1002, 1003)
+    if billing_id >= 1001 and billing_id <= 1003:
+        from datetime import datetime, timedelta
+        sample_items = [
+            {
+                "item_name": "Sethescope",
+                "batch_no": "BATCH001",
+                "quantity": 10 + (billing_id - 1001) * 5,
+                "rate": 30.0,
+                "gross_amount": (10 + (billing_id - 1001) * 5) * 30.0,
+                "total_tax": (10 + (billing_id - 1001) * 5) * 30.0 * 0.18,
+                "amount": (10 + (billing_id - 1001) * 5) * 30.0 * 1.18
+            },
+            {
+                "item_name": "Medical Supplies",
+                "batch_no": "BATCH002",
+                "quantity": 5 + (billing_id - 1001) * 3,
+                "rate": 50.0,
+                "gross_amount": (5 + (billing_id - 1001) * 3) * 50.0,
+                "total_tax": (5 + (billing_id - 1001) * 3) * 50.0 * 0.18,
+                "amount": (5 + (billing_id - 1001) * 3) * 50.0 * 1.18
+            }
+        ]
+        
+        total_gross = sum(item["gross_amount"] for item in sample_items)
+        total_tax = sum(item["total_tax"] for item in sample_items)
+        
+        return {
+            "id": billing_id,
+            "invoice_number": f"SALE-{billing_id:04d}",
+            "created_at": datetime.now() - timedelta(days=(billing_id - 1001) * 10),
+            "total_amount": total_gross + total_tax,
+            "paid_amount": total_gross + total_tax,
+            "gross_amount": total_gross,
+            "tax_amount": total_tax,
+            "items": sample_items
+        }
+    
+    # Handle real billing records
     billing = db.query(ReturnBilling).filter(ReturnBilling.id == billing_id).first()
     if not billing:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -629,18 +668,18 @@ def revert_return_payment(
         "reason": revert_data.reason
     }
 
-@router.post("/refund/{billing_id}")
-def process_refund(
+@router.put("/process-refund/{billing_id}")
+def process_customer_refund(
     billing_id: int,
     refund_data: dict,
     db: Session = Depends(get_tenant_db)
 ):
-    """Process refund for a billing record"""
+    """Process customer refund - reduce paid amount and make balance negative"""
     billing = db.query(ReturnBilling).filter(ReturnBilling.id == billing_id).first()
     if not billing:
         raise HTTPException(status_code=404, detail="Billing not found")
     
-    refund_amount = float(refund_data.get('amount', 0))
+    refund_amount = float(refund_data.get('refund_amount', 0))
     
     # Validate refund amount
     if refund_amount <= 0:
@@ -649,21 +688,23 @@ def process_refund(
     if refund_amount > float(billing.paid_amount):
         raise HTTPException(status_code=400, detail="Refund amount cannot exceed paid amount")
     
-    # Update billing record
+    # Update billing record - reduce paid amount and make balance negative
     billing.paid_amount = billing.paid_amount - Decimal(str(refund_amount))
-    billing.balance_amount = billing.net_amount - billing.paid_amount
-    billing.status = calculate_billing_status(float(billing.net_amount), float(billing.paid_amount))
+    billing.balance_amount = -Decimal(str(refund_amount))  # Negative balance for customer refunds
+    
+    # Change status to DRAFT to indicate refund pending
+    billing.status = BillingStatus.DRAFT
     
     db.commit()
     db.refresh(billing)
     
     return {
-        "message": "Refund processed successfully",
+        "message": "Customer refund processed successfully",
         "billing_id": billing.id,
         "refund_amount": refund_amount,
-        "remaining_paid_amount": float(billing.paid_amount),
-        "balance_amount": float(billing.balance_amount),
-        "status": billing.status.value
+        "new_paid_amount": float(billing.paid_amount),
+        "new_balance_amount": float(billing.balance_amount),
+        "new_status": billing.status.value
     }
 
 @router.put("/finalize/{billing_id}")

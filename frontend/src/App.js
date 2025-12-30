@@ -35,9 +35,6 @@ import InventoryLocations from "./pages/inventory/InventoryLocations";
 // Goods Receipt Note (GRN) - New Module to be added later
 import GoodsReceipt from "./pages/grn/GoodsReceipt";
 
-//consumption & issue
-import ConsumptionIssue from "./pages/consuption/ConsuptionIssue";
-
 //return & disposal
 import ReturnDisposal from "./pages/returns/ReturnDisposal";
 
@@ -95,9 +92,6 @@ function App() {
           
           {/* Inventory Locations */}
           <Route path="inventory/locations" element={<InventoryLocations />} />
-
-          {/* Consumption & Issue */}
-          <Route path="consumption" element={<ConsumptionIssue />} />
 
           {/* Return & Disposal */}
           <Route path="returns" element={<ReturnDisposal />} />

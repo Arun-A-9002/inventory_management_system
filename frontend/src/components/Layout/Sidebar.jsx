@@ -108,7 +108,6 @@ export default function Sidebar() {
       submenu: [
         { name: "Organization Structure Setup", path: "/app/organization/structure" },
         { name: "Master Data Setup", path: "/app/organization/master-data" },
-        { name: "Inventory Rules & Policies", path: "/app/organization/inventory-rules" },
       ],
     },
 
@@ -117,20 +116,27 @@ export default function Sidebar() {
 
     { name: "Vendor Management", path: "/app/vendor" },
 
+    { name: "Customer Management", path: "/app/customers" },
+
+    { name: "Locations", path: "/app/inventory/locations" },
+
     { name: "Purchase Management", path: "/app/purchase-management" },
 
     { name: "Goods Receipt & Inspection", path: "/app/grn" },
+
+    { name: "Return & Disposal", path: "/app/returns" },
 
     //billing system
     { name: "Billing System", path: "/app/billing" },
 
     // ================= SINGLE MENU ITEMS =================
-    { name: "Stock Ledger", path: "/app/stocks" },
-    { name: "Locations", path: "/app/inventory/locations" },
-    { name: "Consumption & Issue", path: "/app/consumption" },
-    { name: "Return & Disposal", path: "/app/returns" },
-    { name: "Customer Management", path: "/app/customers" },
+    
+    
+    
+    
     { name: "Vendor Ledger", path: "/app/supplier-ledger" },
+
+    { name: "Stock Ledger", path: "/app/stocks" },
   ];
 
   return (

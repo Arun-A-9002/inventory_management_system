@@ -43,6 +43,13 @@ export default function Item() {
   });
 
   const [editingId, setEditingId] = useState(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [editQuantity, setEditQuantity] = useState(0);
+  const [originalQuantity, setOriginalQuantity] = useState(0);
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [showBatchSelector, setShowBatchSelector] = useState(false);
 
   useEffect(() => {
     loadItems();
@@ -224,6 +231,102 @@ export default function Item() {
     if (item.category_id) {
       loadSubCategories(item.category_id);
     }
+  };
+
+  const handleEditQuantity = async (item) => {
+    setEditingItem(item);
+    setShowEditDialog(true);
+    
+    // Get current stock for this item
+    try {
+      const stockRes = await api.get(`/stocks/`);
+      const itemStock = stockRes.data.find(stock => stock.item_name === item.name);
+      
+      if (itemStock) {
+        setOriginalQuantity(itemStock.available_qty);
+        setEditQuantity(itemStock.available_qty);
+        setAvailableBatches(itemStock.batches || []);
+      } else {
+        setOriginalQuantity(0);
+        setEditQuantity(0);
+        setAvailableBatches([]);
+      }
+    } catch (err) {
+      console.error('Failed to load stock:', err);
+      showToast('Failed to load stock information', 'error');
+    }
+  };
+
+  const handleTakeQuantity = async () => {
+    const extraQuantity = editQuantity - originalQuantity;
+    
+    if (extraQuantity <= 0) {
+      showToast('No extra quantity to take', 'error');
+      return;
+    }
+
+    // Check if we have enough stock in selected batch
+    if (selectedBatch) {
+      const batch = availableBatches.find(b => b.batch_no === selectedBatch);
+      if (!batch || batch.qty < extraQuantity) {
+        showToast(`Insufficient stock in batch ${selectedBatch}. Available: ${batch?.qty || 0}`, 'error');
+        return;
+      }
+    } else if (availableBatches.length > 0) {
+      // Show batch selector if no batch selected
+      setShowBatchSelector(true);
+      return;
+    }
+
+    try {
+      // Process the quantity extraction
+      await api.post('/stocks/add-batch-stock', {
+        item_name: editingItem.name,
+        batch_no: selectedBatch,
+        quantity: extraQuantity
+      });
+      
+      showToast(`Successfully took ${extraQuantity} units`, 'success');
+      setShowEditDialog(false);
+      setShowBatchSelector(false);
+      loadItems(); // Refresh the items list
+    } catch (err) {
+      console.error('Failed to take quantity:', err);
+      showToast('Failed to take quantity', 'error');
+    }
+  };
+
+  const handleReturnQuantity = async () => {
+    const returnQuantity = originalQuantity - editQuantity;
+    
+    if (returnQuantity <= 0) {
+      showToast('No quantity to return', 'error');
+      return;
+    }
+
+    // Check if batch is selected for return
+    if (availableBatches.length > 0 && !selectedBatch) {
+      setShowBatchSelector(true);
+      return;
+    }
+
+    try {
+      // Return quantity to stock using the new return endpoint
+      await api.post(`/stock-overview/return-stock?item_name=${encodeURIComponent(editingItem.name)}&batch_no=${selectedBatch || 'default'}&quantity=${returnQuantity}`);
+      
+      showToast(`Successfully returned ${returnQuantity} units to stock`, 'success');
+      setShowEditDialog(false);
+      setShowBatchSelector(false);
+      loadItems(); // Refresh the items list
+    } catch (err) {
+      console.error('Failed to return quantity:', err);
+      showToast('Failed to return quantity', 'error');
+    }
+  };
+
+  const handleBatchSelection = (batchNo) => {
+    setSelectedBatch(batchNo);
+    setShowBatchSelector(false);
   };
 
   const handleDeactivate = async (id) => {
@@ -836,6 +939,162 @@ const downloadQR = () => {
           </div>
         </div>
       </div>
+      
+      {/* Edit Quantity Dialog */}
+      {showEditDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4">Edit Item</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Item Name</label>
+                <input 
+                  type="text" 
+                  value={editingItem?.name || ''} 
+                  disabled 
+                  className="w-full p-2 border rounded bg-gray-100"
+                />
+              </div>
+              
+              {availableBatches.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Batch Number</label>
+                  <select 
+                    value={selectedBatch} 
+                    onChange={(e) => setSelectedBatch(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="">Select Batch</option>
+                    {availableBatches.map((batch, idx) => (
+                      <option key={idx} value={batch.batch_no}>
+                        {batch.batch_no} (Available: {batch.qty})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Batch number cannot be modified</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Quantity</label>
+                <input 
+                  type="number" 
+                  value={editQuantity} 
+                  onChange={(e) => setEditQuantity(parseInt(e.target.value) || 0)}
+                  className="w-full p-2 border rounded"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editQuantity - originalQuantity > 0 ? 
+                    `+${editQuantity - originalQuantity} from original (${originalQuantity})` :
+                    editQuantity - originalQuantity < 0 ?
+                    `${editQuantity - originalQuantity} from original (${originalQuantity})` :
+                    `No change from original (${originalQuantity})`
+                  }
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Status</label>
+                <select disabled className="w-full p-2 border rounded bg-gray-100">
+                  <option>Approved</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Rate</label>
+                <input 
+                  type="number" 
+                  value={editingItem?.fixing_price || 0} 
+                  disabled 
+                  className="w-full p-2 border rounded bg-gray-100"
+                />
+                <p className="text-xs text-gray-500 mt-1">Rate cannot be modified</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Tax Rate (%)</label>
+                <input 
+                  type="number" 
+                  value={editingItem?.tax || 0} 
+                  disabled 
+                  className="w-full p-2 border rounded bg-gray-100"
+                />
+              </div>
+              
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm">
+                  <div>Subtotal: ₹{((editingItem?.fixing_price || 0) * editQuantity).toFixed(2)}</div>
+                  <div>Tax ({(editingItem?.tax || 0)}/unit × {editQuantity}): ₹{((editingItem?.tax || 0) * editQuantity / 100).toFixed(2)}</div>
+                  <div className="font-semibold">Total: ₹{((editingItem?.fixing_price || 0) * editQuantity + (editingItem?.tax || 0) * editQuantity / 100).toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 mt-6">
+              <button 
+                onClick={() => setShowEditDialog(false)}
+                className="px-4 py-2 border rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              
+              <button 
+                onClick={handleTakeQuantity}
+                disabled={editQuantity <= originalQuantity}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
+              >
+                Take
+              </button>
+              
+              <button 
+                onClick={handleReturnQuantity}
+                disabled={editQuantity >= originalQuantity}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300"
+              >
+                Return {originalQuantity - editQuantity > 0 ? originalQuantity - editQuantity : ''}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  // Save without taking or returning
+                  setShowEditDialog(false);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Batch Selector Dialog */}
+      {showBatchSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-80">
+            <h3 className="text-lg font-semibold mb-4">Select Batch</h3>
+            <div className="space-y-2">
+              {availableBatches.map((batch, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleBatchSelection(batch.batch_no)}
+                  className="w-full p-3 text-left border rounded hover:bg-gray-50"
+                >
+                  <div className="font-medium">{batch.batch_no}</div>
+                  <div className="text-sm text-gray-500">Available: {batch.qty}</div>
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={() => setShowBatchSelector(false)}
+              className="w-full mt-4 px-4 py-2 border rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       
       <Toast 
         message={toast.message}

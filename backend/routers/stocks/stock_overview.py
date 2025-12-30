@@ -135,22 +135,44 @@ def get_stock_by_location(location_name: str, db: Session = Depends(get_tenant_d
 @router.put("/increase-stock/{batch_no}")
 def increase_stock_by_batch(batch_no: str, quantity: int, db: Session = Depends(get_tenant_db)):
     """Increase stock quantity for items with specific batch number"""
-    stocks = db.query(StockOverview).filter(StockOverview.batch_no == batch_no).all()
-    if not stocks:
-        raise HTTPException(status_code=404, detail=f"No items found with batch number {batch_no}")
+    from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
-    updated_items = []
-    for stock in stocks:
-        stock.available_qty += quantity
-        # Update status based on new quantity
-        if stock.available_qty >= stock.min_stock:
-            stock.status = "Good"
-        else:
-            stock.status = "Low Stock"
-        updated_items.append(stock.item_name)
+    # Find the batch in the GRN system
+    batch = db.query(Batch).filter(Batch.batch_no == batch_no).first()
     
+    if not batch:
+        # If batch doesn't exist, find any batch for the item and create/update
+        # This is a fallback for items without specific batch tracking
+        stocks = db.query(StockOverview).filter(StockOverview.batch_no == batch_no).all()
+        if not stocks:
+            raise HTTPException(status_code=404, detail=f"No items found with batch number {batch_no}")
+        
+        updated_items = []
+        for stock in stocks:
+            stock.available_qty += quantity
+            # Update status based on new quantity
+            if stock.available_qty >= stock.min_stock:
+                stock.status = "Good"
+            else:
+                stock.status = "Low Stock"
+            updated_items.append(stock.item_name)
+        
+        db.commit()
+        return {"message": f"Increased stock by {quantity} for {len(stocks)} items", "items": updated_items}
+    
+    # Increase quantity in the batch
+    batch.qty += quantity
     db.commit()
-    return {"message": f"Increased stock by {quantity} for {len(stocks)} items", "items": updated_items}
+    
+    # Get item name for response
+    grn_item = db.query(GRNItem).filter(GRNItem.id == batch.grn_item_id).first()
+    item_name = grn_item.item_name if grn_item else "Unknown Item"
+    
+    return {
+        "message": f"Increased stock by {quantity} for batch {batch_no}", 
+        "item": item_name,
+        "new_quantity": batch.qty
+    }
 
 @router.get("/batches/{item_name}")
 def get_item_batches(item_name: str, db: Session = Depends(get_tenant_db)):
@@ -197,6 +219,46 @@ def dispense_stock(item_id: int, batch_index: int, quantity: int, db: Session = 
     db.commit()
     
     return {"message": f"Dispensed {quantity} units from batch {target_batch.batch_no}"}
+
+@router.post("/return-stock")
+def return_stock_to_batch(item_name: str, batch_no: str, quantity: int, db: Session = Depends(get_tenant_db)):
+    """Return stock to a specific batch"""
+    from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
+    
+    # Find the item
+    item = db.query(Item).filter(Item.name == item_name).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Find the batch
+    batch = db.query(Batch).filter(Batch.batch_no == batch_no).first()
+    
+    if not batch:
+        # If specific batch not found, find any batch for this item
+        grn_item = db.query(GRNItem).join(GRN).filter(
+            GRNItem.item_name == item_name,
+            GRN.status == GRNStatus.approved
+        ).first()
+        
+        if not grn_item:
+            raise HTTPException(status_code=404, detail=f"No approved GRN found for item {item_name}")
+        
+        # Find any batch for this GRN item
+        batch = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).first()
+        
+        if not batch:
+            raise HTTPException(status_code=404, detail=f"No batch found for item {item_name}")
+    
+    # Increase the batch quantity
+    batch.qty += quantity
+    db.commit()
+    
+    return {
+        "message": f"Successfully returned {quantity} units to batch {batch.batch_no}",
+        "item_name": item_name,
+        "batch_no": batch.batch_no,
+        "new_quantity": batch.qty
+    }
 
 @router.post("/create-test-batches")
 def create_test_batches(db: Session = Depends(get_tenant_db)):

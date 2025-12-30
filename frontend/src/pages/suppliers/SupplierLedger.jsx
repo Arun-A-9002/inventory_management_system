@@ -398,25 +398,13 @@ export default function SupplierLedger() {
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <div className="space-y-1">
-                        {outstanding > 0 && (
-                          <div className="font-medium text-green-600">
-                            ₹{outstanding.toFixed(2)}
-                          </div>
-                        )}
-                        {paidAmount > 0 && (
-                          <button 
-                            onClick={() => handlePayment(grn)}
-                            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                          >
-                            Pay
-                          </button>
-                        )}
+                      <div className="font-medium">
+                        ₹{paidAmount.toFixed(2)}
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      <div className={`font-medium ${paidAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ₹{paidAmount.toFixed(2)}
+                      <div className="font-medium">
+                        ₹{outstanding.toFixed(2)}
                       </div>
                     </td>
                     <td className="p-4 text-center">
@@ -430,6 +418,17 @@ export default function SupplierLedger() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
+                        <button 
+                          onClick={() => handlePayment(grn)}
+                          disabled={outstanding === 0}
+                          className={`px-3 py-1 rounded text-sm ${
+                            outstanding === 0 
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          Pay
+                        </button>
                         <button 
                           onClick={() => handleViewGRN(grn)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
