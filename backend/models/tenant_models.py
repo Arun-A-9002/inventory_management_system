@@ -399,6 +399,24 @@ class Item(TenantBase):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Relationship
+    batches = relationship("ItemBatch", back_populates="item")
+
+
+class ItemBatch(TenantBase):
+    __tablename__ = "item_batches"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False)
+    batch_number = Column(String(50), nullable=False)
+    quantity = Column(Integer, default=0)
+    rate = Column(DECIMAL(10, 2), nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    item = relationship("Item", back_populates="batches")
+
 
 # ================= ENUMS =================
 class VendorVerificationStatus(str, enum.Enum):
@@ -458,28 +476,7 @@ class VendorQualification(TenantBase):
     audit_status = Column(String(50))
     notes = Column(Text)
 
-# ================= CONTRACT =================
-class VendorContract(TenantBase):
-    __tablename__ = "vendor_contracts"
 
-    id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"))
-
-    contract_type = Column(String(50))
-    start_date = Column(Date)
-    end_date = Column(Date)
-
-# ================= CONTRACT ITEMS =================
-class VendorContractItem(TenantBase):
-    __tablename__ = "vendor_contract_items"
-
-    id = Column(Integer, primary_key=True)
-    contract_id = Column(Integer, ForeignKey("vendor_contracts.id"))
-
-    item_name = Column(String(100))
-    contract_price = Column(Float)
-    currency = Column(String(10))
-    moq = Column(Integer)
 
 # ================= PERFORMANCE =================
 class VendorPerformance(TenantBase):
@@ -883,6 +880,7 @@ class ReturnTypeEnum(str, enum.Enum):
     TO_VENDOR = "TO_VENDOR"
     FROM_DEPARTMENT = "FROM_DEPARTMENT"
     TO_CUSTOMER = "TO_CUSTOMER"
+    FROM_CUSTOMER = "FROM_CUSTOMER"
 
 class ItemConditionEnum(str, enum.Enum):
     GOOD = "GOOD"

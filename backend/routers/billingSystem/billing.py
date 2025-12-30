@@ -1864,3 +1864,51 @@ def save_item_edit_values(
         db.commit()
     
     return {"message": "Item saved with correct tax calculation"}
+
+@router.put("/take-from-batch/{item_id}")
+def take_from_batch(
+    item_id: int,
+    take_data: dict,
+    db: Session = Depends(get_tenant_db)
+):
+    """Take quantity from specific batch and update stock"""
+    from models.tenant_models import ReturnItem, ItemBatch, StockOverview
+    
+    # Get the return item
+    item = db.query(ReturnItem).filter(ReturnItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Return item not found")
+    
+    batch_id = take_data.get('batch_id')
+    take_qty = take_data.get('quantity', 0)
+    
+    if take_qty <= 0:
+        raise HTTPException(status_code=400, detail="Take quantity must be greater than 0")
+    
+    # Find the batch
+    batch = db.query(ItemBatch).filter(ItemBatch.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    
+    if batch.quantity < take_qty:
+        raise HTTPException(status_code=400, detail="Insufficient quantity in batch")
+    
+    # Update batch quantity
+    batch.quantity -= take_qty
+    
+    # Update stock overview
+    stock = db.query(StockOverview).filter(
+        StockOverview.item_name == item.item_name,
+        StockOverview.batch_no == batch.batch_number
+    ).first()
+    
+    if stock:
+        stock.available_qty -= take_qty
+    
+    db.commit()
+    
+    return {
+        "message": f"Took {take_qty} units from batch {batch.batch_number}",
+        "remaining_batch_qty": batch.quantity,
+        "remaining_stock_qty": stock.available_qty if stock else 0
+    }

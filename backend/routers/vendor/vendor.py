@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_tenant_db
 from models.tenant_models import (
-    Vendor, VendorQualification, VendorContract,
-    VendorContractItem, VendorPerformance, VendorLeadTime
+    Vendor, VendorQualification,
+    VendorPerformance, VendorLeadTime
 )
 from schemas.tenant_schemas import *
 import uuid
@@ -74,26 +74,7 @@ def delete_qualification(qualification_id: int, db: Session = Depends(get_tenant
     db.commit()
     return {"message": "Qualification deleted"}
 
-# ---------------- STEP 3: CONTRACT ----------------
-@router.get("/contract")
-def get_contracts(db: Session = Depends(get_tenant_session)):
-    contracts = db.query(VendorContract).all()
-    return contracts
 
-@router.post("/contract")
-def create_contract(data: VendorContractCreate, db: Session = Depends(get_tenant_session)):
-    contract = VendorContract(**data.dict())
-    db.add(contract)
-    db.commit()
-    db.refresh(contract)
-    return {"message": "Vendor contract created", "id": contract.id}
-
-@router.post("/contract/item")
-def add_contract_item(data: VendorContractItemCreate, db: Session = Depends(get_tenant_session)):
-    item = VendorContractItem(**data.dict())
-    db.add(item)
-    db.commit()
-    return {"message": "Contract item added"}
 
 # ---------------- STEP 4: PERFORMANCE ----------------
 @router.get("/performance")

@@ -27,3 +27,41 @@ def create_location(data: InventoryLocationCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(location)
     return location
+
+@router.get("/{location_id}", response_model=InventoryLocationResponse)
+def get_location(location_id: int, db: Session = Depends(get_db)):
+    location = db.query(InventoryLocation).filter(InventoryLocation.id == location_id).first()
+    if not location:
+        raise HTTPException(404, "Location not found")
+    return location
+
+@router.put("/{location_id}", response_model=InventoryLocationResponse)
+def update_location(location_id: int, data: InventoryLocationCreate, db: Session = Depends(get_db)):
+    location = db.query(InventoryLocation).filter(InventoryLocation.id == location_id).first()
+    if not location:
+        raise HTTPException(404, "Location not found")
+    
+    # Check if code already exists (excluding current location)
+    existing = db.query(InventoryLocation).filter(
+        InventoryLocation.code == data.code,
+        InventoryLocation.id != location_id
+    ).first()
+    if existing:
+        raise HTTPException(400, "Location code already exists")
+    
+    for field, value in data.dict().items():
+        setattr(location, field, value)
+    
+    db.commit()
+    db.refresh(location)
+    return location
+
+@router.delete("/{location_id}")
+def delete_location(location_id: int, db: Session = Depends(get_db)):
+    location = db.query(InventoryLocation).filter(InventoryLocation.id == location_id).first()
+    if not location:
+        raise HTTPException(404, "Location not found")
+    
+    location.is_active = False
+    db.commit()
+    return {"message": "Location deleted successfully"}

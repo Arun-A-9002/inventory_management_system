@@ -574,19 +574,7 @@ class VendorQualificationCreate(BaseModel):
     audit_status: str
     notes: Optional[str]
 
-# ================= CONTRACT =================
-class VendorContractCreate(BaseModel):
-    vendor_id: int
-    contract_type: str
-    start_date: date
-    end_date: date
 
-class VendorContractItemCreate(BaseModel):
-    contract_id: int
-    item_name: str
-    contract_price: float
-    currency: str
-    moq: int
 
 # ================= PERFORMANCE =================
 class VendorPerformanceCreate(BaseModel):

@@ -17,17 +17,6 @@ export default function Vendor() {
   });
   const [editingQualification, setEditingQualification] = useState(null);
   const [qualifications, setQualifications] = useState([]);
-  const [contracts, setContracts] = useState([]);
-  const [items, setItems] = useState([]);
-  const [contractItemForm, setContractItemForm] = useState({
-    vendor_id: "",
-    contract_type: "Annual",
-    start_date: "",
-    end_date: "",
-    item_id: "",
-    contract_price: 0,
-    moq: 0
-  });
   const [performanceForm, setPerformanceForm] = useState({
     vendor_id: "",
     delivery_quality: 4,
@@ -65,7 +54,6 @@ export default function Vendor() {
   const tabs = [
     { id: "Registration", name: "Vendor Registration", icon: "👥" },
     { id: "Qualification", name: "Qualification (AVL)", icon: "✅" },
-    { id: "Contract", name: "Contract Management", icon: "📋" },
     { id: "Performance", name: "Performance Tracking", icon: "📊" }
   ];
 
@@ -87,8 +75,6 @@ export default function Vendor() {
   useEffect(() => {
     loadVendors();
     loadQualifications();
-    loadContracts();
-    loadItems();
     loadPerformances();
   }, []);
 
@@ -219,23 +205,7 @@ export default function Vendor() {
     }
   };
 
-  const loadContracts = async () => {
-    try {
-      const res = await api.get("/vendors/contract");
-      setContracts(res.data || []);
-    } catch (err) {
-      console.error("Error loading contracts:", err);
-    }
-  };
 
-  const loadItems = async () => {
-    try {
-      const res = await api.get("/items");
-      setItems(res.data || []);
-    } catch (err) {
-      console.error("Error loading items:", err);
-    }
-  };
 
   const saveQualification = async () => {
     if (!qualificationForm.vendor_id) {
@@ -287,56 +257,7 @@ export default function Vendor() {
     }
   };
 
-  const saveContractWithItem = async () => {
-    if (!contractItemForm.vendor_id || !contractItemForm.item_id || !contractItemForm.start_date || !contractItemForm.end_date) {
-      return alert("Please fill all required fields");
-    }
 
-    try {
-      // First create contract
-      const contractRes = await api.post("/vendors/contract", {
-        vendor_id: parseInt(contractItemForm.vendor_id),
-        contract_type: contractItemForm.contract_type,
-        start_date: contractItemForm.start_date,
-        end_date: contractItemForm.end_date
-      });
-      
-      console.log("Contract created:", contractRes.data);
-      
-      // Get contract ID from response
-      const contractId = contractRes.data.id;
-      
-      if (contractId) {
-        // Get item name from items array
-        const selectedItem = items.find(item => item.id === parseInt(contractItemForm.item_id));
-        
-        // Then add item to contract
-        await api.post("/vendors/contract/item", {
-          contract_id: contractId,
-          item_name: selectedItem?.name || "Unknown Item",
-          contract_price: contractItemForm.contract_price,
-          currency: "INR",
-          moq: contractItemForm.moq
-        });
-      }
-      
-      setContractItemForm({
-        vendor_id: "",
-        contract_type: "Annual",
-        start_date: "",
-        end_date: "",
-        item_id: "",
-        contract_price: 0,
-        moq: 0
-      });
-      
-      loadContracts();
-      alert("Contract with item created successfully");
-    } catch (err) {
-      console.error("Error details:", err.response?.data || err.message);
-      alert("Error creating contract with item: " + (err.response?.data?.detail || err.message));
-    }
-  };
 
   const loadPerformances = async () => {
     try {
@@ -861,139 +782,7 @@ export default function Vendor() {
         </div>
       )}
 
-      {/* CONTRACT TAB */}
-      {activeTab === "Contract" && (
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border">
-              <h2 className="text-xl font-semibold mb-4">Create Contract with Item</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Select Vendor *</label>
-                  <select 
-                    value={contractItemForm.vendor_id}
-                    onChange={(e) => setContractItemForm({...contractItemForm, vendor_id: e.target.value})}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">Choose vendor</option>
-                    {vendors.map(vendor => (
-                      <option key={vendor.id} value={vendor.id}>{vendor.vendor_name}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Contract Type</label>
-                  <select 
-                    value={contractItemForm.contract_type}
-                    onChange={(e) => setContractItemForm({...contractItemForm, contract_type: e.target.value})}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="Annual">Annual Contract</option>
-                    <option value="Project">Project Based</option>
-                    <option value="Monthly">Monthly Contract</option>
-                  </select>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
-                    <input 
-                      type="date" 
-                      value={contractItemForm.start_date}
-                      onChange={(e) => setContractItemForm({...contractItemForm, start_date: e.target.value})}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
-                    <input 
-                      type="date" 
-                      value={contractItemForm.end_date}
-                      onChange={(e) => setContractItemForm({...contractItemForm, end_date: e.target.value})}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Select Item *</label>
-                  <select 
-                    value={contractItemForm.item_id}
-                    onChange={(e) => setContractItemForm({...contractItemForm, item_id: e.target.value})}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">Choose item from Item Master</option>
-                    {items.map(item => (
-                      <option key={item.id} value={item.id}>{item.name} ({item.item_code})</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Contract Price</label>
-                    <input 
-                      type="number" 
-                      value={contractItemForm.contract_price}
-                      onChange={(e) => setContractItemForm({...contractItemForm, contract_price: parseFloat(e.target.value) || 0})}
-                      placeholder="0.00" 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">MOQ</label>
-                    <input 
-                      type="number" 
-                      value={contractItemForm.moq}
-                      onChange={(e) => setContractItemForm({...contractItemForm, moq: parseInt(e.target.value) || 0})}
-                      placeholder="Minimum order quantity" 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={saveContractWithItem}
-                  className="w-full rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700"
-                >
-                  Create Contract with Item
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-span-12 lg:col-span-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold mb-4">Active Contracts</h3>
-              <div className="space-y-3">
-                {contracts.length === 0 ? (
-                  <div className="text-center text-slate-500 py-4">No contracts found</div>
-                ) : (
-                  contracts.map((contract) => {
-                    const vendor = vendors.find(v => v.id === contract.vendor_id);
-                    return (
-                      <div key={contract.id} className="p-4 border rounded-lg">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium">{vendor?.vendor_name || 'Unknown Vendor'}</div>
-                            <div className="text-sm text-slate-500">{contract.contract_type} Contract</div>
-                            <div className="text-xs text-slate-400">{contract.start_date} - {contract.end_date}</div>
-                          </div>
-                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Active</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* PERFORMANCE TAB */}
       {activeTab === "Performance" && (
