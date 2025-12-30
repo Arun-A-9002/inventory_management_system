@@ -45,7 +45,8 @@ import CustomerRegistration from "./pages/customers/CustomerRegistration";
 import SupplierLedger from "./pages/suppliers/SupplierLedger";
 
 //billing system
-import Billing from "./pages/BillingSystem/Billing";
+import Billing from "./pages/BillingSystem/billing";
+import InvoiceCreation from "./pages/BillingSystem/InvoiceCreation";
 function App() {
   return (
     <BrowserRouter>
@@ -103,6 +104,7 @@ function App() {
           <Route path="supplier-ledger" element={<SupplierLedger />} />
           {/* Billing System */}
           <Route path="billing" element={<Billing />} />
+          <Route path="billing/create" element={<InvoiceCreation />} />
             
         </Route>
 

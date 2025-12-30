@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../../api";
 
 export default function Billing() {
@@ -12,6 +13,8 @@ export default function Billing() {
   const [isFinalized, setIsFinalized] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [invoiceItems, setInvoiceItems] = useState([]);
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [selectedBatchInfo, setSelectedBatchInfo] = useState(null);
   
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
@@ -227,11 +230,21 @@ export default function Billing() {
       const taxRes = await api.get(`/billing/get-item-tax/${encodeURIComponent(item.name)}`);
       const itemMasterTax = taxRes.data.tax_rate || 0;
       
+      // Fetch available batches for this item
+      const batchesRes = await api.get(`/billing/available-batches/${encodeURIComponent(item.name)}`);
+      const batches = batchesRes.data || [];
+      setAvailableBatches(batches);
+      
+      // Find current batch info
+      const currentBatch = batches.find(b => b.batch_no === item.batch_no);
+      setSelectedBatchInfo(currentBatch);
+      
       console.log('Setting up item edit:', {
         item,
         itemId: item.id,
         itemName: item.name,
-        itemMasterTax
+        itemMasterTax,
+        availableBatches: batches.length
       });
       
       setEditingItem({ 
@@ -251,6 +264,8 @@ export default function Billing() {
         returned: item.returned || false,
         database_id: item.id  // Use the ID from the API response directly
       });
+      setAvailableBatches([]);
+      setSelectedBatchInfo(null);
     }
   };
   
@@ -341,7 +356,7 @@ export default function Billing() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="relative min-h-screen bg-slate-50 p-6">
       {showDetailsPage ? (
         // Invoice Details Page
         <div>
@@ -577,7 +592,16 @@ export default function Billing() {
               <h1 className="text-3xl font-semibold mt-2">Billing System</h1>
               <p className="mt-2 opacity-90">Manage invoices, payments and billing records.</p>
             </div>
-            <div className="text-right">
+            <div className="flex items-center gap-4">
+              <Link
+                to="/app/billing/create"
+                className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create Invoice
+              </Link>
               <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
                 <span className="text-sm font-medium">Total Invoices</span>
                 <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">{billings.length}</div>
@@ -864,7 +888,7 @@ export default function Billing() {
 
       {/* Item Edit Modal */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900">Edit Item</h3>
@@ -892,13 +916,30 @@ export default function Billing() {
               
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Batch Number</label>
-                <input
-                  type="text"
-                  value={editingItem.batch_no || 'N/A'}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-gray-100 text-gray-600"
-                  readOnly
-                />
-                <div className="text-xs text-gray-500 mt-1">Batch number cannot be modified</div>
+                <select
+                  value={editingItem.batch_no || ''}
+                  onChange={(e) => {
+                    const selectedBatch = availableBatches.find(b => b.batch_no === e.target.value);
+                    setSelectedBatchInfo(selectedBatch);
+                    setEditingItem({...editingItem, batch_no: e.target.value});
+                  }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Batch</option>
+                  {availableBatches.map((batch) => (
+                    <option key={batch.batch_no} value={batch.batch_no}>
+                      {batch.batch_no} (Available: {batch.qty})
+                    </option>
+                  ))}
+                </select>
+                {selectedBatchInfo && (
+                  <div className="text-xs text-blue-600 mt-1">
+                    Remaining Quantity: {selectedBatchInfo.qty} units
+                    {selectedBatchInfo.expiry_date && (
+                      <span className="ml-2">| Expiry: {selectedBatchInfo.expiry_date}</span>
+                    )}
+                  </div>
+                )}
               </div>
               
               <div>
@@ -909,7 +950,13 @@ export default function Billing() {
                   onChange={(e) => setEditingItem({...editingItem, qty: parseInt(e.target.value) || 0})}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   min="1"
+                  max={selectedBatchInfo ? selectedBatchInfo.qty : undefined}
                 />
+                {selectedBatchInfo && editingItem.qty > selectedBatchInfo.qty && (
+                  <div className="text-xs text-red-600 mt-1">
+                    Quantity exceeds available stock ({selectedBatchInfo.qty})
+                  </div>
+                )}
                 {(() => {
                   const originalItem = invoiceItems.find(item => item.id === editingItem.id);
                   const qtyDiff = editingItem.qty - (originalItem?.qty || 0);
@@ -923,14 +970,23 @@ export default function Billing() {
                         </div>
                         <div className="mt-2">
                           <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                          <select
-                            value={editingItem.status || 'pending'}
-                            onChange={(e) => setEditingItem({...editingItem, status: e.target.value})}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              editingItem.status === 'approved' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {editingItem.status === 'approved' ? 'Approved' : 'Pending'}
+                            </span>
+                            {editingItem.status !== 'approved' && (
+                              <button
+                                onClick={() => setEditingItem({...editingItem, status: 'approved'})}
+                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              >
+                                Approve
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </>
                     );
@@ -988,18 +1044,53 @@ export default function Billing() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    // Handle Take action - increase quantity
+                  onClick={async () => {
+                    // Handle Take action - increase quantity and decrease stock
                     const originalItem = invoiceItems.find(item => item.id === editingItem.id);
                     const qtyDiff = editingItem.qty - (originalItem?.qty || 0);
-                    if (qtyDiff > 0) {
-                      saveItemEdit();
-                      showMessage(`Taken ${qtyDiff} units of ${editingItem.name}`);
+                    if (qtyDiff > 0 && editingItem.status === 'approved') {
+                      try {
+                        // Check if sufficient stock is available
+                        if (selectedBatchInfo && selectedBatchInfo.qty < qtyDiff) {
+                          showMessage(`Insufficient stock. Available: ${selectedBatchInfo.qty}, Required: ${qtyDiff}`, 'error');
+                          return;
+                        }
+                        
+                        // Update stock by reducing the extra quantity from the specific batch
+                        await api.post('/stocks/add-batch-stock', {
+                          item_name: editingItem.name,
+                          batch_no: editingItem.batch_no,  // Uses the selected batch number (1256)
+                          quantity: -qtyDiff  // Negative quantity to decrease stock (-6)
+                        });
+                        
+                        // Save the item edit
+                        await saveItemEdit();
+                        showMessage(`Taken ${qtyDiff} units of ${editingItem.name} (Stock decreased by ${qtyDiff})`);
+                      } catch (err) {
+                        console.error('Failed to update stock:', err);
+                        showMessage('Failed to update stock quantity', 'error');
+                      }
+                    } else if (qtyDiff > 0 && editingItem.status !== 'approved') {
+                      showMessage('Please approve the quantity increase first', 'error');
                     } else {
                       showMessage('No additional quantity to take', 'error');
                     }
                   }}
-                  className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    (() => {
+                      const originalItem = invoiceItems.find(item => item.id === editingItem.id);
+                      const qtyDiff = editingItem.qty - (originalItem?.qty || 0);
+                      const canTake = qtyDiff > 0 && editingItem.status === 'approved';
+                      return canTake 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'bg-gray-400 text-gray-200 cursor-not-allowed';
+                    })()
+                  }`}
+                  disabled={(() => {
+                    const originalItem = invoiceItems.find(item => item.id === editingItem.id);
+                    const qtyDiff = editingItem.qty - (originalItem?.qty || 0);
+                    return qtyDiff <= 0 || editingItem.status !== 'approved';
+                  })()}
                 >
                   {(() => {
                     const originalItem = invoiceItems.find(item => item.id === editingItem.id);

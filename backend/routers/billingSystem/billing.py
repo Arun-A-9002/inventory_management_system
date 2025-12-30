@@ -7,7 +7,7 @@ from models.tenant_models import Billing, GRN, BillingStatus, ReturnBilling, Ret
 from schemas.tenant_schemas import BillingCreate, BillingResponse, ReturnBillingCreate, ReturnBillingResponse
 from pydantic import BaseModel
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -1810,6 +1810,162 @@ def get_item_tax_rate(
         "tax_rate": 0,
         "rate": 0
     }
+@router.post("/create-invoice")
+def create_new_invoice(
+    invoice_data: dict,
+    db: Session = Depends(get_tenant_db)
+):
+    """Create a new invoice with batch tracking"""
+    from models.tenant_models import ReturnHeader, ReturnItem, ReturnBilling, Customer, GRN, GRNItem, Batch, GRNStatus
+    from datetime import date, timedelta
+    
+    try:
+        # Create or find customer
+        customer = None
+        if invoice_data.get('customer_name'):
+            customer = db.query(Customer).filter(
+                Customer.name == invoice_data['customer_name']
+            ).first()
+            
+            if not customer:
+                customer = Customer(
+                    customer_type='self',
+                    name=invoice_data['customer_name'],
+                    mobile=invoice_data.get('customer_phone'),
+                    email=invoice_data.get('customer_email'),
+                    status='approved'
+                )
+                db.add(customer)
+                db.flush()
+        
+        # Create return header
+        return_no = f"INV-{int(datetime.utcnow().timestamp())}"
+        return_header = ReturnHeader(
+            return_no=return_no,
+            return_type="TO_CUSTOMER",
+            customer_id=customer.id if customer else None,
+            customer_name=invoice_data.get('customer_name'),
+            customer_phone=invoice_data.get('customer_phone'),
+            customer_email=invoice_data.get('customer_email'),
+            reason="Sale to customer",
+            return_date=date.today(),
+            status="APPROVED"
+        )
+        db.add(return_header)
+        db.flush()
+        
+        # Process items and update stock
+        total_gross = 0
+        total_tax = 0
+        
+        for item_data in invoice_data['items']:
+            # Validate stock availability
+            batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+                GRNItem.item_name == item_data['item_name'],
+                Batch.batch_no == item_data['batch_no'],
+                GRN.status == GRNStatus.approved
+            ).first()
+            
+            if not batch:
+                raise HTTPException(400, f"Batch {item_data['batch_no']} not found for {item_data['item_name']}")
+            
+            if batch.qty < item_data['qty']:
+                raise HTTPException(400, f"Insufficient stock. Available: {batch.qty}, Requested: {item_data['qty']}")
+            
+            # Calculate amounts
+            rate = item_data['rate']
+            qty = item_data['qty']
+            tax_rate = item_data.get('tax_rate', 0)
+            
+            gross_amount = qty * rate
+            tax_amount = (tax_rate / 100) * gross_amount
+            
+            total_gross += gross_amount
+            total_tax += tax_amount
+            
+            # Create return item
+            return_item = ReturnItem(
+                return_id=return_header.id,
+                item_name=item_data['item_name'],
+                batch_no=item_data['batch_no'],
+                qty=qty,
+                uom="PCS",
+                rate=Decimal(str(rate)),
+                total_tax=Decimal(str(tax_amount)),
+                gross_amount=Decimal(str(gross_amount)),
+                condition="GOOD",
+                remarks="Sale item"
+            )
+            db.add(return_item)
+            
+            # Update batch quantity (reduce stock)
+            batch.qty -= qty
+            
+            # Update GRN item quantity
+            grn_item = db.query(GRNItem).filter(GRNItem.id == batch.grn_item_id).first()
+            if grn_item:
+                grn_item.received_qty -= qty
+        
+        # Create billing record
+        net_amount = total_gross + total_tax
+        billing = ReturnBilling(
+            return_id=return_header.id,
+            gross_amount=Decimal(str(total_gross)),
+            tax_amount=Decimal(str(total_tax)),
+            net_amount=Decimal(str(net_amount)),
+            paid_amount=Decimal('0.00'),
+            balance_amount=Decimal(str(net_amount)),
+            status=BillingStatus.DRAFT,
+            due_date=date.today() + timedelta(days=30)
+        )
+        db.add(billing)
+        
+        db.commit()
+        
+        return {
+            "message": "Invoice created successfully",
+            "invoice_id": billing.id,
+            "return_no": return_no,
+            "total_amount": float(net_amount)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to create invoice: {str(e)}")
+
+@router.get("/available-batches/{item_name}")
+def get_available_batches(
+    item_name: str,
+    db: Session = Depends(get_tenant_db)
+):
+    """Get available batches for an item with remaining quantities"""
+    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
+    
+    # Get all batches for this item from approved GRNs
+    batches_data = []
+    
+    approved_grn_items = db.query(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        GRN.status == GRNStatus.approved
+    ).all()
+    
+    for grn_item in approved_grn_items:
+        batches = db.query(Batch).filter(
+            Batch.grn_item_id == grn_item.id,
+            Batch.qty > 0  # Only include batches with available quantity
+        ).all()
+        
+        for batch in batches:
+            batches_data.append({
+                "batch_no": batch.batch_no,
+                "qty": batch.qty,
+                "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
+                "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
+                "grn_item_id": grn_item.id
+            })
+    
+    return batches_data
+
 @router.put("/save-item-edit/{item_id}")
 def save_item_edit_values(
     item_id: int,
@@ -1865,50 +2021,120 @@ def save_item_edit_values(
     
     return {"message": "Item saved with correct tax calculation"}
 
-@router.put("/take-from-batch/{item_id}")
-def take_from_batch(
-    item_id: int,
-    take_data: dict,
+@router.post("/refund/{billing_id}")
+def process_refund(
+    billing_id: int,
+    refund_data: dict,
     db: Session = Depends(get_tenant_db)
 ):
-    """Take quantity from specific batch and update stock"""
-    from models.tenant_models import ReturnItem, ItemBatch, StockOverview
+    """Process customer refund for a billing record"""
+    billing = db.query(ReturnBilling).filter(ReturnBilling.id == billing_id).first()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing record not found")
     
-    # Get the return item
-    item = db.query(ReturnItem).filter(ReturnItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Return item not found")
+    # Extract refund amount from different possible keys
+    refund_amount = (
+        refund_data.get('refund_amount') or 
+        refund_data.get('amount') or 
+        refund_data.get('refundAmount') or 0
+    )
+    refund_amount = float(refund_amount)
+    refund_reason = refund_data.get('reason', 'Customer refund')
     
-    batch_id = take_data.get('batch_id')
-    take_qty = take_data.get('quantity', 0)
+    # Validate refund amount
+    if refund_amount <= 0:
+        # Log the received data for debugging
+        print(f"Invalid refund data received: {refund_data}")
+        raise HTTPException(status_code=400, detail=f"Refund amount must be greater than 0. Received: {refund_amount}")
     
-    if take_qty <= 0:
-        raise HTTPException(status_code=400, detail="Take quantity must be greater than 0")
+    # Check if this is a negative balance scenario (customer owes money back)
+    current_balance = float(billing.balance_amount)
+    
+    if current_balance < 0:
+        # For negative balance, set balance to 0 after refund
+        billing.balance_amount = Decimal('0.00')
+        # Update status to PAID since balance is cleared
+        billing.status = BillingStatus.PAID
+    else:
+        # Normal refund scenario - reduce paid amount
+        current_paid = float(billing.paid_amount)
+        if refund_amount > current_paid:
+            refund_amount = current_paid
+        
+        billing.paid_amount = billing.paid_amount - Decimal(str(refund_amount))
+        billing.balance_amount = billing.net_amount - billing.paid_amount
+        
+        # Update status based on remaining payment
+        if float(billing.paid_amount) <= 0:
+            billing.status = BillingStatus.DRAFT
+        elif float(billing.paid_amount) >= float(billing.net_amount):
+            billing.status = BillingStatus.PAID
+        else:
+            billing.status = BillingStatus.PARTIAL
+    
+    # Create refund payment record (negative amount)
+    refund_record = ReturnBillingPayment(
+        billing_id=billing_id,
+        amount=-Decimal(str(refund_amount)),  # Negative for refund
+        payment_mode='REFUND',
+        reference_no=f"REF-{billing_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        notes=refund_reason
+    )
+    db.add(refund_record)
+    
+    db.commit()
+    db.refresh(billing)
+    
+    return {
+        "message": "Refund processed successfully",
+        "billing_id": billing_id,
+        "refund_amount": refund_amount,
+        "remaining_paid_amount": float(billing.paid_amount),
+        "balance_amount": float(billing.balance_amount),
+        "status": billing.status.value
+    }
+
+@router.put("/update-batch-quantity")
+def update_batch_quantity(
+    update_data: dict,
+    db: Session = Depends(get_tenant_db)
+):
+    """Update batch quantity when items are taken or returned"""
+    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
+    
+    item_name = update_data.get('item_name')
+    batch_no = update_data.get('batch_no')
+    quantity_change = int(update_data.get('quantity_change', 0))  # Positive for return, negative for take
     
     # Find the batch
-    batch = db.query(ItemBatch).filter(ItemBatch.id == batch_id).first()
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    
-    if batch.quantity < take_qty:
-        raise HTTPException(status_code=400, detail="Insufficient quantity in batch")
-    
-    # Update batch quantity
-    batch.quantity -= take_qty
-    
-    # Update stock overview
-    stock = db.query(StockOverview).filter(
-        StockOverview.item_name == item.item_name,
-        StockOverview.batch_no == batch.batch_number
+    batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        Batch.batch_no == batch_no,
+        GRN.status == GRNStatus.approved
     ).first()
     
-    if stock:
-        stock.available_qty -= take_qty
+    if not batch:
+        raise HTTPException(404, f"Batch {batch_no} not found for {item_name}")
+    
+    # Update batch quantity
+    new_qty = batch.qty + quantity_change
+    
+    if new_qty < 0:
+        raise HTTPException(400, f"Cannot reduce quantity below 0. Current: {batch.qty}, Requested change: {quantity_change}")
+    
+    batch.qty = new_qty
+    
+    # Update GRN item quantity
+    grn_item = db.query(GRNItem).filter(GRNItem.id == batch.grn_item_id).first()
+    if grn_item:
+        grn_item.received_qty += quantity_change
     
     db.commit()
     
     return {
-        "message": f"Took {take_qty} units from batch {batch.batch_number}",
-        "remaining_batch_qty": batch.quantity,
-        "remaining_stock_qty": stock.available_qty if stock else 0
+        "message": f"Batch quantity updated successfully",
+        "item_name": item_name,
+        "batch_no": batch_no,
+        "new_quantity": new_qty,
+        "quantity_change": quantity_change
     }

@@ -37,6 +37,9 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
       setIsRefreshing(true);
       await onRefresh();
       setIsRefreshing(false);
+    } else {
+      // If no onRefresh callback provided, refresh the page
+      window.location.reload();
     }
   };
 
