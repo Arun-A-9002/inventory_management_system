@@ -18,7 +18,7 @@ import UserAccess from "./pages/organization/UserAccess";
 import InventoryRules from "./pages/organization/InventoryRules";
 
 //items
-import Item from "./pages/items/Item";
+import ItemMaster from "./pages/items/Item";
 
 //vendors
 import Vendor from "./pages/vendors/vendor";
@@ -78,7 +78,7 @@ function App() {
           <Route path="organization/user-access" element={<UserAccess />} />
           <Route path="organization/inventory-rules" element={<InventoryRules />} />
           
-          <Route path="items" element={<Item />} />
+          <Route path="items" element={<ItemMaster />} />
           {/* Vendor Management */}
           <Route path="vendor" element={<Vendor />} />
 

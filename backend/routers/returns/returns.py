@@ -9,9 +9,39 @@ router = APIRouter(prefix="/returns", tags=["Returns & Disposal"])
 
 @router.get("/")
 def list_returns(db: Session = Depends(get_tenant_db)):
-    """Get all returns"""
+    """Get all returns with existing invoice info"""
+    from models.tenant_models import Billing
+    
     returns = db.query(ReturnHeader).order_by(ReturnHeader.created_at.desc()).all()
-    return returns
+    
+    # Add existing invoice info to each return
+    result = []
+    for return_header in returns:
+        billing = None
+        if return_header.reference_no:
+            # Extract billing ID from invoice reference
+            try:
+                invoice_id = int(return_header.reference_no.replace('INV-', ''))
+                billing = db.query(Billing).filter(Billing.id == invoice_id).first()
+            except:
+                pass
+        
+        return_dict = {
+            "id": return_header.id,
+            "return_no": return_header.return_no,
+            "return_type": return_header.return_type,
+            "customer_name": return_header.customer_name,
+            "reference_no": return_header.reference_no,  # Original Invoice ID
+            "status": return_header.status,
+            "return_date": return_header.return_date,
+            "reason": return_header.reason,
+            "billing_id": billing.id if billing else None,
+            "refund_amount": abs(float(billing.balance_amount)) if billing and billing.balance_amount < 0 else 0,
+            "balance_amount": float(billing.balance_amount) if billing else 0
+        }
+        result.append(return_dict)
+    
+    return result
 
 @router.post("/")
 def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
@@ -41,13 +71,14 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
     # Create return header
     return_header = ReturnHeader(
         return_no=return_no,
-        return_type=return_data.get('return_type', 'TO_VENDOR'),
+        return_type=return_data.get('return_type', 'FROM_CUSTOMER'),
         vendor=return_data.get('supplier'),
         location=return_data.get('location'),
         customer_id=customer_id,
         customer_name=customer_name,
         customer_phone=customer_phone,
         customer_email=customer_email,
+        reference_no=return_data.get('invoice_id'),  # Store invoice reference
         reason=return_data.get('reason'),
         return_date=date.today(),
         status="DRAFT"
@@ -56,13 +87,14 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
     db.add(return_header)
     db.flush()
     
-    # Create return items
+    # Create return items with rate information
     for item_data in return_data.get('items', []):
         return_item = ReturnItem(
             return_id=return_header.id,
             item_name=item_data.get('item_name'),
             batch_no=item_data.get('batch_no'),
             qty=float(item_data.get('quantity', 0)),
+            rate=float(item_data.get('rate', 0)),
             uom='PCS',
             condition='GOOD',
             remarks=item_data.get('reason', '')
@@ -129,7 +161,7 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
 @router.patch("/{return_id}/status")
 def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):
     """Update return status and adjust inventory if approved"""
-    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
+    from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview, Billing
     
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -138,30 +170,33 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
     old_status = return_header.status
     return_header.status = status
     
-    # If status changed to APPROVED, adjust stock based on return type
+    # If status changed to APPROVED, adjust stock and update existing billing
     if status == "APPROVED" and old_status != "APPROVED":
         return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
         
+        # Calculate refund amount
+        total_refund = 0
         for item in return_items:
-            # Find the correct batch in GRN system
-            grn_item = db.query(GRNItem).join(GRN).filter(
-                GRNItem.item_name == item.item_name,
-                GRN.status == GRNStatus.approved
-            ).first()
+            refund_amount = item.qty * item.rate
+            total_refund += refund_amount
             
-            if grn_item:
-                batch = db.query(Batch).filter(
-                    Batch.grn_item_id == grn_item.id,
-                    Batch.batch_no == item.batch_no
+            # Find and update stock for customer returns
+            if return_header.return_type == "FROM_CUSTOMER":
+                grn_item = db.query(GRNItem).join(GRN).filter(
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved
                 ).first()
                 
-                if batch:
-                    # For customer returns (FROM_CUSTOMER), ADD quantity back to stock
-                    if return_header.return_type == "FROM_CUSTOMER":
+                if grn_item:
+                    batch = db.query(Batch).filter(
+                        Batch.grn_item_id == grn_item.id,
+                        Batch.batch_no == item.batch_no
+                    ).first()
+                    
+                    if batch:
                         batch.qty += item.qty
-                        print(f"Added {item.qty} to batch {item.batch_no} for customer return approval")
                         
-                        # Update StockOverview table if it exists
+                        # Update StockOverview
                         stock_overview = db.query(StockOverview).filter(
                             StockOverview.item_name == item.item_name,
                             StockOverview.batch_no == item.batch_no
@@ -170,30 +205,33 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
                             stock_overview.available_qty += int(item.qty)
                             if stock_overview.available_qty >= stock_overview.min_stock:
                                 stock_overview.status = "Good"
-                    else:
-                        # For other returns (TO_VENDOR, etc.), REDUCE quantity from stock
-                        if batch.qty >= item.qty:
-                            batch.qty -= item.qty
-                            
-                            # Update StockOverview table if it exists
-                            stock_overview = db.query(StockOverview).filter(
-                                StockOverview.item_name == item.item_name,
-                                StockOverview.batch_no == item.batch_no
-                            ).first()
-                            if stock_overview:
-                                stock_overview.available_qty -= int(item.qty)
-                                if stock_overview.available_qty < stock_overview.min_stock:
-                                    stock_overview.status = "Low Stock"
-                            
-                            # Remove batch if quantity becomes 0
-                            if batch.qty == 0:
-                                db.delete(batch)
-                            
-                            print(f"Reduced {item.qty} from batch {item.batch_no} for return approval")
                         else:
-                            print(f"Warning: Batch {item.batch_no} insufficient quantity for reduction")
-                else:
-                    print(f"Warning: Batch {item.batch_no} not found")
+                            # Create stock overview if doesn't exist
+                            stock_overview = StockOverview(
+                                item_name=item.item_name,
+                                item_code=f"ITM-{item.item_name[:3].upper()}",
+                                location="Main Store",
+                                available_qty=int(item.qty),
+                                min_stock=10,
+                                batch_no=item.batch_no,
+                                status="Good"
+                            )
+                            db.add(stock_overview)
+        
+        # Update existing billing with negative balance for refund
+        if return_header.return_type == "FROM_CUSTOMER" and return_header.reference_no and total_refund > 0:
+            # Find existing billing by invoice reference
+            try:
+                invoice_id = int(return_header.reference_no.replace('INV-', '').replace('SALE-', ''))
+                existing_billing = db.query(Billing).filter(Billing.id == invoice_id).first()
+                
+                if existing_billing:
+                    # Reduce balance by refund amount (creates negative balance)
+                    existing_billing.balance_amount -= total_refund
+                    if existing_billing.balance_amount < 0:
+                        existing_billing.status = BillingStatus.PARTIAL  # Mark as partial due to refund
+            except:
+                pass  # If invoice parsing fails, skip billing update
     
     db.commit()
     
@@ -272,3 +310,32 @@ def process_item_return(return_id: int, return_data: dict, db: Session = Depends
         "message": f"Successfully returned {quantity} units of {item_name} (batch {batch_no}) to stock",
         "updated_batch_qty": batch.qty
     }
+    
+@router.get("/refunds")
+def get_refund_billings(db: Session = Depends(get_tenant_db)):
+    """Get all billings with negative balance for refund processing"""
+    from models.tenant_models import Billing
+    
+    refunds = db.query(Billing).filter(
+        Billing.balance_amount < 0
+    ).order_by(Billing.created_at.desc()).all()
+    
+    result = []
+    for billing in refunds:
+        # Find associated return
+        return_header = db.query(ReturnHeader).filter(
+            ReturnHeader.reference_no == f"INV-{billing.id:04d}"
+        ).first()
+        
+        refund_dict = {
+            "billing_id": billing.id,
+            "invoice_id": f"INV-{billing.id:04d}",
+            "return_no": return_header.return_no if return_header else None,
+            "customer_name": return_header.customer_name if return_header else "N/A",
+            "refund_amount": abs(float(billing.balance_amount)),
+            "status": billing.status,
+            "created_at": billing.created_at
+        }
+        result.append(refund_dict)
+    
+    return result

@@ -479,23 +479,38 @@ export default function ReturnDisposal() {
     try {
       await api.patch(`/returns/${returnId}/status?status=${status}`);
       
-      // Auto-create invoice when status changes to APPROVED (but skip for INTERNAL returns)
+      // Auto-create invoice when status changes to APPROVED (but skip for INTERNAL and EXTERNAL returns)
       if (status === 'APPROVED') {
-        // Check if this is an internal return
+        // Check if this is an internal or external return
         const returnItem = returns.find(r => r.id === returnId);
+        console.log('DEBUG: Return item found:', returnItem);
+        console.log('DEBUG: Return type:', returnItem?.return_type);
         
-        if (returnItem && returnItem.return_type === 'INTERNAL') {
-          // Skip billing for internal returns
-          showMessage(`Internal return ${status.toLowerCase()} successfully - no billing required`);
+        // Skip billing for INTERNAL, EXTERNAL, and any return type containing 'EXTERNAL'
+        if (returnItem && (
+          returnItem.return_type === 'INTERNAL' || 
+          returnItem.return_type === 'EXTERNAL' ||
+          returnItem.return_type?.includes('EXTERNAL') ||
+          returnItem.return_type?.toUpperCase() === 'EXTERNAL'
+        )) {
+          // Skip billing for internal and external returns
+          showMessage(`${returnItem.return_type.toLowerCase()} return ${status.toLowerCase()} successfully - no billing required`);
         } else {
-          // Create billing for external returns
+          // Create billing for other return types only
           try {
             console.log('Creating invoice for return ID:', returnId);
             const res = await api.post('/billing/return', {
               return_id: returnId
             });
             console.log('Invoice created:', res.data);
-            showMessage(`Return ${status.toLowerCase()} and invoice created: INV-${res.data.id.toString().padStart(4, '0')}`);
+            
+            // Handle different response structures
+            const billingId = res.data.billing_id || res.data.id;
+            if (billingId) {
+              showMessage(`Return ${status.toLowerCase()} and invoice created: INV-${billingId.toString().padStart(4, '0')}`);
+            } else {
+              showMessage(`Return ${status.toLowerCase()} and invoice created successfully`);
+            }
           } catch (invoiceErr) {
             console.error('Invoice creation failed:', invoiceErr);
             console.error('Error details:', invoiceErr.response?.data);
@@ -951,6 +966,7 @@ export default function ReturnDisposal() {
                     <option value="FROM CUSTOMER">From Customer</option>
                     <option value="TO_CUSTOMER">To Customer</option>
                     <option value="INTERNAL">Internal</option>
+                    <option value="EXTERNAL">External</option>
                   </select>
                 </div>
                 {returnForm.return_type === 'INTERNAL' ? (
@@ -1002,7 +1018,7 @@ export default function ReturnDisposal() {
                       className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select location</option>
-                      {locations.map(location => (
+                      {locations.filter(loc => loc.location_type === 'internal').map(location => (
                         <option key={location.id} value={location.name}>
                           {location.name} ({location.code})
                         </option>
@@ -1031,53 +1047,83 @@ export default function ReturnDisposal() {
                 </div>
               )}
 
-              {/* Vendor Selection - Hide for FROM CUSTOMER */}
-              {returnForm.return_type !== 'FROM CUSTOMER' && (
+
+
+              {/* Customer Selection - Hide for EXTERNAL */}
+              {returnForm.return_type !== 'EXTERNAL' && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">Vendor (for return)</label>
+                  <label className="block text-sm font-medium mb-2">Customer</label>
                   <select
-                    value={returnForm.supplier}
-                    onChange={(e) => setReturnForm({...returnForm, supplier: e.target.value})}
+                    value={returnForm.customer_id}
+                    onChange={async (e) => {
+                      const customerId = e.target.value;
+                      console.log('Customer selected:', customerId);
+                      setReturnForm({...returnForm, customer_id: customerId});
+                      if (customerId) {
+                        await fetchCustomerInvoices(customerId);
+                      } else {
+                        setCustomerInvoices([]);
+                      }
+                    }}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select vendor</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.vendor_name}>
-                        {supplier.vendor_name}
+                    <option value="">Select customer</option>
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.customer_type === 'organization' ? customer.org_name : customer.name}
+                        {customer.customer_type === 'organization' && customer.org_mobile ? ` - ${customer.org_mobile}` : ''}
+                        {customer.customer_type !== 'organization' && customer.mobile ? ` - ${customer.mobile}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {returnForm.return_type !== 'EXTERNAL' && (
+                    <div className="text-xs text-gray-500 mt-1">Debug: customerInvoices.length = {customerInvoices.length}</div>
+                  )}
+                </div>
+              )}
+
+              {/* External Name Input - Only for EXTERNAL */}
+              {returnForm.return_type === 'EXTERNAL' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">External Name</label>
+                  <input
+                    type="text"
+                    value={returnForm.external_name || ''}
+                    onChange={(e) => setReturnForm({...returnForm, external_name: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter external party name"
+                  />
+                </div>
+              )}
+
+              {/* External Location - Only for EXTERNAL */}
+              {returnForm.return_type === 'EXTERNAL' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">External Location</label>
+                  <select
+                    value={returnForm.external_location || ''}
+                    onChange={async (e) => {
+                      const selectedLocation = e.target.value;
+                      setReturnForm({...returnForm, external_location: selectedLocation});
+                      
+                      if (selectedLocation) {
+                        const locationItems = await fetchItemsForLocation(selectedLocation);
+                        setItems(locationItems);
+                      } else {
+                        setItems([]);
+                      }
+                    }}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select external location</option>
+                    {locations.filter(loc => loc.location_type === 'external').map(location => (
+                      <option key={location.id} value={location.name}>
+                        {location.name} ({location.code})
                       </option>
                     ))}
                   </select>
                 </div>
               )}
-
-              {/* Customer Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Customer</label>
-                <select
-                  value={returnForm.customer_id}
-                  onChange={async (e) => {
-                    const customerId = e.target.value;
-                    console.log('Customer selected:', customerId);
-                    setReturnForm({...returnForm, customer_id: customerId});
-                    if (customerId) {
-                      await fetchCustomerInvoices(customerId);
-                    } else {
-                      setCustomerInvoices([]);
-                    }
-                  }}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select customer</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.customer_type === 'organization' ? customer.org_name : customer.name}
-                      {customer.customer_type === 'organization' && customer.org_mobile ? ` - ${customer.org_mobile}` : ''}
-                      {customer.customer_type !== 'organization' && customer.mobile ? ` - ${customer.mobile}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <div className="text-xs text-gray-500 mt-1">Debug: customerInvoices.length = {customerInvoices.length}</div>
-              </div>
 
               {/* Customer Invoices - Show for FROM CUSTOMER */}
               {returnForm.return_type === 'FROM CUSTOMER' && (

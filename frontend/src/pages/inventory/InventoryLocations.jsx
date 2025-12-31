@@ -3,6 +3,8 @@ import api from "../../api";
 
 export default function InventoryLocations() {
   const [locations, setLocations] = useState([]);
+  const [filteredLocations, setFilteredLocations] = useState([]);
+  const [activeFilter, setActiveFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState(null);
   const [viewingLocation, setViewingLocation] = useState(null);
@@ -10,7 +12,8 @@ export default function InventoryLocations() {
   const [formData, setFormData] = useState({
     code: "",
     name: "",
-    description: ""
+    description: "",
+    location_type: "internal"
   });
 
   useEffect(() => {
@@ -21,12 +24,29 @@ export default function InventoryLocations() {
     setLoading(true);
     try {
       const res = await api.get("/inventory/locations/");
-      setLocations(res.data || []);
+      const locationData = res.data || [];
+      setLocations(locationData);
+      filterLocations(locationData, activeFilter);
     } catch (error) {
       console.error("Error loading locations:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterLocations = (locationData, filter) => {
+    let filtered = locationData;
+    if (filter === 'external') {
+      filtered = locationData.filter(loc => loc.location_type === 'external');
+    } else if (filter === 'location') {
+      filtered = locationData.filter(loc => loc.location_type === 'internal');
+    }
+    setFilteredLocations(filtered);
+  };
+
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    filterLocations(locations, filter);
   };
 
   const handleSubmit = async (e) => {
@@ -44,7 +64,7 @@ export default function InventoryLocations() {
         await api.post("/inventory/locations/", formData);
       }
       handleCancel();
-      loadLocations();
+      await loadLocations();
     } catch (error) {
       alert(error.response?.data?.detail || "Error saving location");
     } finally {
@@ -57,7 +77,8 @@ export default function InventoryLocations() {
     setFormData({
       code: location.code,
       name: location.name,
-      description: location.description || ""
+      description: location.description || "",
+      location_type: location.location_type || "internal"
     });
     setShowModal(true);
   };
@@ -71,7 +92,7 @@ export default function InventoryLocations() {
       setLoading(true);
       try {
         await api.delete(`/inventory/locations/${location.id}`);
-        loadLocations();
+        await loadLocations();
       } catch (error) {
         alert(error.response?.data?.detail || "Error deleting location");
       } finally {
@@ -80,11 +101,21 @@ export default function InventoryLocations() {
     }
   };
 
+  const handleExternalLocation = () => {
+    setFormData({
+      code: "EXT",
+      name: "External Location",
+      description: "External location for stock segregation outside main premises",
+      location_type: "external"
+    });
+    setShowModal(true);
+  };
+
   const handleCancel = () => {
     setShowModal(false);
     setEditingLocation(null);
     setViewingLocation(null);
-    setFormData({ code: "", name: "", description: "" });
+    setFormData({ code: "", name: "", description: "", location_type: "internal" });
   };
 
   return (
@@ -108,15 +139,27 @@ export default function InventoryLocations() {
                   <p className="text-sm text-gray-600 mt-1">Define pharmacy and store locations for stock segregation</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              >
-                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                New Location
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  New Location
+                </button>
+                <button
+                  onClick={() => handleExternalLocation()}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  External Location
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -124,11 +167,49 @@ export default function InventoryLocations() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Filter Tabs */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => handleFilterChange('all')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeFilter === 'all'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                All Locations ({locations.length})
+              </button>
+              <button
+                onClick={() => handleFilterChange('location')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeFilter === 'location'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Location Area ({locations.filter(loc => loc.location_type === 'internal').length})
+              </button>
+              <button
+                onClick={() => handleFilterChange('external')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeFilter === 'external'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                External Location ({locations.filter(loc => loc.location_type === 'external').length})
+              </button>
+            </nav>
+          </div>
+        </div>
+
         {loading && locations.length === 0 ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
-        ) : locations.length === 0 ? (
+        ) : filteredLocations.length === 0 ? (
           <div className="text-center py-16">
             <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
               <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,25 +217,48 @@ export default function InventoryLocations() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No locations defined</h3>
-            <p className="text-gray-500 mb-6 max-w-sm mx-auto">Get started by creating your first inventory location to organize your stock effectively.</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Create First Location
-            </button>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {activeFilter === 'external' ? 'No external locations' : 
+               activeFilter === 'location' ? 'No location areas' : 'No locations defined'}
+            </h3>
+            <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+              {activeFilter === 'external' ? 'Create external locations for stock outside main premises.' :
+               activeFilter === 'location' ? 'Create location areas for internal stock organization.' :
+               'Get started by creating your first inventory location to organize your stock effectively.'}
+            </p>
+            <div className="flex space-x-3 justify-center">
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create First Location
+              </button>
+              <button
+                onClick={() => handleExternalLocation()}
+                className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                External Location
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-gray-900">All Locations ({locations.length})</h2>
+                <h2 className="text-lg font-medium text-gray-900">
+                  {activeFilter === 'external' ? `External Locations (${filteredLocations.length})` :
+                   activeFilter === 'location' ? `Location Areas (${filteredLocations.length})` :
+                   `All Locations (${filteredLocations.length})`}
+                </h2>
                 <div className="text-sm text-gray-500">
-                  {locations.filter(l => l.is_active).length} active locations
+                  {filteredLocations.filter(l => l.is_active).length} active locations
                 </div>
               </div>
             </div>
@@ -170,7 +274,7 @@ export default function InventoryLocations() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {locations.map((location) => (
+                  {filteredLocations.map((location) => (
                     <tr key={location.id} className="hover:bg-gray-50 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">

@@ -816,6 +816,7 @@ class InventoryLocation(TenantBase):
     code = Column(String(50), unique=True, nullable=False)
     name = Column(String(191), nullable=False)
     description = Column(Text, nullable=True)
+    location_type = Column(String(20), default="internal")  # internal, external
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
@@ -881,6 +882,7 @@ class ReturnTypeEnum(str, enum.Enum):
     FROM_DEPARTMENT = "FROM_DEPARTMENT"
     TO_CUSTOMER = "TO_CUSTOMER"
     FROM_CUSTOMER = "FROM_CUSTOMER"
+    EXTERNAL = "EXTERNAL"
 
 class ItemConditionEnum(str, enum.Enum):
     GOOD = "GOOD"

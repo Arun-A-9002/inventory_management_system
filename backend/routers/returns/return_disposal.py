@@ -25,7 +25,6 @@ def list_returns(db: Session = Depends(get_tenant_db)):
             "id": return_item.id,
             "return_no": return_item.return_no,
             "return_type": return_item.return_type,
-            "vendor": return_item.vendor,
             "location": return_item.location,  # Ensure location is included
             "reason": return_item.reason,
             "return_date": return_item.return_date,
@@ -308,6 +307,33 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
                 if batch:
                     batch.qty += qty
                     print(f"FROM_CUSTOMER: Added {qty} to batch {item.batch_no} in {return_header.location}")
+                    
+            elif return_header.return_type == 'EXTERNAL':
+                # Reduce quantity from external location (no billing)
+                batch = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    Batch.batch_no == item.batch_no,
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == return_header.location
+                ).first()
+                
+                if batch and batch.qty >= qty:
+                    batch.qty -= qty
+                    print(f"EXTERNAL: Reduced {qty} from batch {item.batch_no} in {return_header.location}")
+                    if batch.qty <= 0:
+                        db.delete(batch)
+                    
+                    # Update StockOverview
+                    from models.tenant_models import StockOverview
+                    stock_overview = db.query(StockOverview).filter(
+                        StockOverview.item_name == item.item_name,
+                        StockOverview.batch_no == item.batch_no
+                    ).first()
+                    if stock_overview:
+                        stock_overview.available_qty -= int(qty)
+                        if stock_overview.available_qty <= 0:
+                            db.delete(stock_overview)
+                        print(f"EXTERNAL: Updated StockOverview for {item.item_name} batch {item.batch_no}")
     
     
     db.commit()

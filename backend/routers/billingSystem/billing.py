@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from database import get_tenant_db
-from models.tenant_models import Billing, GRN, BillingStatus, ReturnBilling, ReturnHeader, ReturnBillingPayment
+from models.tenant_models import Billing, GRN, BillingStatus, ReturnBilling, ReturnHeader, ReturnBillingPayment, ReturnItem, Item
 from schemas.tenant_schemas import BillingCreate, BillingResponse, ReturnBillingCreate, ReturnBillingResponse
 from pydantic import BaseModel
 from decimal import Decimal
@@ -267,108 +267,94 @@ def get_invoice_details(billing_id: int, db: Session = Depends(get_tenant_db)):
         } for item in return_items]
     }
 
-@router.post("/return", response_model=ReturnBillingResponse)
+@router.post("/return")
 def create_return_billing(
-    billing_data: ReturnBillingCreate,
+    billing_data: dict,
     db: Session = Depends(get_tenant_db)
 ):
+    """Create return billing record"""
+    from models.tenant_models import ReturnHeader, ReturnItem, Item
+    
     # Get return details
-    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == billing_data.return_id).first()
+    return_id = billing_data.get('return_id')
+    if not return_id:
+        raise HTTPException(status_code=400, detail="Return ID is required")
+    
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
         raise HTTPException(status_code=404, detail="Return not found")
     
-    if return_header.status != "APPROVED":
-        raise HTTPException(status_code=400, detail="Return must be approved to create billing")
+    # Get return items to calculate amounts
+    return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
     
-    # Skip billing for internal returns - only handle stock movements
-    if return_header.return_type == "INTERNAL":
-        raise HTTPException(status_code=400, detail="Internal returns do not require billing - stock movements only")
-    
-    # Get return items
-    from models.tenant_models import ReturnItem
-    return_items = db.query(ReturnItem).filter(ReturnItem.return_id == billing_data.return_id).all()
-    
-    # Calculate amounts from return items (only for non-internal returns)
+    # Calculate amounts from return items
     gross_amount = 0
-    for item in return_items:
-        # Try to get rate from multiple sources
-        rate = 0
-        if hasattr(item, 'rate') and item.rate:
-            rate = float(item.rate)
-        else:
-            # Try to get rate from item master
-            from models.tenant_models import Item
-            master_item = db.query(Item).filter(Item.name == item.item_name).first()
-            if master_item:
-                rate = float(master_item.mrp or master_item.fixing_price or 30)
-            else:
-                rate = 30  # Default rate
-        
-        item_total = item.qty * rate
-        gross_amount += item_total
-    
-    # Calculate tax based on item master data
     tax_amount = 0
+    
     for item in return_items:
-        # Get rate from multiple sources
-        rate = 0
-        if hasattr(item, 'rate') and item.rate:
-            rate = float(item.rate)
-        else:
-            # Get MRP from item master
-            from models.tenant_models import Item
-            master_item = db.query(Item).filter(Item.name == item.item_name).first()
-            if master_item:
-                rate = float(master_item.mrp or master_item.fixing_price or 30)
-            else:
-                rate = 30  # Default rate
-        
-        # Calculate amounts for this item
+        # Get rate from item or use default
+        rate = float(item.rate) if item.rate else 3.0
         item_gross = item.qty * rate
-        item_tax = 0
+        gross_amount += item_gross
         
-        # Fetch tax from item master
+        # Get tax from item master
         master_item = db.query(Item).filter(Item.name == item.item_name).first()
         if master_item and master_item.tax:
-            item_tax = master_item.tax * item.qty
-        
-        # Update item with calculated values
-        item.rate = rate
-        item.total_tax = item_tax
-        item.gross_amount = item_gross
-        
-        tax_amount += item_tax
+            tax_amount += master_item.tax * item.qty
+        else:
+            # Default tax calculation (18%)
+            tax_amount += item_gross * 0.18
+    
     net_amount = gross_amount + tax_amount
     
-    # Create return billing record
-    from datetime import timedelta
-    due_date = date.today() + timedelta(days=30)  # 30 days payment term
-    
+    # Create billing record
     billing = ReturnBilling(
-        return_id=billing_data.return_id,
-        gross_amount=gross_amount,
-        tax_amount=tax_amount,
-        net_amount=net_amount,
-        paid_amount=Decimal('0.00'),  # ALWAYS START WITH ZERO
-        balance_amount=Decimal(str(net_amount)),  # BALANCE = NET AMOUNT
-        status=BillingStatus.DRAFT,  # ALWAYS START WITH DRAFT
-        due_date=due_date
+        return_id=return_id,
+        gross_amount=Decimal(str(gross_amount)),
+        tax_amount=Decimal(str(tax_amount)),
+        net_amount=Decimal(str(net_amount)),
+        paid_amount=Decimal('0.00'),
+        balance_amount=Decimal(str(net_amount)),
+        status=BillingStatus.DRAFT
     )
     
     db.add(billing)
     db.commit()
     db.refresh(billing)
     
-    # FORCE RESET PAYMENT FIELDS AFTER CREATION
-    billing.paid_amount = Decimal('0.00')
-    billing.balance_amount = billing.net_amount
-    billing.status = BillingStatus.DRAFT
+    return {
+        "message": "Return billing created successfully",
+        "billing_id": billing.id,
+        "return_id": return_id,
+        "gross_amount": float(billing.gross_amount),
+        "tax_amount": float(billing.tax_amount),
+        "net_amount": float(billing.net_amount)
+    }
+
+@router.post("/create-sample-invoice")
+def create_sample_invoice(db: Session = Depends(get_tenant_db)):
+    """Create a sample invoice in main billing table for testing returns"""
+    # Create a sample billing record
+    billing = Billing(
+        grn_id=1,  # Dummy GRN ID
+        gross_amount=Decimal('688.00'),
+        tax_amount=Decimal('0.00'),
+        net_amount=Decimal('688.00'),
+        paid_amount=Decimal('688.00'),  # Fully paid
+        balance_amount=Decimal('0.00'),
+        status=BillingStatus.PAID
+    )
+    
+    db.add(billing)
     db.commit()
     db.refresh(billing)
     
-    return billing
-
-@router.get("/invoice/{billing_id}")
+    return {
+        "message": "Sample invoice created",
+        "invoice_id": billing.id,
+        "invoice_number": f"INV-{billing.id:04d}",
+        "amount": float(billing.net_amount)
+    }
 def generate_invoice(billing_id: int, db: Session = Depends(get_tenant_db)):
     """Generate professional invoice PDF"""
     from fastapi.responses import Response
@@ -487,6 +473,43 @@ def update_billing_status_from_balance(billing_record):
     # DISABLED TO PREVENT AUTO-PAYMENT CALCULATION
     # This function was causing automatic payment calculation during tab navigation
     return billing_record
+
+@router.put("/refund/{billing_id}")
+def process_refund_payment(
+    billing_id: int,
+    payment_data: PaymentUpdate,
+    db: Session = Depends(get_tenant_db)
+):
+    """Process refund payment for billing with negative balance"""
+    billing = db.query(Billing).filter(Billing.id == billing_id).first()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing not found")
+    
+    # Validate refund amount
+    if payment_data.paid_amount < 0:
+        raise HTTPException(status_code=400, detail="Refund amount cannot be negative")
+    
+    refund_due = abs(float(billing.balance_amount))
+    if payment_data.paid_amount > refund_due:
+        raise HTTPException(status_code=400, detail="Refund amount cannot exceed amount due")
+    
+    # Update billing record - add refund to balance (reduces negative balance)
+    billing.balance_amount += payment_data.paid_amount
+    
+    # Update status based on new balance
+    if billing.balance_amount >= 0:
+        billing.status = BillingStatus.PAID
+    else:
+        billing.status = BillingStatus.PARTIAL
+    
+    db.commit()
+    db.refresh(billing)
+    
+    return {
+        "message": "Refund processed successfully",
+        "refund_amount": payment_data.paid_amount,
+        "remaining_balance": abs(float(billing.balance_amount)) if billing.balance_amount < 0 else 0
+    }
 
 @router.put("/payment/{billing_id}")
 def update_payment(
@@ -2094,47 +2117,53 @@ def process_refund(
         "status": billing.status.value
     }
 
-@router.put("/update-batch-quantity")
-def update_batch_quantity(
-    update_data: dict,
+@router.put("/recalculate-amounts/{billing_id}")
+def recalculate_billing_amounts(
+    billing_id: int,
     db: Session = Depends(get_tenant_db)
 ):
-    """Update batch quantity when items are taken or returned"""
-    from models.tenant_models import GRN, GRNItem, Batch, GRNStatus
+    """Recalculate billing amounts from return items"""
+    billing = db.query(ReturnBilling).filter(ReturnBilling.id == billing_id).first()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing not found")
     
-    item_name = update_data.get('item_name')
-    batch_no = update_data.get('batch_no')
-    quantity_change = int(update_data.get('quantity_change', 0))  # Positive for return, negative for take
+    # Get return items
+    return_items = db.query(ReturnItem).filter(ReturnItem.return_id == billing.return_id).all()
     
-    # Find the batch
-    batch = db.query(Batch).join(GRNItem).join(GRN).filter(
-        GRNItem.item_name == item_name,
-        Batch.batch_no == batch_no,
-        GRN.status == GRNStatus.approved
-    ).first()
+    # Calculate amounts from return items
+    gross_amount = 0
+    tax_amount = 0
     
-    if not batch:
-        raise HTTPException(404, f"Batch {batch_no} not found for {item_name}")
+    for item in return_items:
+        # Get rate from item or use default
+        rate = float(item.rate) if item.rate else 3.0
+        item_gross = item.qty * rate
+        gross_amount += item_gross
+        
+        # Get tax from item master
+        master_item = db.query(Item).filter(Item.name == item.item_name).first()
+        if master_item and master_item.tax:
+            tax_amount += master_item.tax * item.qty
+        else:
+            # Default tax calculation (18%)
+            tax_amount += item_gross * 0.18
     
-    # Update batch quantity
-    new_qty = batch.qty + quantity_change
+    net_amount = gross_amount + tax_amount
     
-    if new_qty < 0:
-        raise HTTPException(400, f"Cannot reduce quantity below 0. Current: {batch.qty}, Requested change: {quantity_change}")
-    
-    batch.qty = new_qty
-    
-    # Update GRN item quantity
-    grn_item = db.query(GRNItem).filter(GRNItem.id == batch.grn_item_id).first()
-    if grn_item:
-        grn_item.received_qty += quantity_change
+    # Update billing amounts
+    billing.gross_amount = Decimal(str(gross_amount))
+    billing.tax_amount = Decimal(str(tax_amount))
+    billing.net_amount = Decimal(str(net_amount))
+    billing.balance_amount = billing.net_amount - billing.paid_amount
     
     db.commit()
+    db.refresh(billing)
     
     return {
-        "message": f"Batch quantity updated successfully",
-        "item_name": item_name,
-        "batch_no": batch_no,
-        "new_quantity": new_qty,
-        "quantity_change": quantity_change
+        "message": "Billing amounts recalculated",
+        "billing_id": billing.id,
+        "gross_amount": float(billing.gross_amount),
+        "tax_amount": float(billing.tax_amount),
+        "net_amount": float(billing.net_amount),
+        "balance_amount": float(billing.balance_amount)
     }

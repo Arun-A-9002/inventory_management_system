@@ -774,6 +774,7 @@ class InventoryLocationBase(BaseModel):
     code: str
     name: str
     description: Optional[str] = None
+    location_type: Optional[str] = "internal"
 
 class InventoryLocationCreate(InventoryLocationBase):
     pass
