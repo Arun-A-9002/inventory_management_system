@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import Category from './Category';
 import SubCategory from './SubCategory';
 import Brand from './Brand';
-import UOM from './uom';
-import Tax from './Tax';
 
 export default function MasterData() {
   const [activeTab, setActiveTab] = useState('category');
@@ -12,8 +10,6 @@ export default function MasterData() {
     { id: 'category', label: 'Category', component: <Category /> },
     { id: 'subcategory', label: 'Sub Category', component: <SubCategory /> },
     { id: 'brand', label: 'Brand', component: <Brand /> },
-    { id: 'uom', label: 'UOM', component: <UOM /> },
-    { id: 'tax', label: 'Tax Code', component: <Tax /> },
   ];
 
   return (

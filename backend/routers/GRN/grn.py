@@ -4,7 +4,7 @@ from datetime import date
 import uuid
 
 from database import get_tenant_db
-from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, UOM, Stock, StockLedger, StockOverview, VendorPayment
+from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, Stock, StockLedger, StockOverview, VendorPayment
 from schemas.tenant_schemas import GRNCreate, QCCreate, GRNStatusUpdate
 
 router = APIRouter(prefix="/grn", tags=["Goods Receipt & Inspection"])

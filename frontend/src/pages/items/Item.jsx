@@ -1,19 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import api from "../../api";
 import QRCode from "react-qr-code";
 import JsBarcode from "jsbarcode";
-import Toast from "../../components/Toast";
 import { useToast } from "../../utils/useToast";
 
 export default function Item() {
   const [items, setItems] = useState([]);
-  const { toast, showToast, hideToast } = useToast();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   const [allSubCategories, setAllSubCategories] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [uoms, setUoms] = useState([]);
   const [generatedBarcode, setGeneratedBarcode] = useState("");
   const [generatedQR, setGeneratedQR] = useState("");
 
@@ -25,18 +23,19 @@ export default function Item() {
     sub_category: "",
     brand: "",
     manufacturer: "",
-    uom: "",
     min_stock: 0,
     max_stock: 0,
+    safety_stock: 0,
     fixing_price: 0,
     mrp: 0,
     tax: 0,
-    is_batch_managed: false,
+    item_type: "",
     has_expiry: false,
     expiry_date: "",
+    manufacture_date: "",
     has_warranty: false,
-    warranty_start_date: "",
-    warranty_end_date: "",
+    warranty_period: 0,
+    warranty_period_type: "years",
     barcode: "",
     qr_code: "",
     is_active: true
@@ -50,7 +49,10 @@ export default function Item() {
   const [availableBatches, setAvailableBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('');
   const [showBatchSelector, setShowBatchSelector] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadItems();
     loadMasterData();
@@ -58,21 +60,18 @@ export default function Item() {
 
   const loadMasterData = async () => {
     try {
-      const [categoriesRes, brandsRes, uomsRes, subCategoriesRes] = await Promise.all([
+      const [categoriesRes, brandsRes, subCategoriesRes] = await Promise.all([
         api.get("/category/"),
         api.get("/brand/"),
-        api.get("/uom/"),
         api.get("/subcategory/")
       ]);
       
       console.log("Categories loaded:", categoriesRes.data);
       console.log("Brands loaded:", brandsRes.data);
-      console.log("UOMs loaded:", uomsRes.data);
       console.log("Subcategories loaded:", subCategoriesRes.data);
       
       setCategories(categoriesRes.data || []);
       setBrands(brandsRes.data || []);
-      setUoms(uomsRes.data || []);
       setAllSubCategories(subCategoriesRes.data || []);
       
       // Set initial subcategories (empty until category is selected)
@@ -142,29 +141,33 @@ export default function Item() {
       sub_category: "",
       brand: "",
       manufacturer: "",
-      uom: "",
       min_stock: 0,
       max_stock: 0,
+      safety_stock: 0,
       fixing_price: 0,
       mrp: 0,
       tax: 0,
-      is_batch_managed: false,
+      item_type: "",
       has_expiry: false,
       expiry_date: "",
+      manufacture_date: "",
       has_warranty: false,
-      warranty_start_date: "",
-      warranty_end_date: "",
+      warranty_period: 0,
+      warranty_period_type: "years",
       barcode: "",
       qr_code: "",
       is_active: true
     });
     setEditingId(null);
     setSubCategories([]);
+    setShowCreateModal(false);
+    setGeneratedBarcode("");
+    setGeneratedQR("");
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.item_code) {
-      showToast("Item name and code are required", 'error');
+    if (!form.name || !form.item_code || !form.item_type) {
+      showToast("Item name, code, and type are required", 'error');
       return;
     }
 
@@ -174,6 +177,9 @@ export default function Item() {
         category: form.category ? String(form.category) : null,
         sub_category: form.sub_category ? String(form.sub_category) : null,
         expiry_date: form.expiry_date || null,
+        manufacture_date: form.manufacture_date || null,
+        item_type: form.item_type || null,
+        warranty_period: form.warranty_period || 0,
         barcode: form.barcode || null,
         qr_code: form.qr_code || null
       };
@@ -210,18 +216,19 @@ export default function Item() {
       sub_category: item.sub_category_id || "",
       brand: item.brand || "",
       manufacturer: item.manufacturer || "",
-      uom: item.uom || "",
       min_stock: item.min_stock,
       max_stock: item.max_stock,
+      safety_stock: item.safety_stock || 0,
       fixing_price: item.fixing_price || 0,
       mrp: item.mrp || 0,
       tax: item.tax || 0,
-      is_batch_managed: item.is_batch_managed,
+      item_type: item.item_type || "",
       has_expiry: item.has_expiry,
       expiry_date: item.expiry_date || "",
+      manufacture_date: item.manufacture_date || "",
       has_warranty: item.has_warranty || false,
-      warranty_start_date: item.warranty_start_date || "",
-      warranty_end_date: item.warranty_end_date || "",
+      warranty_period: item.warranty_period || 0,
+      warranty_period_type: item.warranty_period_type || "years",
       barcode: item.barcode || "",
       qr_code: item.qr_code || "",
       is_active: item.is_active !== undefined ? item.is_active : true
@@ -231,6 +238,8 @@ export default function Item() {
     if (item.category_id) {
       loadSubCategories(item.category_id);
     }
+    
+    setShowCreateModal(true);
   };
 
   const handleEditQuantity = async (item) => {
@@ -463,482 +472,520 @@ const downloadQR = () => {
   }
 };
 
+  const filteredItems = items.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      {/* HEADER */}
-      <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-500 p-6 text-white shadow-md">
-          <div className="text-sm uppercase opacity-80">Inventory Management</div>
-          <h1 className="text-3xl font-semibold mt-2">Item Master</h1>
-          <p className="mt-2 opacity-90">Manage your inventory items and their details.</p>
+    <>
+      <div className="space-y-6">
+      {/* Items List */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Items List</h2>
+              <p className="text-sm text-gray-500 mt-1">All inventory items with their specifications and stock details.</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => window.location.href = '/app/organization/master-data'}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <span>⚙️</span>
+                <span>Master Data Setup</span>
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <span>+</span>
+                <span>Create Item</span>
+              </button>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search items..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Details</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Levels</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pricing</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loading ? (
+                <tr><td colSpan={8} className="text-center py-12 text-gray-500">Loading...</td></tr>
+              ) : filteredItems.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-12 text-gray-500">No items found</td></tr>
+              ) : (
+                filteredItems.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{idx + 1}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-gray-900">{item.name}</div>
+                      <div className="text-sm text-gray-500 font-mono">{item.item_code}</div>
+                      {item.description && (
+                        <div className="text-xs text-gray-400 mt-1">{item.description}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {getCategoryName(item.category_id)}
+                      </span>
+                      {getSubCategoryName(item.sub_category_id) && (
+                        <div className="text-xs text-gray-500 mt-1">{getSubCategoryName(item.sub_category_id)}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.brand || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div>Min: {item.min_stock}</div>
+                      <div>Max: {item.max_stock}</div>
+                      <div className="text-orange-600">Safety: {item.safety_stock || 0}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="text-green-600 font-medium">₹{item.fixing_price || 0}</div>
+                      <div className="text-blue-600">MRP: ₹{item.mrp || 0}</div>
+                      <div className="text-orange-600">Tax: {item.tax || 0}%</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          item.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                        }`}>
+                          {item.is_active ? "Active" : "Inactive"}
+                        </span>
+                        <div className="text-xs text-gray-500">{item.item_type}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeactivate(item.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <div className="grid grid-cols-12 gap-6">
-        {/* LEFT — CREATE / EDIT FORM */}
-        <div className="col-span-12 lg:col-span-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border">
-            <h2 className="text-xl font-semibold mb-4">{editingId ? "Edit Item" : "Create New Item"}</h2>
-            
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Item Name *</label>
-                <input 
-                  name="name" 
-                  placeholder="Enter item name" 
-                  value={form.name} 
-                  onChange={handleChange}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto m-4">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">{editingId ? "Edit Item" : "Create New Item"}</h2>
+                <button 
+                  onClick={resetForm}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Item Code / SKU *</label>
-                <input 
-                  name="item_code" 
-                  placeholder="Enter unique item code" 
-                  value={form.item_code} 
-                  onChange={handleChange}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea 
-                  name="description" 
-                  placeholder="Item description" 
-                  value={form.description} 
-                  onChange={handleChange}
-                  rows={3}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Classification */}
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">Classification</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                  <select 
-                    name="category" 
-                    value={form.category} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  {/* Debug info */}
-                  <div className="text-xs text-gray-500 mt-1">
-                    Loaded: {categories.length} categories
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Sub Category</label>
-                  <select 
-                    name="sub_category" 
-                    value={form.sub_category} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    disabled={!form.category}
-                  >
-                    <option value="">Select Sub Category</option>
-                    {subCategories.map(subCat => (
-                      <option key={subCat.id} value={subCat.id}>{subCat.name}</option>
-                    ))}
-                  </select>
-                  {/* Debug info */}
-                  <div className="text-xs text-gray-500 mt-1">
-                    Available: {subCategories.length} subcategories
-                    {form.category && ` for category ${form.category}`}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
-                  <select 
-                    name="brand" 
-                    value={form.brand} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Select Brand</option>
-                    {brands.map(brand => (
-                      <option key={brand.id} value={brand.brand_name}>{brand.brand_name}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Manufacturer</label>
-                  <input 
-                    name="manufacturer" 
-                    placeholder="Manufacturer name" 
-                    value={form.manufacturer} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Inventory Settings */}
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">Inventory Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Unit of Measure</label>
-                  <select 
-                    name="uom" 
-                    value={form.uom} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Select UOM</option>
-                    {uoms.map(uom => (
-                      <option key={uom.id} value={uom.name}>{uom.name}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Min Stock</label>
-                  <input 
-                    type="number" 
-                    name="min_stock" 
-                    placeholder="0" 
-                    value={form.min_stock} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Max Stock</label>
-                  <input 
-                    type="number" 
-                    name="max_stock" 
-                    placeholder="0" 
-                    value={form.max_stock} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fixing Price</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="fixing_price" 
-                    placeholder="0.00" 
-                    value={form.fixing_price} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">MRP</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="mrp" 
-                    placeholder="0.00" 
-                    value={form.mrp} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tax (%)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="tax" 
-                    placeholder="0.00" 
-                    value={form.tax} 
-                    onChange={handleChange}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Additional Settings */}
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">Additional Settings</h3>
-              <div className="space-y-3">
-                <label className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    name="is_batch_managed" 
-                    checked={form.is_batch_managed} 
-                    onChange={handleChange}
-                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Batch Managed</span>
-                </label>
-                
-                <label className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    name="has_expiry" 
-                    checked={form.has_expiry} 
-                    onChange={handleChange}
-                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Has Expiry Date</span>
-                </label>
-                
-                {form.has_expiry && (
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Item Name *</label>
                     <input 
-                      type="date" 
-                      name="expiry_date" 
-                      value={form.expiry_date} 
+                      name="name" 
+                      placeholder="Enter item name" 
+                      value={form.name} 
                       onChange={handleChange}
                       className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
                   </div>
-                )}
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Item Code / SKU *</label>
+                    <input 
+                      name="item_code" 
+                      placeholder="Enter unique item code" 
+                      value={form.item_code} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
                 
-                <label className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    name="has_warranty" 
-                    checked={form.has_warranty} 
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                  <textarea 
+                    name="description" 
+                    placeholder="Item description" 
+                    value={form.description} 
                     onChange={handleChange}
-                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    rows={3}
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
-                  <span className="text-sm font-medium text-slate-700">Has Warranty</span>
-                </label>
+                </div>
+              </div>
+
+              {/* Classification */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium mb-3">Classification</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                    <select 
+                      name="category" 
+                      value={form.category} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Loaded: {categories.length} categories
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Sub Category</label>
+                    <select 
+                      name="sub_category" 
+                      value={form.sub_category} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      disabled={!form.category}
+                    >
+                      <option value="">Select Sub Category</option>
+                      {subCategories.map(subCat => (
+                        <option key={subCat.id} value={subCat.id}>{subCat.name}</option>
+                      ))}
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Available: {subCategories.length} subcategories
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
+                    <select 
+                      name="brand" 
+                      value={form.brand} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Brand</option>
+                      {brands.map(brand => (
+                        <option key={brand.id} value={brand.brand_name}>{brand.brand_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Manufacturer</label>
+                    <input 
+                      name="manufacturer" 
+                      placeholder="Manufacturer name" 
+                      value={form.manufacturer} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Inventory Settings */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium mb-3">Inventory Settings</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Item Type *</label>
+                    <select 
+                      name="item_type" 
+                      value={form.item_type} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Item Type</option>
+                      <option value="consumable">Consumable</option>
+                      <option value="non_consumable">Non-Consumable</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Min Stock</label>
+                    <input 
+                      type="number" 
+                      name="min_stock" 
+                      placeholder="0" 
+                      value={form.min_stock} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Max Stock</label>
+                    <input 
+                      type="number" 
+                      name="max_stock" 
+                      placeholder="0" 
+                      value={form.max_stock} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Safety Stock</label>
+                    <input 
+                      type="number" 
+                      name="safety_stock" 
+                      placeholder="0" 
+                      value={form.safety_stock} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Fixing Price</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      name="fixing_price" 
+                      placeholder="0" 
+                      value={form.fixing_price} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">MRP</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      name="mrp" 
+                      placeholder="0" 
+                      value={form.mrp} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Tax (%)</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      name="tax" 
+                      placeholder="0" 
+                      value={form.tax} 
+                      onChange={handleChange}
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Settings */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium mb-3">Additional Settings</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      name="has_expiry" 
+                      checked={form.has_expiry} 
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Has Expiry Date</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      name="has_warranty" 
+                      checked={form.has_warranty} 
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Has Warranty</span>
+                  </label>
+                </div>
                 
-                {form.has_warranty && (
-                  <div className="grid grid-cols-2 gap-4">
+                {form.has_expiry && (
+                  <div className="grid grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Start Date</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Manufacture Date</label>
                       <input 
                         type="date" 
-                        name="warranty_start_date" 
-                        value={form.warranty_start_date} 
+                        name="manufacture_date" 
+                        value={form.manufacture_date} 
                         onChange={handleChange}
                         className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty End Date</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
                       <input 
                         type="date" 
-                        name="warranty_end_date" 
-                        value={form.warranty_end_date} 
+                        name="expiry_date" 
+                        value={form.expiry_date} 
                         onChange={handleChange}
                         className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                     </div>
                   </div>
                 )}
+                
+                {form.has_warranty && (
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Period</label>
+                      <input 
+                        type="number" 
+                        name="warranty_period" 
+                        placeholder="0"
+                        min="0"
+                        value={form.warranty_period} 
+                        onChange={handleChange}
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Period Type</label>
+                      <select 
+                        name="warranty_period_type" 
+                        value={form.warranty_period_type} 
+                        onChange={handleChange}
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        <option value="years">Years</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
 
-           {/* Identification */}
-<div className="mt-6">
-  <h3 className="text-lg font-medium mb-3">Identification</h3>
+              {/* Identification */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium mb-3">Identification</h3>
 
-  {/* ACTION BUTTONS */}
-  <div className="flex gap-3 mb-4">
-    <button
-      onClick={generateBarcode}
-      className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-    >
-      Create Barcode
-    </button>
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={generateBarcode}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                  >
+                    Create Barcode
+                  </button>
 
-    <button
-      onClick={generateQR}
-      className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
-    >
-      Create QR Code
-    </button>
-  </div>
+                  <button
+                    onClick={generateQR}
+                    className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+                  >
+                    Create QR Code
+                  </button>
+                </div>
 
-  {/* DISPLAY AREA */}
-  <div className="grid grid-cols-2 gap-6">
-    
-    {/* BARCODE */}
-    {generatedBarcode && (
-      <div className="border rounded-xl p-4 text-center bg-slate-50">
-        <div id="barcodeCanvas" style={{minHeight: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-        </div>
+                <div className="grid grid-cols-2 gap-6">
+                  {generatedBarcode && (
+                    <div className="border rounded-xl p-4 text-center bg-slate-50">
+                      <div id="barcodeCanvas" style={{minHeight: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                      </div>
+                      <div className="flex justify-center gap-4 mt-3">
+                        <button
+                          onClick={() => printCode("barcodeCanvas")}
+                          className="text-sm text-indigo-600 hover:underline"
+                        >
+                          🖨 Print
+                        </button>
+                        <button
+                          onClick={downloadBarcode}
+                          className="text-sm text-indigo-600 hover:underline"
+                        >
+                          ⬇ Download
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-        <div className="flex justify-center gap-4 mt-3">
-          <button
-            onClick={() => printCode("barcodeCanvas")}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            🖨 Print
-          </button>
-          <button
-            onClick={downloadBarcode}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            ⬇ Download
-          </button>
-        </div>
-      </div>
-    )}
+                  {generatedQR && (
+                    <div className="border rounded-xl p-4 text-center bg-slate-50">
+                      <div id="qr">
+                        <QRCode value={generatedQR} size={120} />
+                        <div className="text-xs mt-2 text-slate-500">{generatedQR}</div>
+                      </div>
+                      <div className="flex justify-center gap-4 mt-3">
+                        <button
+                          onClick={() => printCode("qr")}
+                          className="text-sm text-purple-600 hover:underline"
+                        >
+                          🖨 Print
+                        </button>
+                        <button
+                          onClick={downloadQR}
+                          className="text-sm text-purple-600 hover:underline"
+                        >
+                          ⬇ Download
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-    {/* QR CODE */}
-    {generatedQR && (
-      <div className="border rounded-xl p-4 text-center bg-slate-50">
-        <div id="qr">
-          <QRCode value={generatedQR} size={120} />
-          <div className="text-xs mt-2 text-slate-500">{generatedQR}</div>
-        </div>
-
-        <div className="flex justify-center gap-4 mt-3">
-          <button
-            onClick={() => printCode("qr")}
-            className="text-sm text-purple-600 hover:underline"
-          >
-            🖨 Print
-          </button>
-          <button
-            onClick={downloadQR}
-            className="text-sm text-purple-600 hover:underline"
-          >
-            ⬇ Download
-          </button>
-        </div>
-      </div>
-    )}
-  </div>
-</div>
-
-            {/* Action Buttons */}
-            <div className="mt-6 flex gap-3">
-              <button 
-                onClick={handleSubmit} 
-                className="flex-1 rounded-full bg-purple-600 text-white px-6 py-2 hover:bg-purple-700 transition-colors"
-              >
-                {editingId ? "Update Item" : "Create Item"}
-              </button>
-              {editingId && (
+              {/* Action Buttons */}
+              <div className="mt-6 flex gap-3 justify-end">
                 <button 
                   onClick={resetForm} 
-                  className="rounded-full border border-gray-300 px-6 py-2 hover:bg-gray-50 transition-colors"
+                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
-              )}
+                <button 
+                  onClick={handleSubmit} 
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  {editingId ? "Update Item" : "Create Item"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* RIGHT — ITEMS LIST */}
-        <div className="col-span-12 lg:col-span-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4">Items List</h3>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="border border-gray-300 px-4 py-2 text-left">#</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Code</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Category</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Brand</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">UOM</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Fixing Price</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">MRP</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Tax (%)</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Status</th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={11} className="border border-gray-300 px-4 py-6 text-center">Loading...</td></tr>
-                  ) : items.length === 0 ? (
-                    <tr><td colSpan={11} className="border border-gray-300 px-4 py-6 text-center text-slate-500">No items found</td></tr>
-                  ) : (
-                    items.map((item, idx) => (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="border border-gray-300 px-4 py-2">{idx + 1}</td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <div className="font-medium">{item.name}</div>
-                          {item.description && (
-                            <div className="text-sm text-slate-500">{item.description}</div>
-                          )}
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded">{item.item_code}</span>
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <div className="text-sm">{item.category || "-"}</div>
-                          {item.sub_category && (
-                            <div className="text-xs text-slate-500">{item.sub_category}</div>
-                          )}
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">{item.brand || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2">{item.uom || "-"}</td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <span className="text-sm font-medium text-green-600">
-                            ₹{item.fixing_price || 0}
-                          </span>
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <span className="text-sm font-medium text-blue-600">
-                            ₹{item.mrp || 0}
-                          </span>
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <span className="text-sm font-medium text-orange-600">
-                            {item.tax || 0}%
-                          </span>
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            item.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          }`}>
-                            {item.is_active ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleEdit(item)} 
-                              className="text-sm px-3 py-1 rounded border hover:bg-slate-100"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDeactivate(item.id)} 
-                              className="text-sm px-3 py-1 rounded border text-red-600 hover:bg-red-50"
-                            >
-                              Deactivate
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
       
       {/* Edit Quantity Dialog */}
       {showEditDialog && (
@@ -1096,12 +1143,7 @@ const downloadQR = () => {
         </div>
       )}
       
-      <Toast 
-        message={toast.message}
-        type={toast.type}
-        isVisible={toast.isVisible}
-        onClose={hideToast}
-      />
-    </div>
+      </div>
+    </>
   );
 }

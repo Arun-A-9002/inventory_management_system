@@ -135,8 +135,7 @@ class CompanyResponse(CompanyBase):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -174,9 +173,7 @@ class BranchResponse(BranchBase):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
-
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -212,8 +209,7 @@ class BranchBasic(BaseModel):
     code: Optional[str] = None
     city: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StoreResponse(StoreBase):
     id: int
@@ -222,8 +218,7 @@ class StoreResponse(StoreBase):
     updated_at: Optional[datetime]
     branch: Optional[BranchBasic] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -250,8 +245,7 @@ class CategoryResponse(CategoryBase):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -281,8 +275,7 @@ class SubCategoryResponse(SubCategoryBase):
     updated_at: Optional[datetime]
     category: Optional[CategoryResponse] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -315,38 +308,8 @@ class BrandResponse(BrandBase):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
-
-# ============================================================
-#                     UOM SCHEMAS
-# ============================================================
-class UOMBase(BaseModel):
-    name: str
-    code: Optional[str] = None
-    conversion_factor: Optional[float] = 1.0
-
-
-class UOMCreate(UOMBase):
-    pass
-
-
-class UOMUpdate(BaseModel):
-    name: Optional[str] = None
-    code: Optional[str] = None
-    conversion_factor: Optional[float] = None
-    is_active: Optional[bool] = None
-
-
-class UOMResponse(UOMBase):
-    id: int
-    is_active: bool
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
-
-    class Config:
-        orm_mode = True
 
 
 # ============================================================
@@ -381,8 +344,7 @@ class TaxCodeResponse(TaxCodeBase):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -401,8 +363,7 @@ class InventoryGlobalRuleCreate(BaseModel):
 class InventoryGlobalRuleResponse(InventoryGlobalRuleCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =========================================================
@@ -421,8 +382,7 @@ class ItemReorderRuleCreate(BaseModel):
 class ItemReorderRuleResponse(ItemReorderRuleCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =========================================================
@@ -439,8 +399,7 @@ class LeadTimeCreate(BaseModel):
 class LeadTimeResponse(LeadTimeCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =========================================================
@@ -463,8 +422,7 @@ class InventoryAlertRuleCreate(BaseModel):
 class InventoryAlertRuleResponse(InventoryAlertRuleCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -479,22 +437,22 @@ class ItemBase(BaseModel):
     sub_category: Optional[str] = None
     brand: Optional[str] = None
     manufacturer: Optional[str] = None
+    item_type: str = "consumable"
 
-    uom: Optional[str] = None
     min_stock: Optional[int] = 0
     max_stock: Optional[int] = 0
+    safety_stock: Optional[int] = 0
     
     fixing_price: Optional[float] = 0.0
     mrp: Optional[float] = 0.0
     tax: Optional[float] = 0.0
 
-    is_batch_managed: Optional[bool] = False
     has_expiry: Optional[bool] = False
     expiry_date: Optional[date] = None
     
     has_warranty: Optional[bool] = False
-    warranty_start_date: Optional[date] = None
-    warranty_end_date: Optional[date] = None
+    warranty_period: Optional[int] = 0
+    warranty_period_type: Optional[str] = "years"
 
     barcode: Optional[str] = None
     qr_code: Optional[str] = None
@@ -512,22 +470,22 @@ class ItemUpdate(BaseModel):
     sub_category: Optional[str]
     brand: Optional[str]
     manufacturer: Optional[str]
+    item_type: Optional[str]
 
-    uom: Optional[str]
     min_stock: Optional[int]
     max_stock: Optional[int]
+    safety_stock: Optional[int]
     
     fixing_price: Optional[float]
     mrp: Optional[float]
     tax: Optional[float]
 
-    is_batch_managed: Optional[bool]
     has_expiry: Optional[bool]
     expiry_date: Optional[date]
     
     has_warranty: Optional[bool]
-    warranty_start_date: Optional[date]
-    warranty_end_date: Optional[date]
+    warranty_period: Optional[int]
+    warranty_period_type: Optional[str]
 
     barcode: Optional[str]
     qr_code: Optional[str]
@@ -539,8 +497,7 @@ class ItemResponse(ItemBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -562,8 +519,7 @@ class VendorResponse(VendorCreate):
     vendor_code: str
     verification_status: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ================= QUALIFICATION =================
 class VendorQualificationCreate(BaseModel):
@@ -734,8 +690,7 @@ class StockResponse(BaseModel):
     available_qty: float
     reserved_qty: float
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------- ADJUSTMENT ----------
@@ -784,8 +739,7 @@ class InventoryLocationResponse(InventoryLocationBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -895,8 +849,7 @@ class CustomerResponse(CustomerBase):
     is_active: bool
     created_at: datetime
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -916,8 +869,7 @@ class BillingResponse(BaseModel):
     status: str
     created_at: datetime
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReturnBillingCreate(BaseModel):
@@ -934,6 +886,4 @@ class ReturnBillingResponse(BaseModel):
     status: str
     created_at: datetime
     
-    class Config:
-        orm_mode = True
-
+    model_config = ConfigDict(from_attributes=True)

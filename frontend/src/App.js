@@ -14,6 +14,7 @@ import Users from "./pages/Users";
 // Organization Setup Pages
 import OrganizationStructure from "./pages/organization/OrganizationStructure";
 import MasterData from "./pages/organization/MasterData";
+import TaxSetup from "./pages/organization/Tax";
 import UserAccess from "./pages/organization/UserAccess";
 import InventoryRules from "./pages/organization/InventoryRules";
 
@@ -47,6 +48,9 @@ import SupplierLedger from "./pages/suppliers/SupplierLedger";
 //billing system
 import Billing from "./pages/BillingSystem/billing";
 import InvoiceCreation from "./pages/BillingSystem/InvoiceCreation";
+
+//external transfer
+import ExternalTransfer from "./pages/external-transfer/ExternalTransfer";
 function App() {
   return (
     <BrowserRouter>
@@ -75,6 +79,7 @@ function App() {
           {/* Organization Setup */}
           <Route path="organization/structure" element={<OrganizationStructure />} />
           <Route path="organization/master-data" element={<MasterData />} />
+          <Route path="organization/tax-setup" element={<TaxSetup />} />
           <Route path="organization/user-access" element={<UserAccess />} />
           <Route path="organization/inventory-rules" element={<InventoryRules />} />
           

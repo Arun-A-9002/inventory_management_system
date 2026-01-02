@@ -237,23 +237,6 @@ class Brand(TenantBase):
     updated_at = Column(DateTime, onupdate=func.now())
 
 
-# ============================================================
-#                        UOM (Unit of Measure)
-# ============================================================
-class UOM(TenantBase):
-    __tablename__ = "uoms"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    name = Column(String(191), nullable=False)
-    code = Column(String(100), nullable=True)
-    conversion_factor = Column(String(50), default="1.0")
-
-    is_active = Column(Boolean, default=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, onupdate=func.now())
-
 
 # ============================================================
 #                        TAX CODE
@@ -369,26 +352,26 @@ class Item(TenantBase):
     sub_category = Column(String(100))
     brand = Column(String(100))
     manufacturer = Column(String(150))
+    item_type = Column(String(20), nullable=False, default="consumable")
 
-    # 3. UOM & Inventory Settings
-    uom = Column(String(50))
+    # 3. Inventory Settings
     min_stock = Column(Integer, default=0)
     max_stock = Column(Integer, default=0)
+    safety_stock = Column(Integer, default=0)
     
     # 4. Pricing Information
     fixing_price = Column(DECIMAL(10, 2), default=0.00)
     mrp = Column(DECIMAL(10, 2), default=0.00)
     tax = Column(Float, default=0.0)
 
-    # 5. Batch & Expiry Management
-    is_batch_managed = Column(Boolean, default=False)
+    # 5. Expiry Management
     has_expiry = Column(Boolean, default=False)
     expiry_date = Column(Date, nullable=True)
     
     # 6. Warranty Management
     has_warranty = Column(Boolean, default=False)
-    warranty_start_date = Column(Date, nullable=True)
-    warranty_end_date = Column(Date, nullable=True)
+    warranty_period = Column(Integer, default=0)
+    warranty_period_type = Column(String(20), default="years")
 
     # 7. Barcode / QR
     barcode = Column(String(100), unique=True, nullable=True)
@@ -517,6 +500,9 @@ class PRStatus(str, enum.Enum):
     submitted = "Submitted"
     approved = "Approved"
     rejected = "Rejected"
+    sent = "Sent"
+    partially_received = "Partially Received"
+    closed = "Closed"
 
 
 class POStatus(str, enum.Enum):

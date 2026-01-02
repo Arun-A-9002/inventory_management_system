@@ -194,6 +194,15 @@ def ensure_missing_columns(engine):
             except Exception as e:
                 if "Duplicate column name" not in str(e):
                     print(f"Error adding location column: {e}")
+            
+            # Add safety_stock column to items table
+            try:
+                conn.execute(text("ALTER TABLE items ADD COLUMN safety_stock INT DEFAULT 0 AFTER max_stock"))
+                conn.commit()
+                print("Added safety_stock column to items table")
+            except Exception as e:
+                if "Duplicate column name" not in str(e):
+                    print(f"Error adding safety_stock column: {e}")
                 
     except Exception as e:
         print(f"Error in ensure_missing_columns: {e}")

@@ -29,7 +29,6 @@ from routers.organization.store import router as store_router
 from routers.organization.category import router as category_router
 from routers.organization.subcategory import router as subcategory_router
 from routers.organization.brand import router as brand_router
-from routers.organization.uom import router as uom_router
 from routers.organization.tax import router as tax_router
 from routers.organization.inventory_rules import router as inventory_rules_router
 
@@ -122,7 +121,6 @@ app.include_router(store_router)
 app.include_router(category_router)
 app.include_router(subcategory_router)
 app.include_router(brand_router)
-app.include_router(uom_router)
 app.include_router(tax_router)
 app.include_router(inventory_rules_router)
 
