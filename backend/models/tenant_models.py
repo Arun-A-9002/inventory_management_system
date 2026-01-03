@@ -1137,6 +1137,8 @@ class ExternalTransfer(TenantBase):
     staff_name = Column(String(255), nullable=False)
     staff_id = Column(String(100), nullable=False)
     staff_location = Column(String(255), nullable=False)
+    staff_phone = Column(String(20), nullable=True)
+    staff_email = Column(String(100), nullable=True)
     reason = Column(Text)
     status = Column(Enum(ExternalTransferStatus), default=ExternalTransferStatus.DRAFT)
     approved_by = Column(String(255), nullable=True)
@@ -1145,6 +1147,7 @@ class ExternalTransfer(TenantBase):
     sent_at = Column(DateTime, nullable=True)
     return_date = Column(Date, nullable=True)
     returned_at = Column(DateTime, nullable=True)
+    return_deadline = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     
@@ -1164,8 +1167,24 @@ class ExternalTransferItem(TenantBase):
     returned_quantity = Column(Integer, default=0)
     damaged_quantity = Column(Integer, default=0)
     damage_reason = Column(Text, nullable=True)
+    returned_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     
     # Relationship to transfer
     transfer = relationship("ExternalTransfer", back_populates="items")
 
+class ExternalTransferTransaction(TenantBase):
+    __tablename__ = "external_transfer_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_id = Column(Integer, ForeignKey("external_transfers.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("external_transfer_items.id"), nullable=False)
+    transaction_type = Column(Enum("RETURN", "DAMAGE", name="transaction_type_enum"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    transaction_date = Column(DateTime, nullable=False)
+    remarks = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    transfer = relationship("ExternalTransfer")
+    item = relationship("ExternalTransferItem")

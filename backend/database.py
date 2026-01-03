@@ -211,7 +211,10 @@ def ensure_missing_columns(engine):
                 ("rejection_reason", "TEXT NULL"),
                 ("sent_at", "DATETIME NULL"),
                 ("return_date", "DATE NULL"),
-                ("returned_at", "DATETIME NULL")
+                ("returned_at", "DATETIME NULL"),
+                ("return_deadline", "DATE NULL"),
+                ("staff_phone", "VARCHAR(20) NULL"),
+                ("staff_email", "VARCHAR(100) NULL")
             ]
             
             for column_name, column_def in external_transfer_columns:
@@ -226,7 +229,8 @@ def ensure_missing_columns(engine):
             item_columns_to_add = [
                 ("returned_quantity", "INT DEFAULT 0"),
                 ("damaged_quantity", "INT DEFAULT 0"),
-                ("damage_reason", "TEXT NULL")
+                ("damage_reason", "TEXT NULL"),
+                ("returned_at", "DATETIME NULL")
             ]
             
             for column_name, column_def in item_columns_to_add:

@@ -914,6 +914,7 @@ class ExternalTransferItemResponse(BaseModel):
     returned_quantity: int = 0
     damaged_quantity: int = 0
     damage_reason: Optional[str] = None
+    returned_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -923,6 +924,8 @@ class ExternalTransferCreate(BaseModel):
     staff_name: str
     staff_id: str
     staff_location: str
+    staff_phone: Optional[str] = None
+    staff_email: Optional[str] = None
     reason: Optional[str] = None
     items: List[ExternalTransferItemCreate]
 
@@ -939,9 +942,13 @@ class ExternalTransferReturnItem(BaseModel):
     item_id: int
     returned_quantity: int
     damaged_quantity: int = 0
+    return_deadline: Optional[date] = None
     damage_reason: Optional[str] = None
 
 class ExternalTransferReturn(BaseModel):
+    staff_phone: Optional[str] = None
+    staff_email: Optional[str] = None
+    return_deadline: Optional[date] = None
     items: List[ExternalTransferReturnItem]
 
 class ExternalTransferResponse(BaseModel):
@@ -951,6 +958,8 @@ class ExternalTransferResponse(BaseModel):
     staff_name: str
     staff_id: str
     staff_location: str
+    staff_phone: Optional[str] = None
+    staff_email: Optional[str] = None
     reason: Optional[str] = None
     status: str
     approved_by: Optional[str] = None
@@ -959,8 +968,38 @@ class ExternalTransferResponse(BaseModel):
     sent_at: Optional[datetime] = None
     return_date: Optional[date] = None
     returned_at: Optional[datetime] = None
+    return_deadline: Optional[date] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: List[ExternalTransferItemResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+# ============================================================
+#                   EXTERNAL TRANSFER TRANSACTION SCHEMAS
+# ============================================================
+class ExternalTransferTransactionResponse(BaseModel):
+    id: int
+    transfer_id: int
+    item_id: int
+    transaction_type: str
+    quantity: int
+    transaction_date: datetime
+    remarks: Optional[str] = None
+    item_name: str
+    batch_no: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+# ============================================================
+#                   EXTERNAL TRANSFER TRANSACTION SCHEMAS
+# ============================================================
+class ExternalTransferTransactionResponse(BaseModel):
+    id: int
+    transaction_type: str  # RETURN or DAMAGE
+    quantity: int
+    transaction_date: datetime
+    remarks: Optional[str] = None
+    item_name: str
+    batch_no: str
 
     model_config = ConfigDict(from_attributes=True)

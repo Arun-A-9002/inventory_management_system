@@ -22,6 +22,8 @@ export default function ExternalTransfer() {
     staff_name: '',
     staff_id: '',
     staff_location: '',
+    staff_email: '',
+    staff_phone: '',
     return_date: '',
     items: []
   });
@@ -105,6 +107,8 @@ export default function ExternalTransfer() {
         staff_name: form.staff_name,
         staff_id: form.staff_id,
         staff_location: form.staff_location,
+        staff_email: form.staff_email,
+        staff_phone: form.staff_phone,
         reason: `Staff allocation to ${form.staff_name} (ID: ${form.staff_id})`,
         items: form.items.map(item => ({
           item_name: item.item_name,
@@ -137,6 +141,8 @@ export default function ExternalTransfer() {
       staff_name: '',
       staff_id: '',
       staff_location: '',
+      staff_email: '',
+      staff_phone: '',
       return_date: '',
       items: []
     });
@@ -233,6 +239,7 @@ export default function ExternalTransfer() {
         remaining_quantity: item.quantity - ((item.returned_quantity || 0) + (item.damaged_quantity || 0)),
         returned_quantity: 0,
         damaged_quantity: 0,
+        return_deadline: '',
         damage_reason: ''
       }));
       setReturnItems(items);
@@ -268,13 +275,26 @@ export default function ExternalTransfer() {
       return;
     }
     
+    // Check if items with return quantities have deadlines
+    const itemsWithReturns = returnItems.filter(item => 
+      (parseInt(item.returned_quantity) || 0) > 0 || (parseInt(item.damaged_quantity) || 0) > 0
+    );
+    
+    const missingDeadlines = itemsWithReturns.filter(item => !item.return_deadline);
+    if (missingDeadlines.length > 0) {
+      showMessage('Please set return deadline for all items being returned', 'error');
+      return;
+    }
+    
     try {
       setLoading(true);
       const payload = {
+        return_deadline: selectedTransfer.return_deadline,
         items: returnItems.map(item => ({
           item_id: item.item_id,
           returned_quantity: parseInt(item.returned_quantity) || 0,
           damaged_quantity: parseInt(item.damaged_quantity) || 0,
+          return_deadline: item.return_deadline || null,
           damage_reason: item.damage_reason || null
         }))
       };
@@ -320,6 +340,8 @@ export default function ExternalTransfer() {
       staff_name: transfer.staff_name,
       staff_id: transfer.staff_id,
       staff_location: transfer.staff_location,
+      staff_email: transfer.staff_email || '',
+      staff_phone: transfer.staff_phone || '',
       items: transfer.items || []
     });
     setShowEditModal(true);
@@ -335,6 +357,8 @@ export default function ExternalTransfer() {
         staff_name: form.staff_name,
         staff_id: form.staff_id,
         staff_location: form.staff_location,
+        staff_email: form.staff_email,
+        staff_phone: form.staff_phone,
         items: form.items.map(item => ({
           item_name: item.item_name,
           batch_no: item.batch_no,
@@ -354,6 +378,128 @@ export default function ExternalTransfer() {
       showMessage('Failed to update transfer: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrintHistory = async (transfer) => {
+    try {
+      // Fetch transaction history
+      const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
+      const transactions = transactionRes.data || [];
+      
+      const printContent = `
+        <html>
+          <head>
+            <title>Transfer History - ${transfer.transfer_no}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .info { margin-bottom: 20px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              .status { padding: 4px 8px; border-radius: 4px; }
+              .draft { background-color: #f3f4f6; }
+              .sent { background-color: #dbeafe; }
+              .returned { background-color: #dcfce7; }
+              .transaction-table { margin-top: 30px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>External Transfer History</h1>
+              <h2>${transfer.transfer_no}</h2>
+            </div>
+            
+            <div class="info">
+              <p><strong>Staff:</strong> ${transfer.staff_name} (ID: ${transfer.staff_id})</p>
+              <p><strong>Staff Location:</strong> ${transfer.staff_location}</p>
+              <p><strong>Transfer Location:</strong> ${transfer.location}</p>
+              <p><strong>Status:</strong> <span class="status ${transfer.status.toLowerCase()}">${transfer.status}</span></p>
+              <p><strong>Created:</strong> ${new Date(transfer.created_at).toLocaleDateString()}</p>
+              ${transfer.sent_at ? `<p><strong>Sent:</strong> ${new Date(transfer.sent_at).toLocaleDateString()}</p>` : ''}
+              ${transfer.returned_at ? `<p><strong>Returned:</strong> ${new Date(transfer.returned_at).toLocaleDateString()}</p>` : ''}
+              ${transfer.staff_phone ? `<p><strong>Phone:</strong> ${transfer.staff_phone}</p>` : ''}
+              ${transfer.staff_email ? `<p><strong>Email:</strong> ${transfer.staff_email}</p>` : ''}
+            </div>
+            
+            <h3>Item Summary</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Batch</th>
+                  <th>Original Qty</th>
+                  <th>Returned Qty</th>
+                  <th>Damaged Qty</th>
+                  <th>Remaining</th>
+                  <th>Return Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${transfer.items?.map(item => {
+                  const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+                  const remaining = item.quantity - totalReturned;
+                  const status = remaining <= 0 ? 'Completed' : 'Pending';
+                  return `
+                    <tr>
+                      <td>${item.item_name}</td>
+                      <td>${item.batch_no}</td>
+                      <td>${item.quantity}</td>
+                      <td>${item.returned_quantity || 0}</td>
+                      <td>${item.damaged_quantity || 0}</td>
+                      <td>${remaining}</td>
+                      <td>${item.return_date ? new Date(item.return_date).toLocaleDateString() : '-'}</td>
+                      <td>${status}</td>
+                    </tr>
+                  `;
+                }).join('') || '<tr><td colspan="8">No items found</td></tr>'}
+              </tbody>
+            </table>
+            
+            <div class="transaction-table">
+              <h3>Transaction History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Item</th>
+                    <th>Batch</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${transactions.length > 0 ? transactions.map(txn => `
+                    <tr>
+                      <td>${new Date(txn.transaction_date).toLocaleDateString()} ${new Date(txn.transaction_date).toLocaleTimeString()}</td>
+                      <td>${txn.item_name}</td>
+                      <td>${txn.batch_no}</td>
+                      <td>${txn.transaction_type}</td>
+                      <td>${txn.quantity}</td>
+                      <td>${txn.remarks}</td>
+                    </tr>
+                  `).join('') : '<tr><td colspan="6">No transactions found</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: center; color: #666;">
+              <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.print();
+    } catch (error) {
+      console.error('Error fetching transaction history:', error);
+      showMessage('Failed to generate print report', 'error');
     }
   };
 
@@ -499,6 +645,12 @@ export default function ExternalTransfer() {
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handlePrintHistory(transfer)}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              Print
+                            </button>
                             {transfer.status === 'DRAFT' && (
                               <>
                                 <button
@@ -521,20 +673,12 @@ export default function ExternalTransfer() {
                                   const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
                                   return item.quantity > totalReturned;
                                 }) ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleReturnTransfer(transfer)}
-                                      className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-                                    >
-                                      Return
-                                    </button>
-                                    <button
-                                      onClick={() => openReturnProcessing(transfer.id)}
-                                      className="text-green-600 hover:text-green-800 text-sm font-medium"
-                                    >
-                                      Process
-                                    </button>
-                                  </>
+                                  <button
+                                    onClick={() => handleReturnTransfer(transfer)}
+                                    className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                                  >
+                                    Return
+                                  </button>
                                 ) : (
                                   <span className="text-gray-400 text-sm">Fully Returned</span>
                                 )}
@@ -611,6 +755,29 @@ export default function ExternalTransfer() {
                     onChange={(e) => setForm({...form, staff_id: e.target.value})}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter staff ID"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Staff Email</label>
+                  <input
+                    type="email"
+                    value={form.staff_email || ''}
+                    onChange={(e) => setForm({...form, staff_email: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter staff email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Staff Phone</label>
+                  <input
+                    type="tel"
+                    value={form.staff_phone || ''}
+                    onChange={(e) => setForm({...form, staff_phone: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter staff phone"
                   />
                 </div>
               </div>
@@ -768,7 +935,17 @@ export default function ExternalTransfer() {
                 <label className="block text-sm font-medium mb-2">Location</label>
                 <select
                   value={form.location}
-                  onChange={(e) => setForm({...form, location: e.target.value})}
+                  onChange={async (e) => {
+                    const selectedLocation = e.target.value;
+                    setForm({...form, location: selectedLocation});
+                    
+                    if (selectedLocation) {
+                      const locationItems = await fetchItemsForLocation(selectedLocation);
+                      setItems(locationItems);
+                    } else {
+                      setItems([]);
+                    }
+                  }}
                   className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Location</option>
@@ -801,14 +978,128 @@ export default function ExternalTransfer() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Staff Email</label>
+                  <input
+                    type="email"
+                    value={form.staff_email || ''}
+                    onChange={(e) => setForm({...form, staff_email: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter staff email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Staff Phone</label>
+                  <input
+                    type="tel"
+                    value={form.staff_phone || ''}
+                    onChange={(e) => setForm({...form, staff_phone: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter staff phone"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Staff Location</label>
-                <input
-                  type="text"
+                <select
                   value={form.staff_location}
                   onChange={(e) => setForm({...form, staff_location: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Select Staff Location</option>
+                  {locations.filter(loc => loc.location_type === 'external').map(location => (
+                    <option key={location.id} value={location.name}>
+                      {location.name} ({location.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="block text-sm font-medium">Line items</label>
+                  <button
+                    onClick={addLineItem}
+                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    + Add line
+                  </button>
+                </div>
+                
+                {form.items.length === 0 ? (
+                  <div className="border rounded-lg p-4 text-center text-gray-500">
+                    <p className="text-sm">Click "+ Add line" to add items</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {form.items.map((item, index) => (
+                      <div key={index} className="grid grid-cols-6 gap-3 p-3 border rounded">
+                        <select
+                          value={item.item_name || ''}
+                          onChange={async (e) => {
+                            const selectedItemName = e.target.value;
+                            updateLineItem(index, 'item_name', selectedItemName);
+                            
+                            if (selectedItemName) {
+                              const batches = await fetchBatchesForItem(selectedItemName);
+                              setItemBatches(prev => ({ ...prev, [index]: batches }));
+                            }
+                          }}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">Select Item</option>
+                          {items.map(itm => (
+                            <option key={itm.id} value={itm.name}>
+                              {itm.name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={item.batch_no || ''}
+                          onChange={(e) => {
+                            updateLineItem(index, 'batch_no', e.target.value);
+                          }}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">Select Batch</option>
+                          {(itemBatches[index] || []).map(batch => (
+                            <option key={batch.batch_no} value={batch.batch_no}>
+                              {batch.batch_no} (Qty: {batch.qty})
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          placeholder="Quantity"
+                          value={item.quantity}
+                          onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Reason"
+                          value={item.reason}
+                          onChange={(e) => updateLineItem(index, 'reason', e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                        <input
+                          type="date"
+                          value={item.return_date || ''}
+                          onChange={(e) => updateLineItem(index, 'return_date', e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                        <button
+                          onClick={() => removeLineItem(index)}
+                          className="text-red-600 hover:text-red-800 px-2"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -861,6 +1152,7 @@ export default function ExternalTransfer() {
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damaged Qty</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Good Return</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damaged</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Deadline *</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damage Reason</th>
                   </tr>
                 </thead>
@@ -904,6 +1196,16 @@ export default function ExternalTransfer() {
                           value={item.damaged_quantity}
                           onChange={(e) => updateReturnItem(index, 'damaged_quantity', e.target.value)}
                           className="w-20 border rounded px-2 py-1 text-sm"
+                          disabled={isCompleted}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="date"
+                          value={item.return_deadline || ''}
+                          onChange={(e) => updateReturnItem(index, 'return_deadline', e.target.value)}
+                          className="w-32 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                          required
                           disabled={isCompleted}
                         />
                       </td>

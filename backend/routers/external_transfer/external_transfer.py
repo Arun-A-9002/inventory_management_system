@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database import get_tenant_db
 from models.tenant_models import ExternalTransfer, ExternalTransferItem, ExternalTransferStatus
@@ -30,6 +30,8 @@ def create_external_transfer(transfer_data: ExternalTransferCreate, db: Session 
             staff_name=transfer_data.staff_name,
             staff_id=transfer_data.staff_id,
             staff_location=transfer_data.staff_location,
+            staff_phone=transfer_data.staff_phone,
+            staff_email=transfer_data.staff_email,
             reason=transfer_data.reason
         )
         db.add(transfer)
@@ -139,14 +141,31 @@ def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
             ).distinct().all()
             print(f"Available stores for {item.item_name}: {[store[0] for store in available_stores]}")
             
-            # Try exact match first
-            batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
-                GRNItem.item_name == item.item_name,
-                Batch.batch_no == item.batch_no,
-                GRN.status == GRNStatus.approved,
-                GRN.store == transfer.location,
-                Batch.qty >= item.quantity
-            ).first()
+            batch_record = None
+            
+            # If batch_no is empty or None, find any available batch
+            if not item.batch_no or item.batch_no.strip() == "":
+                print(f"Empty batch number, finding any available batch for {item.item_name}")
+                batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    GRNItem.item_name == item.item_name,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == transfer.location,
+                    Batch.qty >= item.quantity
+                ).first()
+                
+                if batch_record:
+                    # Update the item with the found batch number
+                    item.batch_no = batch_record.batch_no
+                    print(f"Found batch {batch_record.batch_no} for {item.item_name}")
+            else:
+                # Try exact match first
+                batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
+                    GRNItem.item_name == item.item_name,
+                    Batch.batch_no == item.batch_no,
+                    GRN.status == GRNStatus.approved,
+                    GRN.store == transfer.location,
+                    Batch.qty >= item.quantity
+                ).first()
             
             # If not found, try case-insensitive match
             if not batch_record:
@@ -232,6 +251,14 @@ def return_transfer(transfer_id: int, return_data: ExternalTransferReturn, db: S
         if transfer.status != ExternalTransferStatus.SENT:
             raise HTTPException(status_code=400, detail="Can only return sent transfers")
         
+        # Update transfer with contact info and deadline
+        if hasattr(return_data, 'staff_phone') and return_data.staff_phone:
+            transfer.staff_phone = return_data.staff_phone
+        if hasattr(return_data, 'staff_email') and return_data.staff_email:
+            transfer.staff_email = return_data.staff_email
+        if hasattr(return_data, 'return_deadline') and return_data.return_deadline:
+            transfer.return_deadline = return_data.return_deadline
+        
         # Update return quantities for each item
         for return_item in return_data.items:
             item = db.query(ExternalTransferItem).filter(
@@ -257,10 +284,43 @@ def return_transfer(transfer_id: int, return_data: ExternalTransferReturn, db: S
                     detail=f"Cannot return more than sent quantity for {item.item_name}. Trying to return {total_returning}, but only {item.quantity} was sent."
                 )
             
-            # Update item with new totals
+            # Update item with new totals and return date
             item.returned_quantity = new_returned
             item.damaged_quantity = new_damaged
             item.damage_reason = return_item.damage_reason
+            
+            # Update return_date if deadline is provided
+            if hasattr(return_item, 'return_deadline') and return_item.return_deadline:
+                item.return_date = return_item.return_deadline
+            
+            # Set return date for items being returned
+            if return_item.returned_quantity > 0 or return_item.damaged_quantity > 0:
+                item.returned_at = datetime.now()
+                
+                # Log individual transactions
+                if return_item.returned_quantity > 0:
+                    db.execute(text("""
+                        INSERT INTO external_transfer_transactions 
+                        (transfer_id, item_id, transaction_type, quantity, transaction_date, remarks)
+                        VALUES (:transfer_id, :item_id, 'RETURN', :quantity, NOW(), :remarks)
+                    """), {
+                        "transfer_id": transfer_id,
+                        "item_id": item.id,
+                        "quantity": return_item.returned_quantity,
+                        "remarks": f"Good return - {return_item.returned_quantity} units"
+                    })
+                
+                if return_item.damaged_quantity > 0:
+                    db.execute(text("""
+                        INSERT INTO external_transfer_transactions 
+                        (transfer_id, item_id, transaction_type, quantity, transaction_date, remarks)
+                        VALUES (:transfer_id, :item_id, 'DAMAGE', :quantity, NOW(), :remarks)
+                    """), {
+                        "transfer_id": transfer_id,
+                        "item_id": item.id,
+                        "quantity": return_item.damaged_quantity,
+                        "remarks": f"Damaged return - {return_item.damage_reason or 'No reason provided'}"
+                    })
             
             # Add good items back to stock
             if return_item.returned_quantity > 0:
@@ -752,3 +812,174 @@ def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)
     }
     
     return transfer_dict
+
+@router.post("/check-deadlines")
+def check_return_deadlines(db: Session = Depends(get_tenant_db)):
+    """Check for upcoming return deadlines and send email alerts"""
+    try:
+        # Get transfers with upcoming deadlines (next 3 days)
+        tomorrow = datetime.now() + timedelta(days=1)
+        three_days = datetime.now() + timedelta(days=3)
+        
+        query = text("""
+            SELECT 
+                et.id,
+                et.transfer_no,
+                et.staff_name,
+                et.staff_email,
+                et.return_deadline,
+                et.location,
+                SUM(eti.quantity - COALESCE(eti.returned_quantity, 0) - COALESCE(eti.damaged_quantity, 0)) as pending_qty
+            FROM external_transfers et
+            JOIN external_transfer_items eti ON et.id = eti.transfer_id
+            WHERE et.return_deadline BETWEEN :tomorrow AND :three_days
+            AND et.status = 'SENT'
+            AND (eti.quantity - COALESCE(eti.returned_quantity, 0) - COALESCE(eti.damaged_quantity, 0)) > 0
+            GROUP BY et.id
+            HAVING pending_qty > 0
+        """)
+        
+        result = db.execute(query, {
+            'tomorrow': tomorrow.strftime('%Y-%m-%d'),
+            'three_days': three_days.strftime('%Y-%m-%d')
+        })
+        
+        alerts = []
+        for row in result:
+            transfer_no = row[1]
+            staff_name = row[2]
+            staff_email = row[3]
+            return_deadline = row[4]
+            location = row[5]
+            pending_qty = row[6]
+            
+            if staff_email:
+                days_left = (return_deadline - datetime.now().date()).days
+                
+                alert_info = {
+                    "transfer_no": transfer_no,
+                    "staff_name": staff_name,
+                    "staff_email": staff_email,
+                    "return_deadline": return_deadline.strftime('%d-%m-%Y'),
+                    "days_left": days_left,
+                    "pending_qty": int(pending_qty),
+                    "location": location
+                }
+                alerts.append(alert_info)
+        
+        return {
+            "message": f"Found {len(alerts)} transfers with upcoming deadlines",
+            "alerts": alerts
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/send-deadline-alerts")
+def send_deadline_alerts(db: Session = Depends(get_tenant_db)):
+    """Send email alerts for upcoming return deadlines"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    def send_email(to_email, subject, body):
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = "inventory@company.com"
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'html'))
+            
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.starttls()
+            server.login("your-email@gmail.com", "your-password")
+            server.sendmail("inventory@company.com", to_email, msg.as_string())
+            server.quit()
+            return True
+        except:
+            return False
+    
+    try:
+        tomorrow = datetime.now() + timedelta(days=1)
+        three_days = datetime.now() + timedelta(days=3)
+        
+        query = text("""
+            SELECT et.transfer_no, et.staff_name, et.staff_email, et.return_deadline, et.location,
+                   SUM(eti.quantity - COALESCE(eti.returned_quantity, 0) - COALESCE(eti.damaged_quantity, 0)) as pending_qty
+            FROM external_transfers et
+            JOIN external_transfer_items eti ON et.id = eti.transfer_id
+            WHERE et.return_deadline BETWEEN :tomorrow AND :three_days
+            AND et.status = 'SENT' AND et.staff_email IS NOT NULL
+            AND (eti.quantity - COALESCE(eti.returned_quantity, 0) - COALESCE(eti.damaged_quantity, 0)) > 0
+            GROUP BY et.id HAVING pending_qty > 0
+        """)
+        
+        result = db.execute(query, {
+            'tomorrow': tomorrow.strftime('%Y-%m-%d'),
+            'three_days': three_days.strftime('%Y-%m-%d')
+        })
+        
+        sent_count = 0
+        for row in result:
+            transfer_no, staff_name, staff_email, return_deadline, location, pending_qty = row
+            days_left = (return_deadline - datetime.now().date()).days
+            
+            subject = f"Return Reminder: {transfer_no} - Due in {days_left} days"
+            body = f"""
+            <h2>Return Deadline Reminder</h2>
+            <p>Dear {staff_name},</p>
+            <p>You have <strong>{int(pending_qty)} items</strong> pending return for transfer <strong>{transfer_no}</strong>.</p>
+            <ul>
+                <li>Transfer: {transfer_no}</li>
+                <li>Location: {location}</li>
+                <li>Deadline: {return_deadline.strftime('%d-%m-%Y')}</li>
+                <li>Days Left: {days_left}</li>
+                <li>Pending Items: {int(pending_qty)}</li>
+            </ul>
+            <p>Please return all items by the deadline.</p>
+            """
+            
+            if send_email(staff_email, subject, body):
+                sent_count += 1
+        
+        return {"message": f"Sent {sent_count} email alerts"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/{transfer_id}/transactions")
+def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_tenant_db)):
+    """Get all transaction history for a transfer"""
+    try:
+        query = text("""
+            SELECT 
+                ett.id,
+                ett.transaction_type,
+                ett.quantity,
+                ett.transaction_date,
+                ett.remarks,
+                eti.item_name,
+                eti.batch_no
+            FROM external_transfer_transactions ett
+            JOIN external_transfer_items eti ON ett.item_id = eti.id
+            WHERE ett.transfer_id = :transfer_id
+            ORDER BY ett.transaction_date ASC
+        """)
+        
+        result = db.execute(query, {"transfer_id": transfer_id})
+        
+        transactions = []
+        for row in result:
+            transactions.append({
+                "id": row[0],
+                "transaction_type": row[1],
+                "quantity": row[2],
+                "transaction_date": row[3],
+                "remarks": row[4],
+                "item_name": row[5],
+                "batch_no": row[6]
+            })
+        
+        return transactions
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
