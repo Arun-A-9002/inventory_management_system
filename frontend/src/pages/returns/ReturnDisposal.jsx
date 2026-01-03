@@ -7,9 +7,11 @@ export default function ReturnDisposal() {
   const [customerInvoices, setCustomerInvoices] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showReturnProcessing, setShowReturnProcessing] = useState(false);
+  const [selectedReturnId, setSelectedReturnId] = useState(null);
+  const [returnItems, setReturnItems] = useState([]);
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [suppliers, setSuppliers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [items, setItems] = useState([]);
   const [itemBatches, setItemBatches] = useState({});
@@ -33,7 +35,7 @@ export default function ReturnDisposal() {
     fetchSuppliers();
     fetchLocations();
     fetchCustomers();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchCustomers = async () => {
     try {
@@ -179,7 +181,7 @@ export default function ReturnDisposal() {
   const fetchSuppliers = async () => {
     try {
       const res = await api.get('/vendors/');
-      setSuppliers(res.data || []);
+      // Suppliers data available but not used in current UI
     } catch (err) {
       console.error('Failed to fetch suppliers:', err);
     }
@@ -283,6 +285,32 @@ export default function ReturnDisposal() {
     return returnForm.items.reduce((total, item) => {
       return total + calculateItemAmount(item, item.quantity);
     }, 0);
+  };
+
+  const openReturnProcessing = async (returnId) => {
+    try {
+      const res = await api.get(`/returns/${returnId}/items`);
+      setReturnItems(res.data || []);
+      setSelectedReturnId(returnId);
+      setShowReturnProcessing(true);
+    } catch (err) {
+      console.error('Failed to fetch return items:', err);
+      showMessage('Failed to fetch return items', 'error');
+    }
+  };
+
+  const processReturn = async (item, returnQty) => {
+    try {
+      const res = await api.post(`/returns/${selectedReturnId}/process-return`, {
+        item_name: item.item_name,
+        batch_no: item.batch_no,
+        quantity: returnQty
+      });
+      showMessage(res.data.message, 'success');
+      await openReturnProcessing(selectedReturnId); // Refresh
+    } catch (err) {
+      showMessage(err.response?.data?.detail || 'Failed to process return', 'error');
+    }
   };
 
   const openNewReturnModal = () => {
@@ -691,65 +719,6 @@ export default function ReturnDisposal() {
     } catch (err) {
       console.error('Failed to create return:', err);
       alert('Failed to create return: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createInvoiceForReturn = async (returnId) => {
-    try {
-      setLoading(true);
-      const res = await api.post('/billing/return', {
-        return_id: returnId
-      });
-      showMessage(`Invoice created successfully: INV-${res.data.id.toString().padStart(4, '0')}`);
-    } catch (err) {
-      console.error('Failed to create invoice:', err);
-      showMessage('Failed to create invoice: ' + (err.response?.data?.detail || err.message), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createReturnWithInvoice = async () => {
-    if (!returnForm.return_type) {
-      alert('Please select return type');
-      return;
-    }
-
-    if (!returnForm.location) {
-      alert('Please select location');
-      return;
-    }
-
-    if (!returnForm.customer_id) {
-      alert('Please select customer');
-      return;
-    }
-
-    if (returnForm.items.length === 0) {
-      alert('Please add at least one item');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Create return first
-      const returnRes = await api.post('/returns/', returnForm);
-      
-      // Generate invoice and send email
-      await api.post('/returns/generate-invoice', {
-        return_id: returnRes.data.id,
-        customer_id: returnForm.customer_id
-      });
-      
-      alert(`Return created and invoice sent successfully: ${returnRes.data.return_number}`);
-      setShowModal(false);
-      fetchReturns();
-    } catch (err) {
-      console.error('Failed to create return with invoice:', err);
-      alert('Failed to create return with invoice: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
     }
@@ -1499,6 +1468,167 @@ export default function ReturnDisposal() {
           </div>
         </div>
       )}
+      {/* Return Processing Modal */}
+      {showReturnProcessing && selectedReturnId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">Return Items - ET{selectedReturnId}</h2>
+              <button onClick={() => setShowReturnProcessing(false)} className="text-gray-400 hover:text-gray-600 text-2xl font-bold">×</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Item</th>
+                    <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Location</th>
+                    <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Batch</th>
+                    <th className="border border-gray-300 px-4 py-3 text-center font-semibold">Original Qty</th>
+                    <th className="border border-gray-300 px-4 py-3 text-center font-semibold">Return Qty</th>
+                    <th className="border border-gray-300 px-4 py-3 text-center font-semibold">Good Return</th>
+                    <th className="border border-gray-300 px-4 py-3 text-center font-semibold">Damaged</th>
+                    <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Damage Reason & Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {returnItems.map((item, index) => {
+                    const returnedQty = item.returned_qty || 0;
+                    const remainingQty = item.qty - returnedQty;
+                    
+                    return (
+                      <ReturnRow
+                        key={index}
+                        item={item}
+                        returnedQty={returnedQty}
+                        remainingQty={remainingQty}
+                        onProcess={processReturn}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-between items-center mt-6">
+              <button onClick={() => setShowReturnProcessing(false)} className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium">Cancel</button>
+              <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">Process Returns</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ReturnRow({ item, returnedQty, remainingQty, onProcess }) {
+  const [returnQty, setReturnQty] = useState(0);
+  const [goodReturn, setGoodReturn] = useState(0);
+  const [damaged, setDamaged] = useState(0);
+  const [damageReason, setDamageReason] = useState('');
+  
+  const handleReturnQtyChange = (value) => {
+    const qty = Math.min(value, remainingQty);
+    setReturnQty(qty);
+    setGoodReturn(qty); // Default all to good return
+    setDamaged(0);
+  };
+  
+  const handleGoodReturnChange = (value) => {
+    const good = Math.min(value, returnQty);
+    setGoodReturn(good);
+    setDamaged(returnQty - good);
+  };
+  
+  const handleDamagedChange = (value) => {
+    const dmg = Math.min(value, returnQty);
+    setDamaged(dmg);
+    setGoodReturn(returnQty - dmg);
+  };
+  
+  const handleProcessReturn = () => {
+    if (returnQty > 0) {
+      onProcess(item, returnQty);
+      setReturnQty(0);
+      setGoodReturn(0);
+      setDamaged(0);
+      setDamageReason('');
+    }
+  };
+  
+  return (
+    <tr className={remainingQty <= 0 ? 'bg-green-50' : 'bg-white'}>
+      <td className="border border-gray-300 px-4 py-3">
+        <div className="font-medium">{item.item_name}</div>
+        {returnedQty > 0 && <div className="text-sm text-green-600">Returned: {returnedQty}/{item.qty}</div>}
+        {remainingQty <= 0 && <div className="text-sm text-green-600 font-medium">✓ Fully Returned</div>}
+      </td>
+      <td className="border border-gray-300 px-4 py-3">main</td>
+      <td className="border border-gray-300 px-4 py-3">{item.batch_no}</td>
+      <td className="border border-gray-300 px-4 py-3 text-center">{item.qty}</td>
+      <td className="border border-gray-300 px-4 py-3 text-center">
+        {remainingQty > 0 ? (
+          <input 
+            type="number" 
+            min="0" 
+            max={remainingQty} 
+            value={returnQty} 
+            onChange={(e) => handleReturnQtyChange(parseInt(e.target.value) || 0)} 
+            className="w-20 px-2 py-1 border rounded text-center" 
+          />
+        ) : (
+          <span className="text-gray-500">—</span>
+        )}
+      </td>
+      <td className="border border-gray-300 px-4 py-3 text-center">
+        {remainingQty > 0 ? (
+          <input 
+            type="number" 
+            min="0" 
+            max={returnQty} 
+            value={goodReturn} 
+            onChange={(e) => handleGoodReturnChange(parseInt(e.target.value) || 0)}
+            className="w-20 px-2 py-1 border rounded text-center" 
+          />
+        ) : (
+          <span className="text-gray-500">—</span>
+        )}
+      </td>
+      <td className="border border-gray-300 px-4 py-3 text-center">
+        {remainingQty > 0 ? (
+          <input 
+            type="number" 
+            min="0" 
+            max={returnQty} 
+            value={damaged} 
+            onChange={(e) => handleDamagedChange(parseInt(e.target.value) || 0)}
+            className="w-20 px-2 py-1 border rounded text-center" 
+          />
+        ) : (
+          <span className="text-gray-500">—</span>
+        )}
+      </td>
+      <td className="border border-gray-300 px-4 py-3">
+        {remainingQty > 0 ? (
+          <div className="flex items-center gap-2">
+            <input 
+              type="text" 
+              placeholder="Reason for damage" 
+              value={damageReason}
+              onChange={(e) => setDamageReason(e.target.value)}
+              className="flex-1 px-2 py-1 border rounded text-sm" 
+            />
+            {returnQty > 0 && (
+              <button
+                onClick={handleProcessReturn}
+                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+              >
+                Return
+              </button>
+            )}
+          </div>
+        ) : (
+          <span className="text-gray-500">—</span>
+        )}
+      </td>
+    </tr>
   );
 }

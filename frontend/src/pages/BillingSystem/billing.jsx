@@ -674,10 +674,10 @@ export default function Billing() {
           <div className="flex flex-wrap gap-1.5">
             {[
               { key: 'ALL', label: 'All', color: 'bg-slate-100 text-slate-700' },
-              { key: 'INTERNAL', label: 'Internal', color: 'bg-blue-100 text-blue-700' },
-              { key: 'EXTERNAL', label: 'External', color: 'bg-green-100 text-green-700' },
               { key: 'TO_CUSTOMER', label: 'To Customer', color: 'bg-purple-100 text-purple-700' },
               { key: 'FROM_CUSTOMER', label: 'From Customer', color: 'bg-orange-100 text-orange-700' },
+             // { key: 'INTERNAL', label: 'Internal', color: 'bg-blue-100 text-blue-700' },
+              { key: 'EXTERNAL', label: 'External', color: 'bg-green-100 text-green-700' },
               { key: 'TO_VENDOR', label: 'To Vendor', color: 'bg-red-100 text-red-700' }
             ].map((filter) => (
               <button

@@ -480,7 +480,9 @@ export default function GoodsReceipt() {
           batches: [{
             batch_no: item.batch_no,
             mfg_date: null,
-            expiry_date: item.expiry_date || null,
+            expiry_date: item.expiry_date && item.date_type === 'warranty' 
+              ? `${item.expiry_date}-01` // Convert YYYY-MM to YYYY-MM-01
+              : item.expiry_date || null,
             qty: item.po_qty
           }]
         }))

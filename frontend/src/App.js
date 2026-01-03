@@ -107,6 +107,10 @@ function App() {
 
           {/* Supplier Ledger */}
           <Route path="supplier-ledger" element={<SupplierLedger />} />
+          
+          {/* External Transfer */}
+          <Route path="external-transfer" element={<ExternalTransfer />} />
+          
           {/* Billing System */}
           <Route path="billing" element={<Billing />} />
           <Route path="billing/create" element={<InvoiceCreation />} />

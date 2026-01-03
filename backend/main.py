@@ -80,6 +80,10 @@ from routers.suppliers.payments import router as payments_router
 
 #billing system
 from routers.billingSystem.billing import router as billing_router
+
+# External Transfer
+from routers.external_transfer.external_transfer import router as external_transfer_router
+
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -153,7 +157,11 @@ app.include_router(customer_router)
 app.include_router(payments_router)
 
 #billing system
-app.include_router(billing_router)  
+app.include_router(billing_router)
+
+# External Transfer
+app.include_router(external_transfer_router)
+
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING
 # ----------------------------------------------------------

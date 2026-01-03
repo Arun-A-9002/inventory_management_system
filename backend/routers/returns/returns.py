@@ -125,15 +125,16 @@ def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
 
 @router.get("/{return_id}/items")
 def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
-    """Get return items for a specific return with status and returned fields"""
+    """Get return items for a specific return with status, returned fields, and returned_qty"""
     from sqlalchemy import text
     
-    # Use raw SQL to get items with status and returned columns
+    # Use raw SQL to get items with status, returned columns, and returned_qty
     result = db.execute(
         text("""
         SELECT id, return_id, item_name, batch_no, qty, uom, condition, remarks, 
                COALESCE(status, 'pending') as status, 
-               COALESCE(returned, 0) as returned
+               COALESCE(returned, 0) as returned,
+               COALESCE(returned_qty, 0) as returned_qty
         FROM return_items 
         WHERE return_id = :return_id
         """),
@@ -153,7 +154,8 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
             "condition": row[6],
             "remarks": row[7],
             "status": row[8],
-            "returned": bool(row[9])
+            "returned": bool(row[9]),
+            "returned_qty": float(row[10]) if row[10] else 0.0
         })
     
     return items
@@ -267,13 +269,28 @@ def update_return_item(return_id: int, item_id: int, item_data: dict, db: Sessio
 
 @router.post("/{return_id}/process-return")
 def process_item_return(return_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
-    """Process item return - add stock back and mark as returned"""
+    """Process item return - add stock back and update returned quantity"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
     from sqlalchemy import text
     
     item_name = return_data.get('item_name')
     batch_no = return_data.get('batch_no')
     quantity = int(return_data.get('quantity', 0))
+    
+    # Find the return item to update returned_qty
+    return_item = db.query(ReturnItem).filter(
+        ReturnItem.return_id == return_id,
+        ReturnItem.item_name == item_name,
+        ReturnItem.batch_no == batch_no
+    ).first()
+    
+    if not return_item:
+        raise HTTPException(404, "Return item not found")
+    
+    # Check if we can return this quantity (don't exceed original qty)
+    new_returned_qty = float(return_item.returned_qty or 0) + quantity
+    if new_returned_qty > return_item.qty:
+        raise HTTPException(400, f"Cannot return {quantity} units. Maximum returnable: {return_item.qty - (return_item.returned_qty or 0)}")
     
     # Find the batch in approved GRNs
     batch = db.query(Batch).join(GRNItem).join(GRN).filter(
@@ -298,17 +315,24 @@ def process_item_return(return_id: int, return_data: dict, db: Session = Depends
         if stock_overview.available_qty >= stock_overview.min_stock:
             stock_overview.status = "Good"
     
-    # Mark return item as returned using text() wrapper
-    db.execute(
-        text("UPDATE return_items SET returned = 1 WHERE return_id = :return_id AND item_name = :item_name"),
-        {"return_id": return_id, "item_name": item_name}
-    )
+    # Update the returned_qty in return_item
+    return_item.returned_qty = new_returned_qty
+    
+    # Mark return item as returned using text() wrapper if fully returned
+    if new_returned_qty >= return_item.qty:
+        db.execute(
+            text("UPDATE return_items SET returned = 1 WHERE return_id = :return_id AND item_name = :item_name AND batch_no = :batch_no"),
+            {"return_id": return_id, "item_name": item_name, "batch_no": batch_no}
+        )
     
     db.commit()
     
     return {
         "message": f"Successfully returned {quantity} units of {item_name} (batch {batch_no}) to stock",
-        "updated_batch_qty": batch.qty
+        "updated_batch_qty": batch.qty,
+        "total_returned_qty": new_returned_qty,
+        "remaining_returnable": return_item.qty - new_returned_qty,
+        "fully_returned": new_returned_qty >= return_item.qty
     }
     
 @router.get("/refunds")

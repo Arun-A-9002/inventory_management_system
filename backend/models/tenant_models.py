@@ -923,6 +923,7 @@ class ReturnItem(TenantBase):
     item_name = Column(String(150))
     batch_no = Column(String(100), nullable=True)
     qty = Column(Float)
+    returned_qty = Column(DECIMAL(10, 2), default=0.00)  # Track cumulative returned quantity
     uom = Column(String(50))
     rate = Column(DECIMAL(10, 2), default=0.00)
     total_tax = Column(DECIMAL(10, 2), default=0.00)
@@ -1117,4 +1118,54 @@ class ReturnBillingPayment(TenantBase):
     
     # Relationships
     billing = relationship("ReturnBilling")
+
+
+# ============================================================
+#                   EXTERNAL TRANSFER MODELS
+# ============================================================
+class ExternalTransferStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    SENT = "SENT"
+    RETURNED = "RETURNED"
+
+class ExternalTransfer(TenantBase):
+    __tablename__ = "external_transfers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_no = Column(String(50), unique=True, nullable=False)
+    location = Column(String(255), nullable=False)
+    staff_name = Column(String(255), nullable=False)
+    staff_id = Column(String(100), nullable=False)
+    staff_location = Column(String(255), nullable=False)
+    reason = Column(Text)
+    status = Column(Enum(ExternalTransferStatus), default=ExternalTransferStatus.DRAFT)
+    approved_by = Column(String(255), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    return_date = Column(Date, nullable=True)
+    returned_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+    
+    # Relationship to items
+    items = relationship("ExternalTransferItem", back_populates="transfer")
+
+class ExternalTransferItem(TenantBase):
+    __tablename__ = "external_transfer_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_id = Column(Integer, ForeignKey("external_transfers.id"), nullable=False)
+    item_name = Column(String(255), nullable=False)
+    batch_no = Column(String(100), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    reason = Column(Text)
+    return_date = Column(Date)
+    returned_quantity = Column(Integer, default=0)
+    damaged_quantity = Column(Integer, default=0)
+    damage_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationship to transfer
+    transfer = relationship("ExternalTransfer", back_populates="items")
 

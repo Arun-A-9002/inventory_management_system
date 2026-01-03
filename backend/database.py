@@ -203,6 +203,48 @@ def ensure_missing_columns(engine):
             except Exception as e:
                 if "Duplicate column name" not in str(e):
                     print(f"Error adding safety_stock column: {e}")
+            
+            # Add external transfer status management columns
+            external_transfer_columns = [
+                ("approved_by", "VARCHAR(255) NULL"),
+                ("approved_at", "DATETIME NULL"),
+                ("rejection_reason", "TEXT NULL"),
+                ("sent_at", "DATETIME NULL"),
+                ("return_date", "DATE NULL"),
+                ("returned_at", "DATETIME NULL")
+            ]
+            
+            for column_name, column_def in external_transfer_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE external_transfers ADD COLUMN {column_name} {column_def}"))
+                    print(f"Added {column_name} column to external_transfers table")
+                except Exception as e:
+                    if "Duplicate column name" not in str(e):
+                        print(f"Error adding {column_name} column: {e}")
+            
+            # Add external transfer item columns
+            item_columns_to_add = [
+                ("returned_quantity", "INT DEFAULT 0"),
+                ("damaged_quantity", "INT DEFAULT 0"),
+                ("damage_reason", "TEXT NULL")
+            ]
+            
+            for column_name, column_def in item_columns_to_add:
+                try:
+                    conn.execute(text(f"ALTER TABLE external_transfer_items ADD COLUMN {column_name} {column_def}"))
+                    print(f"Added {column_name} column to external_transfer_items table")
+                except Exception as e:
+                    if "Duplicate column name" not in str(e):
+                        print(f"Error adding {column_name} column: {e}")
+            
+            # Add returned_qty column to return_items table
+            try:
+                conn.execute(text("ALTER TABLE return_items ADD COLUMN returned_qty DECIMAL(10, 2) DEFAULT 0.00"))
+                conn.commit()
+                print("Added returned_qty column to return_items table")
+            except Exception as e:
+                if "Duplicate column name" not in str(e):
+                    print(f"Error adding returned_qty column: {e}")
                 
     except Exception as e:
         print(f"Error in ensure_missing_columns: {e}")

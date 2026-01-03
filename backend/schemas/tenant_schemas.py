@@ -887,3 +887,80 @@ class ReturnBillingResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================
+#                   EXTERNAL TRANSFER SCHEMAS
+# ============================================================
+class ExternalTransferStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SENT = "SENT"
+    RETURNED = "RETURNED"
+
+class ExternalTransferItemCreate(BaseModel):
+    item_name: str
+    batch_no: str
+    quantity: int
+    reason: Optional[str] = None
+    return_date: Optional[date] = None
+
+class ExternalTransferItemResponse(BaseModel):
+    id: int
+    item_name: str
+    batch_no: str
+    quantity: int
+    reason: Optional[str] = None
+    return_date: Optional[date] = None
+    returned_quantity: int = 0
+    damaged_quantity: int = 0
+    damage_reason: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ExternalTransferCreate(BaseModel):
+    location: str
+    staff_name: str
+    staff_id: str
+    staff_location: str
+    reason: Optional[str] = None
+    items: List[ExternalTransferItemCreate]
+
+class ExternalTransferUpdate(BaseModel):
+    location: Optional[str] = None
+    staff_name: Optional[str] = None
+    staff_id: Optional[str] = None
+    staff_location: Optional[str] = None
+    reason: Optional[str] = None
+    status: Optional[str] = None
+    items: Optional[List[ExternalTransferItemCreate]] = None
+
+class ExternalTransferReturnItem(BaseModel):
+    item_id: int
+    returned_quantity: int
+    damaged_quantity: int = 0
+    damage_reason: Optional[str] = None
+
+class ExternalTransferReturn(BaseModel):
+    items: List[ExternalTransferReturnItem]
+
+class ExternalTransferResponse(BaseModel):
+    id: int
+    transfer_no: str
+    location: str
+    staff_name: str
+    staff_id: str
+    staff_location: str
+    reason: Optional[str] = None
+    status: str
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    return_date: Optional[date] = None
+    returned_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    items: List[ExternalTransferItemResponse]
+
+    model_config = ConfigDict(from_attributes=True)
