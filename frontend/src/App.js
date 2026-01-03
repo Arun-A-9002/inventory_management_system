@@ -51,6 +51,7 @@ import InvoiceCreation from "./pages/BillingSystem/InvoiceCreation";
 
 //external transfer
 import ExternalTransfer from "./pages/external-transfer/ExternalTransfer";
+import DamagedReturns from "./pages/external-transfer/DamagedReturns";
 function App() {
   return (
     <BrowserRouter>
@@ -110,6 +111,7 @@ function App() {
           
           {/* External Transfer */}
           <Route path="external-transfer" element={<ExternalTransfer />} />
+          <Route path="external-transfer/damaged-returns" element={<DamagedReturns />} />
           
           {/* Billing System */}
           <Route path="billing" element={<Billing />} />

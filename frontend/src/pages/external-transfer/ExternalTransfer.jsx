@@ -228,7 +228,8 @@ export default function ExternalTransfer() {
         item_name: item.item_name,
         batch_no: item.batch_no,
         original_quantity: item.quantity,
-        already_returned: (item.returned_quantity || 0) + (item.damaged_quantity || 0),
+        already_returned: item.returned_quantity || 0,
+        already_damaged: item.damaged_quantity || 0,
         remaining_quantity: item.quantity - ((item.returned_quantity || 0) + (item.damaged_quantity || 0)),
         returned_quantity: 0,
         damaged_quantity: 0,
@@ -857,19 +858,33 @@ export default function ExternalTransfer() {
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Batch</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Original Qty</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Return Qty</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damaged Qty</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Good Return</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damaged</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Damage Reason</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {returnItems.map((item, index) => (
-                    <tr key={index} className="border-t">
+                  {returnItems.map((item, index) => {
+                    const totalReturned = item.already_returned + (item.already_damaged || 0);
+                    const isCompleted = totalReturned >= item.original_quantity;
+                    
+                    return (
+                    <tr key={index} className={`border-t ${isCompleted ? 'bg-green-50' : ''}`}>
                       <td className="px-4 py-2 text-sm">{item.item_name}</td>
                       <td className="px-4 py-2 text-sm">{selectedTransfer.location}</td>
                       <td className="px-4 py-2 text-sm">{item.batch_no}</td>
                       <td className="px-4 py-2 text-sm font-medium">{item.original_quantity}</td>
-                      <td className="px-4 py-2 text-sm font-medium">{item.already_returned + (parseInt(item.returned_quantity) || 0)}</td>
+                      <td className="px-4 py-2 text-sm font-medium">
+                        {item.already_returned + (parseInt(item.returned_quantity) || 0)}
+                        {isCompleted && <div className="text-xs text-green-600 font-medium">✓ Completed</div>}
+                      </td>
+                      <td className="px-4 py-2 text-sm font-medium">
+                        {(item.already_damaged || 0) + (parseInt(item.damaged_quantity) || 0)}
+                        <div className="text-xs text-gray-500 mt-1">
+                          Total: {item.already_returned + (item.already_damaged || 0) + (parseInt(item.returned_quantity) || 0) + (parseInt(item.damaged_quantity) || 0)}
+                        </div>
+                      </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
@@ -878,6 +893,7 @@ export default function ExternalTransfer() {
                           value={item.returned_quantity}
                           onChange={(e) => updateReturnItem(index, 'returned_quantity', e.target.value)}
                           className="w-20 border rounded px-2 py-1 text-sm"
+                          disabled={isCompleted}
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -888,6 +904,7 @@ export default function ExternalTransfer() {
                           value={item.damaged_quantity}
                           onChange={(e) => updateReturnItem(index, 'damaged_quantity', e.target.value)}
                           className="w-20 border rounded px-2 py-1 text-sm"
+                          disabled={isCompleted}
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -897,11 +914,12 @@ export default function ExternalTransfer() {
                           onChange={(e) => updateReturnItem(index, 'damage_reason', e.target.value)}
                           placeholder="Reason for damage"
                           className="w-full border rounded px-2 py-1 text-sm"
-                          disabled={!item.damaged_quantity || item.damaged_quantity === '0'}
+                          disabled={!item.damaged_quantity || item.damaged_quantity === '0' || isCompleted}
                         />
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}}
                 </tbody>
               </table>
             </div>

@@ -334,9 +334,24 @@ def return_transfer(transfer_id: int, return_data: ExternalTransferReturn, db: S
                 else:
                     print(f"ERROR: Could not find batch record to return {item.item_name} to")
             
-            # Log damaged items separately
+            # Track damaged items without adding to stock
             if return_item.damaged_quantity > 0:
-                print(f"Damaged items: {item.item_name} - Batch: {item.batch_no} - Qty: {return_item.damaged_quantity} - Reason: {return_item.damage_reason}")
+                print(f"Processing damaged return for {item.item_name}, batch {item.batch_no}, quantity {return_item.damaged_quantity}")
+                print(f"DAMAGE TRACKING: {return_item.damaged_quantity} units of {item.item_name} marked as damaged - NOT added to stock")
+                
+                # Create stock ledger entry for damaged return tracking only
+                try:
+                    db.execute(text("""
+                        INSERT INTO stock_ledger (stock_id, batch_no, txn_type, qty_in, balance, ref_no, remarks, created_at)
+                        VALUES (0, :batch_no, 'DAMAGE_TRACK', 0, 0, :ref_no, :remarks, NOW())
+                    """), {
+                        "batch_no": item.batch_no,
+                        "ref_no": transfer.transfer_no,
+                        "remarks": f"DAMAGE TRACKING ONLY - {return_item.damaged_quantity} units from {transfer.staff_name}: {return_item.damage_reason}"
+                    })
+                    print(f"Created damage tracking ledger entry - NO STOCK ADDED")
+                except Exception as ledger_error:
+                    print(f"Warning: Could not create damage tracking ledger entry: {ledger_error}")
         
         # Check if all items are fully returned
         all_returned = all(
@@ -542,7 +557,147 @@ def process_transfer_return(transfer_id: int, return_data: dict, db: Session = D
         "fully_returned": new_returned_qty >= original_qty
     }
 
+@router.get("/damaged-returns")
+def get_damaged_returns(db: Session = Depends(get_tenant_db)):
+    """Get all damaged items from external transfers"""
+    from sqlalchemy import text
+    
+    result = db.execute(
+        text("""
+        SELECT 
+            et.transfer_no,
+            et.id as transfer_id,
+            et.staff_name,
+            et.staff_id,
+            et.staff_location,
+            et.location,
+            et.returned_at,
+            eti.item_name,
+            eti.batch_no,
+            eti.damaged_quantity,
+            eti.damage_reason
+        FROM external_transfers et
+        JOIN external_transfer_items eti ON et.id = eti.transfer_id
+        WHERE eti.damaged_quantity > 0
+        ORDER BY et.returned_at DESC, et.transfer_no DESC
+        """)
+    ).fetchall()
+    
+    damaged_items = []
+    for row in result:
+        damaged_items.append({
+            "transfer_no": row[0],
+            "transfer_id": row[1],
+            "staff_name": row[2],
+            "staff_id": row[3],
+            "staff_location": row[4],
+            "location": row[5],
+            "returned_at": row[6],
+            "item_name": row[7],
+            "batch_no": row[8],
+            "damaged_quantity": float(row[9]) if row[9] else 0.0,
+            "damage_reason": row[10]
+        })
+    
+    return damaged_items
+
 @router.get("/{transfer_id}", response_model=ExternalTransferResponse)
+def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
+    from sqlalchemy import text
+    
+    transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
+    if not transfer:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    
+    # Get fresh item data with returned quantities
+    items_result = db.execute(
+        text("""
+        SELECT id, item_name, batch_no, quantity, reason, return_date,
+               COALESCE(returned_quantity, 0) as returned_quantity,
+               COALESCE(damaged_quantity, 0) as damaged_quantity,
+               damage_reason, created_at
+        FROM external_transfer_items 
+        WHERE transfer_id = :transfer_id
+        """),
+        {"transfer_id": transfer_id}
+    ).fetchall()
+    
+    # Update transfer items with fresh data
+    fresh_items = []
+    for row in items_result:
+        item_dict = {
+            "id": row[0],
+            "item_name": row[1],
+            "batch_no": row[2],
+            "quantity": row[3],
+            "reason": row[4],
+            "return_date": row[5],
+            "returned_quantity": float(row[6]) if row[6] else 0.0,
+            "damaged_quantity": float(row[7]) if row[7] else 0.0,
+            "damage_reason": row[8],
+            "created_at": row[9]
+        }
+        fresh_items.append(item_dict)
+    
+    # Create response with fresh items
+    transfer_dict = {
+        "id": transfer.id,
+        "transfer_no": transfer.transfer_no,
+        "location": transfer.location,
+        "staff_name": transfer.staff_name,
+        "staff_id": transfer.staff_id,
+        "staff_location": transfer.staff_location,
+        "reason": transfer.reason,
+        "status": transfer.status,
+        "created_at": transfer.created_at,
+        "sent_at": transfer.sent_at,
+        "returned_at": transfer.returned_at,
+        "items": fresh_items
+    }
+    
+    return transfer_dict
+def get_damaged_returns(db: Session = Depends(get_tenant_db)):
+    """Get all damaged items from external transfers"""
+    from sqlalchemy import text
+    
+    result = db.execute(
+        text("""
+        SELECT 
+            et.transfer_no,
+            et.id as transfer_id,
+            et.staff_name,
+            et.staff_id,
+            et.staff_location,
+            et.location,
+            et.returned_at,
+            eti.item_name,
+            eti.batch_no,
+            eti.damaged_quantity,
+            eti.damage_reason
+        FROM external_transfers et
+        JOIN external_transfer_items eti ON et.id = eti.transfer_id
+        WHERE eti.damaged_quantity > 0
+        ORDER BY et.returned_at DESC, et.transfer_no DESC
+        """)
+    ).fetchall()
+    
+    damaged_items = []
+    for row in result:
+        damaged_items.append({
+            "transfer_no": row[0],
+            "transfer_id": row[1],
+            "staff_name": row[2],
+            "staff_id": row[3],
+            "staff_location": row[4],
+            "location": row[5],
+            "returned_at": row[6],
+            "item_name": row[7],
+            "batch_no": row[8],
+            "damaged_quantity": float(row[9]) if row[9] else 0.0,
+            "damage_reason": row[10]
+        })
+    
+    return damaged_items
 def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
     from sqlalchemy import text
     
