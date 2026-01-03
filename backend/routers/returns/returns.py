@@ -128,13 +128,13 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
     """Get return items for a specific return with status, returned fields, and returned_qty"""
     from sqlalchemy import text
     
-    # Use raw SQL to get items with status, returned columns, and returned_qty
+    # Use raw SQL to get items with status, returned columns, and returned_quantity
     result = db.execute(
         text("""
         SELECT id, return_id, item_name, batch_no, qty, uom, condition, remarks, 
                COALESCE(status, 'pending') as status, 
                COALESCE(returned, 0) as returned,
-               COALESCE(returned_qty, 0) as returned_qty
+               COALESCE(returned_quantity, 0) as returned_qty
         FROM return_items 
         WHERE return_id = :return_id
         """),

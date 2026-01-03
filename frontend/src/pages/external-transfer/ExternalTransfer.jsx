@@ -180,7 +180,12 @@ export default function ExternalTransfer() {
 
   const openReturnProcessing = async (transferId) => {
     try {
-      const res = await api.get(`/api/external-transfers/${transferId}/items`);
+      // Clear existing data first
+      setTransferItems([]);
+      
+      // Always fetch fresh data from the database with cache busting
+      const res = await api.get(`/api/external-transfers/${transferId}/items?t=${Date.now()}`);
+      console.log('Fresh data from API:', res.data);
       setTransferItems(res.data || []);
       setSelectedTransferId(transferId);
       setShowReturnProcessing(true);
@@ -197,28 +202,58 @@ export default function ExternalTransfer() {
         batch_no: item.batch_no,
         quantity: returnQty
       });
+      
       showMessage(res.data.message, 'success');
-      await openReturnProcessing(selectedTransferId); // Refresh
+      
+      // Force complete refresh with cache busting
+      const refreshRes = await api.get(`/api/external-transfers/${selectedTransferId}/items?t=${Date.now()}`);
+      console.log('Refreshed data after return:', refreshRes.data);
+      setTransferItems(refreshRes.data || []);
+      
     } catch (err) {
+      console.error('Return processing error:', err);
       showMessage(err.response?.data?.detail || 'Failed to process return', 'error');
     }
   };
 
-  const handleReturnTransfer = (transfer) => {
-    setSelectedTransfer(transfer);
-    const items = transfer.items.map(item => ({
-      item_id: item.id,
-      item_name: item.item_name,
-      batch_no: item.batch_no,
-      original_quantity: item.quantity,
-      already_returned: (item.returned_quantity || 0) + (item.damaged_quantity || 0),
-      remaining_quantity: item.quantity - ((item.returned_quantity || 0) + (item.damaged_quantity || 0)),
-      returned_quantity: 0,
-      damaged_quantity: 0,
-      damage_reason: ''
-    }));
-    setReturnItems(items);
-    setShowReturnModal(true);
+  const handleReturnTransfer = async (transfer) => {
+    try {
+      // Fetch fresh transfer data with items
+      const res = await api.get(`/api/external-transfers/${transfer.id}`);
+      const freshTransfer = res.data;
+      
+      setSelectedTransfer(freshTransfer);
+      const items = freshTransfer.items.map(item => ({
+        item_id: item.id,
+        item_name: item.item_name,
+        batch_no: item.batch_no,
+        original_quantity: item.quantity,
+        already_returned: (item.returned_quantity || 0) + (item.damaged_quantity || 0),
+        remaining_quantity: item.quantity - ((item.returned_quantity || 0) + (item.damaged_quantity || 0)),
+        returned_quantity: 0,
+        damaged_quantity: 0,
+        damage_reason: ''
+      }));
+      setReturnItems(items);
+      setShowReturnModal(true);
+    } catch (err) {
+      console.error('Failed to fetch fresh transfer data:', err);
+      // Fallback to original logic
+      setSelectedTransfer(transfer);
+      const items = transfer.items.map(item => ({
+        item_id: item.id,
+        item_name: item.item_name,
+        batch_no: item.batch_no,
+        original_quantity: item.quantity,
+        already_returned: (item.returned_quantity || 0) + (item.damaged_quantity || 0),
+        remaining_quantity: item.quantity - ((item.returned_quantity || 0) + (item.damaged_quantity || 0)),
+        returned_quantity: 0,
+        damaged_quantity: 0,
+        damage_reason: ''
+      }));
+      setReturnItems(items);
+      setShowReturnModal(true);
+    }
   };
 
   const handleReturnSubmit = async () => {
@@ -834,7 +869,7 @@ export default function ExternalTransfer() {
                       <td className="px-4 py-2 text-sm">{selectedTransfer.location}</td>
                       <td className="px-4 py-2 text-sm">{item.batch_no}</td>
                       <td className="px-4 py-2 text-sm font-medium">{item.original_quantity}</td>
-                      <td className="px-4 py-2 text-sm font-medium">{(parseInt(item.returned_quantity) || 0) + (parseInt(item.damaged_quantity) || 0)}</td>
+                      <td className="px-4 py-2 text-sm font-medium">{item.already_returned + (parseInt(item.returned_quantity) || 0)}</td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
@@ -915,11 +950,11 @@ export default function ExternalTransfer() {
                 <tbody>
                   {transferItems.map((item, index) => {
                     const returnedQty = item.returned_qty || 0;
-                    const remainingQty = item.qty - returnedQty;
+                    const remainingQty = item.remaining_qty || (item.qty - returnedQty);
                     
                     return (
                       <TransferReturnRow
-                        key={index}
+                        key={`${item.id}-${returnedQty}`} // Force re-render when returned qty changes
                         item={item}
                         returnedQty={returnedQty}
                         remainingQty={remainingQty}
@@ -947,8 +982,12 @@ function TransferReturnRow({ item, returnedQty, remainingQty, onProcess }) {
   const [damaged, setDamaged] = useState(0);
   const [damageReason, setDamageReason] = useState('');
   
+  // Use the actual returned quantity from props, not local state
+  const currentReturnedQty = returnedQty;
+  const currentRemainingQty = item.qty - currentReturnedQty;
+  
   const handleReturnQtyChange = (value) => {
-    const qty = Math.min(value, remainingQty);
+    const qty = Math.min(value, currentRemainingQty);
     setReturnQty(qty);
     setGoodReturn(qty);
     setDamaged(0);
@@ -966,42 +1005,37 @@ function TransferReturnRow({ item, returnedQty, remainingQty, onProcess }) {
     setGoodReturn(returnQty - dmg);
   };
   
-  const handleProcessReturn = () => {
-    if (returnQty > 0) {
-      onProcess(item, returnQty);
-      setReturnQty(0);
-      setGoodReturn(0);
-      setDamaged(0);
-      setDamageReason('');
+  const handleProcessReturn = async () => {
+    if (goodReturn > 0) {
+      try {
+        await onProcess(item, goodReturn);
+        // Reset form after successful return
+        setReturnQty(0);
+        setGoodReturn(0);
+        setDamaged(0);
+        setDamageReason('');
+      } catch (error) {
+        console.error('Failed to process return:', error);
+      }
     }
   };
   
   return (
-    <tr className={remainingQty <= 0 ? 'bg-green-50' : 'bg-white'}>
+    <tr className={currentRemainingQty <= 0 ? 'bg-green-50' : 'bg-white'}>
       <td className="border border-gray-300 px-4 py-3">
         <div className="font-medium">{item.item_name}</div>
-        {returnedQty > 0 && <div className="text-sm text-green-600">Returned: {returnedQty}/{item.qty}</div>}
-        {remainingQty <= 0 && <div className="text-sm text-green-600 font-medium">✓ Fully Returned</div>}
+        {currentReturnedQty > 0 && <div className="text-sm text-green-600">Returned: {currentReturnedQty}/{item.qty}</div>}
+        {currentRemainingQty <= 0 && <div className="text-sm text-green-600 font-medium">✓ Fully Returned</div>}
       </td>
       <td className="border border-gray-300 px-4 py-3">main</td>
       <td className="border border-gray-300 px-4 py-3">{item.batch_no}</td>
       <td className="border border-gray-300 px-4 py-3 text-center">{item.qty}</td>
       <td className="border border-gray-300 px-4 py-3 text-center">
-        {remainingQty > 0 ? (
-          <input 
-            type="number" 
-            min="0" 
-            max={remainingQty} 
-            value={returnQty} 
-            onChange={(e) => handleReturnQtyChange(parseInt(e.target.value) || 0)} 
-            className="w-20 px-2 py-1 border rounded text-center" 
-          />
-        ) : (
-          <span className="text-gray-500">—</span>
-        )}
+        <div className="font-medium">{currentReturnedQty}</div>
+        {currentRemainingQty <= 0 && <div className="text-xs text-green-600">Fully Returned</div>}
       </td>
       <td className="border border-gray-300 px-4 py-3 text-center">
-        {remainingQty > 0 ? (
+        {currentRemainingQty > 0 ? (
           <input 
             type="number" 
             min="0" 
@@ -1015,7 +1049,7 @@ function TransferReturnRow({ item, returnedQty, remainingQty, onProcess }) {
         )}
       </td>
       <td className="border border-gray-300 px-4 py-3 text-center">
-        {remainingQty > 0 ? (
+        {currentRemainingQty > 0 ? (
           <input 
             type="number" 
             min="0" 
@@ -1029,8 +1063,17 @@ function TransferReturnRow({ item, returnedQty, remainingQty, onProcess }) {
         )}
       </td>
       <td className="border border-gray-300 px-4 py-3">
-        {remainingQty > 0 ? (
+        {currentRemainingQty > 0 ? (
           <div className="flex items-center gap-2">
+            <input 
+              type="number" 
+              min="1" 
+              max={currentRemainingQty} 
+              value={returnQty} 
+              onChange={(e) => handleReturnQtyChange(parseInt(e.target.value) || 0)}
+              placeholder="Qty to return"
+              className="w-24 px-2 py-1 border rounded text-sm" 
+            />
             <input 
               type="text" 
               placeholder="Reason for damage" 
@@ -1038,12 +1081,12 @@ function TransferReturnRow({ item, returnedQty, remainingQty, onProcess }) {
               onChange={(e) => setDamageReason(e.target.value)}
               className="flex-1 px-2 py-1 border rounded text-sm" 
             />
-            {returnQty > 0 && (
+            {goodReturn > 0 && (
               <button
                 onClick={handleProcessReturn}
                 className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
               >
-                Return
+                Return {goodReturn}
               </button>
             )}
           </div>

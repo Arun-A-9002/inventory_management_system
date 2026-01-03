@@ -242,17 +242,24 @@ def return_transfer(transfer_id: int, return_data: ExternalTransferReturn, db: S
             if not item:
                 continue
                 
-            # Validate return quantity
-            total_returning = return_item.returned_quantity + return_item.damaged_quantity
+            # Update item with return data - use additive logic
+            current_returned = item.returned_quantity or 0
+            current_damaged = item.damaged_quantity or 0
+            
+            new_returned = current_returned + return_item.returned_quantity
+            new_damaged = current_damaged + return_item.damaged_quantity
+            
+            # Validate total return quantity
+            total_returning = new_returned + new_damaged
             if total_returning > item.quantity:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Cannot return more than sent quantity for {item.item_name}"
+                    detail=f"Cannot return more than sent quantity for {item.item_name}. Trying to return {total_returning}, but only {item.quantity} was sent."
                 )
             
-            # Update item with return data
-            item.returned_quantity = return_item.returned_quantity
-            item.damaged_quantity = return_item.damaged_quantity
+            # Update item with new totals
+            item.returned_quantity = new_returned
+            item.damaged_quantity = new_damaged
             item.damage_reason = return_item.damage_reason
             
             # Add good items back to stock
@@ -454,57 +461,82 @@ def get_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db)):
     
     items = []
     for row in result:
+        returned_qty = float(row[6]) if row[6] is not None else 0.0
+        damaged_qty = float(row[7]) if row[7] is not None else 0.0
+        original_qty = float(row[4])
+        
+        print(f"DB FETCH - Item: {row[2]}, Original: {original_qty}, Returned: {returned_qty}, Damaged: {damaged_qty}")
+        
         items.append({
             "id": row[0],
             "return_id": row[1],
             "item_name": row[2],
             "batch_no": row[3],
-            "qty": row[4],
+            "qty": original_qty,
             "uom": "PCS",
             "condition": "GOOD",
             "remarks": row[5],
             "status": "pending",
-            "returned": bool(row[6] > 0),
-            "returned_qty": float(row[6]) if row[6] else 0.0
+            "returned": bool(returned_qty > 0),
+            "returned_qty": returned_qty,
+            "damaged_qty": damaged_qty,
+            "remaining_qty": original_qty - returned_qty - damaged_qty
         })
     
+    print(f"RETURNING {len(items)} items to frontend")
     return items
 
 @router.post("/{transfer_id}/process-return")
 def process_transfer_return(transfer_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
-    """Process transfer item return - update returned quantity"""
+    """Process transfer item return - update returned quantity additively"""
     from sqlalchemy import text
     
     item_name = return_data.get('item_name')
     batch_no = return_data.get('batch_no')
     quantity = int(return_data.get('quantity', 0))
     
-    # Get current returned quantity
+    if quantity <= 0:
+        raise HTTPException(400, "Return quantity must be greater than 0")
+    
+    # Get current returned quantity with explicit conversion
     result = db.execute(
-        text("SELECT returned_quantity, quantity FROM external_transfer_items WHERE transfer_id = :transfer_id AND item_name = :item_name AND batch_no = :batch_no"),
+        text("SELECT COALESCE(returned_quantity, 0) as returned_qty, quantity FROM external_transfer_items WHERE transfer_id = :transfer_id AND item_name = :item_name AND batch_no = :batch_no"),
         {"transfer_id": transfer_id, "item_name": item_name, "batch_no": batch_no}
     ).fetchone()
     
     if not result:
         raise HTTPException(404, "Transfer item not found")
     
-    current_returned = result[0] or 0
-    original_qty = result[1]
-    new_returned_qty = current_returned + quantity
+    current_returned = float(result[0]) if result[0] is not None else 0.0
+    original_qty = float(result[1])
+    
+    print(f"BEFORE UPDATE: Current returned: {current_returned}, Adding: {quantity}")
+    
+    # Use SQL to add the quantity directly in the database
+    db.execute(
+        text("UPDATE external_transfer_items SET returned_quantity = COALESCE(returned_quantity, 0) + :add_qty WHERE transfer_id = :transfer_id AND item_name = :item_name AND batch_no = :batch_no"),
+        {"add_qty": quantity, "transfer_id": transfer_id, "item_name": item_name, "batch_no": batch_no}
+    )
+    
+    # Get the updated value to verify
+    verify_result = db.execute(
+        text("SELECT returned_quantity FROM external_transfer_items WHERE transfer_id = :transfer_id AND item_name = :item_name AND batch_no = :batch_no"),
+        {"transfer_id": transfer_id, "item_name": item_name, "batch_no": batch_no}
+    ).fetchone()
+    
+    new_returned_qty = float(verify_result[0]) if verify_result and verify_result[0] is not None else 0.0
+    
+    print(f"AFTER UPDATE: New returned quantity: {new_returned_qty}")
     
     if new_returned_qty > original_qty:
-        raise HTTPException(400, f"Cannot return {quantity} units. Maximum returnable: {original_qty - current_returned}")
-    
-    # Update returned quantity
-    db.execute(
-        text("UPDATE external_transfer_items SET returned_quantity = :new_qty WHERE transfer_id = :transfer_id AND item_name = :item_name AND batch_no = :batch_no"),
-        {"new_qty": new_returned_qty, "transfer_id": transfer_id, "item_name": item_name, "batch_no": batch_no}
-    )
+        db.rollback()
+        raise HTTPException(400, f"Cannot return {quantity} units. Current returned: {current_returned}, Maximum returnable: {original_qty - current_returned}")
     
     db.commit()
     
     return {
-        "message": f"Successfully returned {quantity} units of {item_name} (batch {batch_no})",
+        "message": f"Successfully returned {quantity} units of {item_name} (batch {batch_no}). Total returned: {new_returned_qty}",
+        "added_quantity": quantity,
         "total_returned_qty": new_returned_qty,
         "remaining_returnable": original_qty - new_returned_qty,
         "fully_returned": new_returned_qty >= original_qty
@@ -512,7 +544,56 @@ def process_transfer_return(transfer_id: int, return_data: dict, db: Session = D
 
 @router.get("/{transfer_id}", response_model=ExternalTransferResponse)
 def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
+    from sqlalchemy import text
+    
     transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
     if not transfer:
         raise HTTPException(status_code=404, detail="Transfer not found")
-    return transfer
+    
+    # Get fresh item data with returned quantities
+    items_result = db.execute(
+        text("""
+        SELECT id, item_name, batch_no, quantity, reason, return_date,
+               COALESCE(returned_quantity, 0) as returned_quantity,
+               COALESCE(damaged_quantity, 0) as damaged_quantity,
+               damage_reason, created_at
+        FROM external_transfer_items 
+        WHERE transfer_id = :transfer_id
+        """),
+        {"transfer_id": transfer_id}
+    ).fetchall()
+    
+    # Update transfer items with fresh data
+    fresh_items = []
+    for row in items_result:
+        item_dict = {
+            "id": row[0],
+            "item_name": row[1],
+            "batch_no": row[2],
+            "quantity": row[3],
+            "reason": row[4],
+            "return_date": row[5],
+            "returned_quantity": float(row[6]) if row[6] else 0.0,
+            "damaged_quantity": float(row[7]) if row[7] else 0.0,
+            "damage_reason": row[8],
+            "created_at": row[9]
+        }
+        fresh_items.append(item_dict)
+    
+    # Create response with fresh items
+    transfer_dict = {
+        "id": transfer.id,
+        "transfer_no": transfer.transfer_no,
+        "location": transfer.location,
+        "staff_name": transfer.staff_name,
+        "staff_id": transfer.staff_id,
+        "staff_location": transfer.staff_location,
+        "reason": transfer.reason,
+        "status": transfer.status,
+        "created_at": transfer.created_at,
+        "sent_at": transfer.sent_at,
+        "returned_at": transfer.returned_at,
+        "items": fresh_items
+    }
+    
+    return transfer_dict
