@@ -189,7 +189,7 @@ export default function InventoryLocations() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Location Area ({locations.filter(loc => loc.location_type === 'internal').length})
+                Internal Location ({locations.filter(loc => loc.location_type === 'internal').length})
               </button>
               <button
                 onClick={() => handleFilterChange('external')}
@@ -219,11 +219,11 @@ export default function InventoryLocations() {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {activeFilter === 'external' ? 'No external locations' : 
-               activeFilter === 'location' ? 'No location areas' : 'No locations defined'}
+               activeFilter === 'location' ? 'No internal locations' : 'No locations defined'}
             </h3>
             <p className="text-gray-500 mb-6 max-w-sm mx-auto">
               {activeFilter === 'external' ? 'Create external locations for stock outside main premises.' :
-               activeFilter === 'location' ? 'Create location areas for internal stock organization.' :
+               activeFilter === 'location' ? 'Create internal locations for internal stock organization.' :
                'Get started by creating your first inventory location to organize your stock effectively.'}
             </p>
             <div className="flex space-x-3 justify-center">
@@ -254,7 +254,7 @@ export default function InventoryLocations() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">
                   {activeFilter === 'external' ? `External Locations (${filteredLocations.length})` :
-                   activeFilter === 'location' ? `Location Areas (${filteredLocations.length})` :
+                   activeFilter === 'location' ? `Internal Locations (${filteredLocations.length})` :
                    `All Locations (${filteredLocations.length})`}
                 </h2>
                 <div className="text-sm text-gray-500">

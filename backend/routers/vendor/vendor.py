@@ -46,7 +46,8 @@ def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session))
     vendor = Vendor(
         **data.dict(),
         vendor_code=vendor_code,
-        verification_status="active"
+        verification_status="active",
+        status="inactive"  # Default to inactive, can be activated later
     )
 
     db.add(vendor)
@@ -164,10 +165,24 @@ def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_
     if status not in ["active", "inactive"]:
         raise HTTPException(status_code=400, detail="Invalid status. Only 'active' or 'inactive' allowed")
     
-    vendor.verification_status = status
+    vendor.status = status
     db.commit()
     db.refresh(vendor)
-    return {"message": "Vendor status updated successfully"}
+    return {"message": "Vendor status updated successfully", "status": vendor.status}
+
+# ---------------- TOGGLE VENDOR STATUS ----------------
+@router.patch("/{vendor_id}/toggle-status")
+def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_session)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    # Toggle status
+    new_status = "active" if vendor.status == "inactive" else "inactive"
+    vendor.status = new_status
+    db.commit()
+    db.refresh(vendor)
+    return {"message": f"Vendor status changed to {new_status}", "status": vendor.status}
 
 # ---------------- UPDATE VENDOR ----------------
 @router.put("/{vendor_id}")

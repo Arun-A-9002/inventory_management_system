@@ -11,8 +11,23 @@ def get_db():
     yield from get_tenant_db(DEFAULT_DB)
 
 @router.get("/", response_model=list[InventoryLocationResponse])
-def list_locations(db: Session = Depends(get_db)):
-    locations = db.query(InventoryLocation).filter(InventoryLocation.is_active == True).all()
+def list_locations(location_type: str = None, db: Session = Depends(get_db)):
+    query = db.query(InventoryLocation).filter(InventoryLocation.is_active == True)
+    
+    # Filter by location_type if provided
+    if location_type:
+        query = query.filter(InventoryLocation.location_type == location_type)
+    
+    locations = query.all()
+    return locations
+
+@router.get("/internal", response_model=list[InventoryLocationResponse])
+def list_internal_locations(db: Session = Depends(get_db)):
+    """Get only internal locations for GRN and inventory operations"""
+    locations = db.query(InventoryLocation).filter(
+        InventoryLocation.is_active == True,
+        InventoryLocation.location_type == "internal"
+    ).all()
     return locations
 
 @router.post("/", response_model=InventoryLocationResponse)

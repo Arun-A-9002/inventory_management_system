@@ -223,7 +223,7 @@ export default function Vendor() {
       setVendors(prevVendors => 
         prevVendors.map(vendor => 
           vendor.id === vendorId 
-            ? { ...vendor, verification_status: statusValue }
+            ? { ...vendor, status: statusValue }
             : vendor
         )
       );
@@ -491,9 +491,13 @@ export default function Vendor() {
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
                           <select 
-                            value={vendor.verification_status === "active" || vendor.verification_status === "verified" ? "Active" : "Inactive"}
+                            value={vendor.status === "active" || !vendor.status ? "Active" : "Inactive"}
                             onChange={(e) => updateVendorStatus(vendor.id, e.target.value)}
-                            className="text-xs px-2 py-1 rounded-full border-0 bg-green-100 text-green-800 focus:ring-2 focus:ring-green-500"
+                            className={`text-xs px-2 py-1 rounded-full border-0 focus:ring-2 focus:ring-green-500 ${
+                              (vendor.status === "active" || !vendor.status)
+                                ? "bg-green-100 text-green-800" 
+                                : "bg-red-100 text-red-800"
+                            }`}
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
@@ -804,8 +808,12 @@ export default function Vendor() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-600">Status</label>
-                  <span className="inline-block px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                    {selectedVendor.verification_status === "active" || selectedVendor.verification_status === "verified" ? "Active" : "Inactive"}
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                    (selectedVendor.status === "active" || !selectedVendor.status)
+                      ? "bg-green-100 text-green-800" 
+                      : "bg-red-100 text-red-800"
+                  }`}>
+                    {(selectedVendor.status === "active" || !selectedVendor.status) ? "Active" : "Inactive"}
                   </span>
                 </div>
               </div>

@@ -70,20 +70,33 @@ export default function StockManagement() {
     try {
       const [stocksRes, itemsRes, locationsRes, deptsRes, dashRes] = await Promise.all([
         api.get("/stock-overview/"),
-        api.get("/stocks/items"),
+        api.get("/items/"),
         api.get("/inventory/locations/"),
         api.get("/stocks/departments"),
         api.get("/stocks/dashboard")
       ]);
       
-      setStocks(stocksRes.data || []);
-      setItems(itemsRes.data || []);
+      const stocksData = stocksRes.data || [];
+      const itemsData = itemsRes.data || [];
+      
+      // Merge warranty information from items database into stocks data
+      const enrichedStocks = stocksData.map(stock => {
+        const itemInfo = itemsData.find(item => item.name === stock.item_name);
+        return {
+          ...stock,
+          warranty_period: itemInfo?.warranty_period || stock.warranty_period,
+          warranty: itemInfo?.warranty || stock.warranty
+        };
+      });
+      
+      setStocks(enrichedStocks);
+      setItems(itemsData);
       setLocations(locationsRes.data || []);
       setDepartments(deptsRes.data || []);
       setDashboard(dashRes.data);
       
       // Debug: Log stock data to see structure
-      console.log('Stock data:', stocksRes.data);
+      console.log('Stock data:', enrichedStocks);
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -146,22 +159,66 @@ export default function StockManagement() {
                       const selectedBatch = getSelectedBatch(s);
                       const warranty = selectedBatch?.warranty || s.warranty;
                       
-                      if (warranty && warranty.end_date) {
+                      // Handle different warranty data formats
+                      if (warranty) {
+                        // If warranty is an object with end_date
+                        if (warranty.end_date) {
+                          return (
+                            <div className="text-xs">
+                              <div className={`${
+                                new Date(warranty.end_date) <= new Date() 
+                                  ? 'text-red-600 font-semibold' 
+                                  : new Date(warranty.end_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                  ? 'text-orange-600 font-semibold'
+                                  : ''
+                              }`}>
+                                Warranty: {warranty.end_date}
+                              </div>
+                              {warranty.start_date && <div>Start: {warranty.start_date}</div>}
+                            </div>
+                          );
+                        }
+                        // If warranty is a string date
+                        else if (typeof warranty === 'string' && warranty !== '—') {
+                          return (
+                            <div className="text-xs">
+                              <div className={`${
+                                new Date(warranty) <= new Date() 
+                                  ? 'text-red-600 font-semibold' 
+                                  : new Date(warranty) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                  ? 'text-orange-600 font-semibold'
+                                  : ''
+                              }`}>
+                                Warranty: {warranty}
+                              </div>
+                            </div>
+                          );
+                        }
+                      }
+                      
+                      // Check if item has warranty_period and calculate warranty end date
+                      if (s.warranty_period && s.warranty_period > 0) {
+                        // Assume warranty starts from today or creation date
+                        const warrantyEndDate = new Date();
+                        warrantyEndDate.setMonth(warrantyEndDate.getMonth() + s.warranty_period);
+                        const warrantyEndStr = warrantyEndDate.toLocaleDateString();
+                        
                         return (
                           <div className="text-xs">
                             <div className={`${
-                              new Date(warranty.end_date) <= new Date() 
+                              warrantyEndDate <= new Date() 
                                 ? 'text-red-600 font-semibold' 
-                                : new Date(warranty.end_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                : warrantyEndDate <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
                                 ? 'text-orange-600 font-semibold'
                                 : ''
                             }`}>
-                              Warranty: {warranty.end_date}
+                              Warranty: {warrantyEndStr}
                             </div>
-                            {warranty.start_date && <div>Start: {warranty.start_date}</div>}
+                            <div className="text-xs text-gray-500">{s.warranty_period} months</div>
                           </div>
                         );
                       }
+                      
                       return <span className="text-gray-400">—</span>;
                     })()}
                   </td>
@@ -177,7 +234,7 @@ export default function StockManagement() {
                         </option>
                         {s.batches.length > 1 && s.batches.map((batch, index) => (
                           <option key={index} value={index}>
-                            {batch.batch_no}
+                            {batch.batch_no} - {batch.location || s.location}
                           </option>
                         ))}
                       </select>

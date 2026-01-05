@@ -9,6 +9,7 @@ export default function GoodsReceipt() {
   const [poList, setPoList] = useState([]);
   const [grnList, setGrnList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [qualityChecks, setQualityChecks] = useState({});
   const [viewModal, setViewModal] = useState({ isOpen: false, grn: null });
   const [printModal, setPrintModal] = useState({ isOpen: false, grn: null });
   const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
@@ -68,7 +69,7 @@ export default function GoodsReceipt() {
   // Fetch locations
   const fetchLocations = async () => {
     try {
-      const res = await api.get("/inventory/locations/");
+      const res = await api.get("/inventory/locations/internal");
       setLocations(res.data || []);
     } catch (err) {
       console.error("Failed to fetch locations:", err);
@@ -93,14 +94,30 @@ export default function GoodsReceipt() {
       setLoading(true);
       const res = await api.get("/grn/list");
       console.log('GRN API Response:', res.data);
-      setGrnList(res.data || []);
+      const grnData = res.data || [];
+      setGrnList(grnData);
+      
+      // Initialize quality checks from database
+      const qualityCheckState = {};
+      grnData.forEach(grn => {
+        qualityCheckState[grn.id] = grn.quality_check || false;
+      });
+      setQualityChecks(qualityCheckState);
     } catch (err) {
       console.error("Failed to fetch GRN list:", err);
       // Try alternative endpoint
       try {
         const res = await api.get("/grn/");
         console.log('GRN Alternative API Response:', res.data);
-        setGrnList(res.data || []);
+        const grnData = res.data || [];
+        setGrnList(grnData);
+        
+        // Initialize quality checks from database
+        const qualityCheckState = {};
+        grnData.forEach(grn => {
+          qualityCheckState[grn.id] = grn.quality_check || false;
+        });
+        setQualityChecks(qualityCheckState);
       } catch (err2) {
         console.error("Both GRN endpoints failed:", err2);
         setGrnList([]);
@@ -334,6 +351,19 @@ export default function GoodsReceipt() {
       const subtotal = (item.po_qty || 0) * (item.price || 0);
       return sum + (subtotal * (item.tax || 0) / 100);
     }, 0);
+  };
+
+  // Update quality check status
+  const updateQualityCheck = async (grnId, checked) => {
+    try {
+      await api.put(`/grn/${grnId}/quality-check`, { quality_check: checked });
+      setQualityChecks(prev => ({
+        ...prev,
+        [grnId]: checked
+      }));
+    } catch (err) {
+      showToast('Failed to update quality check', 'error');
+    }
   };
 
   // Update GRN status
@@ -1183,10 +1213,23 @@ export default function GoodsReceipt() {
                             </td>
                             <td className="py-4 px-6 text-center">
                               <div className="space-y-2">
+                                <div className="flex items-center justify-center mb-2">
+                                  <label className="flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={qualityChecks[grn.id] || false}
+                                      onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
+                                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span className="text-xs font-medium text-slate-700">Quality Check</span>
+                                  </label>
+                                </div>
                                 <select
                                   value={grn.status || 'Pending'}
                                   onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
+                                  disabled={!qualityChecks[grn.id]}
                                   className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                    !qualityChecks[grn.id] ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
                                     grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
                                     grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                     'bg-yellow-100 text-yellow-800'

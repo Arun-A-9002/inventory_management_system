@@ -88,6 +88,7 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
         invoice_number=data.invoice_number,
         invoice_date=data.invoice_date,
         total_amount=data.total_amount,
+        quality_check=getattr(data, 'quality_check', False),
         status=data.status if hasattr(data, 'status') else GRNStatus.pending
     )
 
@@ -426,6 +427,17 @@ def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_se
 
     db.commit()
     return {"message": "GRN Updated", "grn_number": grn.grn_number}
+
+# ---------------- UPDATE QUALITY CHECK ----------------
+@router.put("/{grn_id}/quality-check")
+def update_quality_check(grn_id: int, data: dict, db: Session = Depends(get_tenant_session)):
+    grn = db.query(GRN).filter(GRN.id == grn_id).first()
+    if not grn:
+        raise HTTPException(404, "GRN not found")
+    
+    grn.quality_check = data.get('quality_check', False)
+    db.commit()
+    return {"message": f"Quality check updated to {grn.quality_check}"}
 
 # ---------------- UPDATE STATUS ----------------
 @router.put("/{grn_id}/status")

@@ -1294,7 +1294,7 @@ export default function ReturnDisposal() {
                             <option value="">Select batch</option>
                             {(itemBatches[index] || []).map(batch => (
                               <option key={batch.batch_no} value={batch.batch_no}>
-                                {batch.batch_no} (Qty: {batch.qty}, Rate: ₹{batch.rate || 0})
+                                {batch.batch_no} - {batch.location || returnForm.location} (Qty: {batch.qty}, Rate: ₹{batch.rate || 0})
                               </option>
                             ))}
                           </select>

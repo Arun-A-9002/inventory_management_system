@@ -523,6 +523,7 @@ class VendorResponse(VendorCreate):
     id: int
     vendor_code: str
     verification_status: str
+    status: Optional[str] = "inactive"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -666,6 +667,7 @@ class GRNCreate(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
     total_amount: Optional[float] = 0.0
+    quality_check: Optional[bool] = False
     items: List[GRNItemCreate]
 
 # -------- GRN STATUS UPDATE --------

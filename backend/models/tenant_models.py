@@ -447,6 +447,9 @@ class Vendor(TenantBase):
         Enum(VendorVerificationStatus),
         default=VendorVerificationStatus.pending
     )
+    
+    # Status field for active/inactive
+    status = Column(String(20), default="inactive")
 
 # ================= QUALIFICATION / AVL =================
 class VendorQualification(TenantBase):
@@ -645,6 +648,7 @@ class GRN(TenantBase):
     invoice_number = Column(String(50), nullable=True)
     invoice_date = Column(Date, nullable=True)
     status = Column(Enum(GRNStatus), default=GRNStatus.pending)
+    quality_check = Column(Boolean, default=False)
     
     # Total amount field
     total_amount = Column(DECIMAL(10, 2), default=0.00)
