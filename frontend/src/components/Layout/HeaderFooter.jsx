@@ -114,7 +114,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
 
   return (
     <footer className="bg-white shadow px-6 py-3 text-center text-gray-500">
-      © 2025 {companyName} — Inventory Management System
+      © 2026 {companyName} — Inventory Management System
     </footer>
   );
 }
