@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from "react";
+import api from "../../api";
 
 export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
   const [userInfo, setUserInfo] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [companyName, setCompanyName] = useState('NUTRYAH');
 
   useEffect(() => {
+    fetchCompanyName();
+    
     if (type === "header") {
       const token = localStorage.getItem("access_token");
       if (token) {
@@ -20,12 +24,22 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
           console.error('Error decoding token:', error);
         }
       }
-      
       // Update time every second
       const timer = setInterval(() => setCurrentTime(new Date()), 1000);
       return () => clearInterval(timer);
     }
   }, [type]);
+
+  const fetchCompanyName = async () => {
+    try {
+      const response = await api.get('/company/');
+      if (response.data && response.data.length > 0) {
+        setCompanyName(response.data[0].name);
+      }
+    } catch (error) {
+      console.error('Error fetching company name:', error);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
@@ -35,8 +49,11 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
   const handleRefresh = async () => {
     if (onRefresh) {
       setIsRefreshing(true);
-      await onRefresh();
-      setIsRefreshing(false);
+      try {
+        await onRefresh();
+      } finally {
+        setIsRefreshing(false);
+      }
     } else {
       // If no onRefresh callback provided, refresh the page
       window.location.reload();
@@ -47,7 +64,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
     return (
       <header className="bg-gray-800 shadow-lg border-b px-6 py-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-white">
-          Nutryah IMS
+          {companyName}
         </h1>
 
         <div className="flex items-center gap-4">
@@ -70,8 +87,6 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
             </svg>
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          
-        
 
           {/* User Info */}
           {userInfo && (
@@ -99,7 +114,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
 
   return (
     <footer className="bg-white shadow px-6 py-3 text-center text-gray-500">
-      © 2025 NUTRYAH — Inventory Management System
+      © 2025 {companyName} — Inventory Management System
     </footer>
   );
 }

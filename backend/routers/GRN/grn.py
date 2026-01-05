@@ -210,7 +210,8 @@ def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session)):
                 "batch_no": batch.batch_no,
                 "mfg_date": batch.mfg_date,
                 "expiry_date": batch.expiry_date,
-                "qty": batch.qty
+                "qty": batch.qty,
+                "location": grn.store
             } for batch in batches]
         }
         grn_data["items"].append(item_data)

@@ -24,6 +24,20 @@ def get_vendors(db: Session = Depends(get_tenant_session)):
     vendors = db.query(Vendor).all()
     return vendors
 
+# ---------------- GET ACTIVE VENDORS ONLY ----------------
+@router.get("/active")
+def get_active_vendors(db: Session = Depends(get_tenant_session)):
+    vendors = db.query(Vendor).filter(Vendor.verification_status == "active").all()
+    return vendors
+
+# ---------------- GET VENDOR BY NAME ----------------
+@router.get("/by-name/{vendor_name}")
+def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_session)):
+    vendor = db.query(Vendor).filter(Vendor.vendor_name == vendor_name).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return vendor
+
 # ---------------- STEP 1: REGISTER VENDOR ----------------
 @router.post("/", response_model=VendorResponse)
 def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session)):
@@ -31,7 +45,8 @@ def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session))
 
     vendor = Vendor(
         **data.dict(),
-        vendor_code=vendor_code
+        vendor_code=vendor_code,
+        verification_status="active"
     )
 
     db.add(vendor)
@@ -118,6 +133,42 @@ def save_lead_time(data: VendorLeadTimeCreate, db: Session = Depends(get_tenant_
     db.commit()
     return {"message": "Vendor lead time saved"}
 
+# ---------------- MIGRATE VENDOR STATUS ----------------
+@router.post("/migrate-status")
+def migrate_vendor_status(db: Session = Depends(get_tenant_session)):
+    # Update old enum values to new ones
+    vendors = db.query(Vendor).all()
+    updated_count = 0
+    
+    for vendor in vendors:
+        if vendor.verification_status == "verified":
+            vendor.verification_status = "active"
+            updated_count += 1
+        elif vendor.verification_status == "rejected":
+            vendor.verification_status = "inactive"
+            updated_count += 1
+        elif vendor.verification_status == "pending":
+            vendor.verification_status = "active"
+            updated_count += 1
+    
+    db.commit()
+    return {"message": f"Migrated {updated_count} vendor status records"}
+
+# ---------------- UPDATE VENDOR STATUS ----------------
+@router.patch("/{vendor_id}/status")
+def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_tenant_session)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    if status not in ["active", "inactive"]:
+        raise HTTPException(status_code=400, detail="Invalid status. Only 'active' or 'inactive' allowed")
+    
+    vendor.verification_status = status
+    db.commit()
+    db.refresh(vendor)
+    return {"message": "Vendor status updated successfully"}
+
 # ---------------- UPDATE VENDOR ----------------
 @router.put("/{vendor_id}")
 def update_vendor(vendor_id: int, data: VendorCreate, db: Session = Depends(get_tenant_session)):
@@ -142,3 +193,44 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_tenant_session)):
     db.delete(vendor)
     db.commit()
     return {"message": "Vendor deleted successfully"}
+
+# ---------------- GET VENDOR BANK DETAILS ----------------
+@router.get("/{vendor_id}/bank-details")
+def get_vendor_bank_details(vendor_id: int, db: Session = Depends(get_tenant_session)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    return {
+        "vendor_id": vendor.id,
+        "vendor_name": vendor.vendor_name,
+        "ifsc_code": vendor.ifsc_code,
+        "account_number": vendor.account_number,
+        "account_holder_name": vendor.account_holder_name,
+        "branch_name": vendor.branch_name
+    }
+
+# ---------------- UPDATE VENDOR BANK DETAILS ----------------
+@router.put("/{vendor_id}/bank-details")
+def update_vendor_bank_details(vendor_id: int, bank_details: dict, db: Session = Depends(get_tenant_session)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    # Update bank details
+    vendor.ifsc_code = bank_details.get("ifsc_code")
+    vendor.account_number = bank_details.get("account_number")
+    vendor.account_holder_name = bank_details.get("account_holder_name")
+    vendor.branch_name = bank_details.get("branch_name")
+    
+    db.commit()
+    db.refresh(vendor)
+    
+    return {
+        "message": "Bank details updated successfully",
+        "vendor_id": vendor.id,
+        "ifsc_code": vendor.ifsc_code,
+        "account_number": vendor.account_number,
+        "account_holder_name": vendor.account_holder_name,
+        "branch_name": vendor.branch_name
+    }

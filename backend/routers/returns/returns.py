@@ -81,6 +81,11 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
         reference_no=return_data.get('invoice_id'),  # Store invoice reference
         reason=return_data.get('reason'),
         return_date=date.today(),
+        # Return staff details (for different staff processing returns)
+        return_staff_name=return_data.get('return_staff_name'),
+        return_staff_phone=return_data.get('return_staff_phone'),
+        return_staff_email=return_data.get('return_staff_email'),
+        staff_change_reason=return_data.get('staff_change_reason'),
         status="DRAFT"
     )
     
@@ -159,6 +164,31 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
         })
     
     return items
+
+@router.patch("/{return_id}/staff")
+def update_return_staff(return_id: int, staff_data: dict, db: Session = Depends(get_tenant_db)):
+    """Update return staff details for different staff processing returns"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        raise HTTPException(404, "Return not found")
+    
+    # Update return staff details
+    if 'return_staff_name' in staff_data:
+        return_header.return_staff_name = staff_data['return_staff_name']
+    if 'return_staff_phone' in staff_data:
+        return_header.return_staff_phone = staff_data['return_staff_phone']
+    if 'return_staff_email' in staff_data:
+        return_header.return_staff_email = staff_data['return_staff_email']
+    if 'staff_change_reason' in staff_data:
+        return_header.staff_change_reason = staff_data['staff_change_reason']
+    
+    db.commit()
+    
+    return {
+        "message": "Return staff details updated successfully",
+        "return_id": return_id,
+        "staff_name": return_header.return_staff_name
+    }
 
 @router.patch("/{return_id}/status")
 def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):

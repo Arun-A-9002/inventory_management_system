@@ -513,6 +513,11 @@ class VendorCreate(BaseModel):
     city: Optional[str]
     pan_number: Optional[str]
     gst_number: Optional[str]
+    # Bank Details
+    ifsc_code: Optional[str]
+    account_number: Optional[str]
+    account_holder_name: Optional[str]
+    branch_name: Optional[str]
 
 class VendorResponse(VendorCreate):
     id: int
@@ -927,6 +932,11 @@ class ExternalTransferCreate(BaseModel):
     staff_phone: Optional[str] = None
     staff_email: Optional[str] = None
     reason: Optional[str] = None
+    # Return staff details
+    return_staff_name: Optional[str] = None
+    return_staff_phone: Optional[str] = None
+    return_staff_email: Optional[str] = None
+    staff_change_reason: Optional[str] = None
     items: List[ExternalTransferItemCreate]
 
 class ExternalTransferUpdate(BaseModel):
@@ -946,6 +956,10 @@ class ExternalTransferReturnItem(BaseModel):
     damage_reason: Optional[str] = None
 
 class ExternalTransferReturn(BaseModel):
+    return_staff_name: Optional[str] = None
+    return_staff_phone: Optional[str] = None
+    return_staff_email: Optional[str] = None
+    staff_change_reason: Optional[str] = None
     staff_phone: Optional[str] = None
     staff_email: Optional[str] = None
     return_deadline: Optional[date] = None
@@ -969,6 +983,11 @@ class ExternalTransferResponse(BaseModel):
     return_date: Optional[date] = None
     returned_at: Optional[datetime] = None
     return_deadline: Optional[date] = None
+    # Return staff details for reports
+    return_staff_name: Optional[str] = None
+    return_staff_phone: Optional[str] = None
+    return_staff_email: Optional[str] = None
+    staff_change_reason: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: List[ExternalTransferItemResponse]
@@ -1001,5 +1020,8 @@ class ExternalTransferTransactionResponse(BaseModel):
     remarks: Optional[str] = None
     item_name: str
     batch_no: str
+    return_staff_name: Optional[str] = None
+    return_staff_phone: Optional[str] = None
+    return_staff_email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

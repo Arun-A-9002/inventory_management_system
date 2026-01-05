@@ -116,8 +116,29 @@ def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_
 
 @router.get("/po")
 def list_purchase_orders(db: Session = Depends(get_tenant_session)):
+    from models.tenant_models import Vendor
+    
     pos = db.query(PurchaseOrder).all()
-    return pos
+    
+    # Enhance PO data with vendor details
+    enhanced_pos = []
+    for po in pos:
+        # Find vendor by email
+        vendor = db.query(Vendor).filter(Vendor.email == po.vendor).first()
+        
+        po_data = {
+            "id": po.id,
+            "po_number": po.po_number,
+            "pr_number": po.pr_number,
+            "vendor": po.vendor,  # Keep original email
+            "vendor_name": vendor.vendor_name if vendor else "Unknown Vendor",
+            "vendor_email": po.vendor,
+            "po_date": po.po_date,
+            "status": po.status.value if po.status else "Draft"
+        }
+        enhanced_pos.append(po_data)
+    
+    return enhanced_pos
 
 @router.get("/{pr_id}")
 def get_purchase_request_by_id(pr_id: int, db: Session = Depends(get_tenant_session)):

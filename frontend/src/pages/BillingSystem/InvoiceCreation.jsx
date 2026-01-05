@@ -273,7 +273,7 @@ export default function InvoiceCreation() {
                         <option value="">Select Batch</option>
                         {(availableBatches[item.item_name] || []).map((batch) => (
                           <option key={batch.batch_no} value={batch.batch_no}>
-                            {batch.batch_no} (Qty: {batch.qty})
+                            {batch.batch_no} - {batch.location || 'N/A'} (Qty: {batch.qty})
                           </option>
                         ))}
                       </select>

@@ -1,6 +1,7 @@
 # backend/main.py
 
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import uuid
 
@@ -216,3 +217,6 @@ def health_db():
         return {"status": "db_ok"}
     except Exception as e:
         return {"status": "db_error", "error": str(e)}
+
+# Static files for uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

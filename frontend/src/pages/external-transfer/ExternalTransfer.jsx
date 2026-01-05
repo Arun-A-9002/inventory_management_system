@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
+import jsPDF from 'jspdf';
 
 export default function ExternalTransfer() {
   const [transfers, setTransfers] = useState([]);
@@ -16,6 +17,13 @@ export default function ExternalTransfer() {
   const [selectedTransferId, setSelectedTransferId] = useState(null);
   const [transferItems, setTransferItems] = useState([]);
   const [returnItems, setReturnItems] = useState([]);
+  const [returnStaffChanged, setReturnStaffChanged] = useState(false);
+  const [returnStaffDetails, setReturnStaffDetails] = useState({
+    staff_name: '',
+    staff_phone: '',
+    staff_email: '',
+    change_reason: ''
+  });
   const [form, setForm] = useState({
     return_type: 'External',
     location: '',
@@ -286,16 +294,33 @@ export default function ExternalTransfer() {
       return;
     }
     
+    // Validate return staff details if staff changed
+    if (returnStaffChanged) {
+      if (!returnStaffDetails.staff_name || !returnStaffDetails.staff_phone || 
+          !returnStaffDetails.staff_email || !returnStaffDetails.change_reason) {
+        showMessage('Please fill all return staff details when staff is changed', 'error');
+        return;
+      }
+    }
+    
     try {
       setLoading(true);
       const payload = {
         return_deadline: selectedTransfer.return_deadline,
+        staff_changed: returnStaffChanged,
+        return_staff_details: returnStaffChanged ? returnStaffDetails : {
+          staff_name: selectedTransfer.staff_name,
+          staff_phone: selectedTransfer.staff_phone,
+          staff_email: selectedTransfer.staff_email,
+          change_reason: null
+        },
         items: returnItems.map(item => ({
           item_id: item.item_id,
           returned_quantity: parseInt(item.returned_quantity) || 0,
           damaged_quantity: parseInt(item.damaged_quantity) || 0,
           return_deadline: item.return_deadline || null,
-          damage_reason: item.damage_reason || null
+          damage_reason: item.damage_reason || null,
+          returned_by_staff: returnStaffChanged ? returnStaffDetails.staff_name : selectedTransfer.staff_name
         }))
       };
       
@@ -306,6 +331,8 @@ export default function ExternalTransfer() {
       loadTransfers();
       setShowReturnModal(false);
       setReturnItems([]);
+      setReturnStaffChanged(false);
+      setReturnStaffDetails({ staff_name: '', staff_phone: '', staff_email: '', change_reason: '' });
     } catch (err) {
       console.error('Return error:', err);
       const errorMessage = err.response?.data?.detail || err.response?.data?.message || err.message;
@@ -383,9 +410,13 @@ export default function ExternalTransfer() {
 
   const handlePrintHistory = async (transfer) => {
     try {
-      // Fetch transaction history
+      // Fetch transaction history and full transfer details
       const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
       const transactions = transactionRes.data || [];
+      
+      // Fetch full transfer details including return staff info
+      const fullTransferRes = await api.get(`/api/external-transfers/${transfer.id}`);
+      const fullTransfer = fullTransferRes.data;
       
       const printContent = `
         <html>
@@ -468,20 +499,23 @@ export default function ExternalTransfer() {
                     <th>Batch</th>
                     <th>Type</th>
                     <th>Quantity</th>
+                    <th>Returned By</th>
                     <th>Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${transactions.length > 0 ? transactions.map(txn => `
+                  ${transactions.length > 0 ? transactions.map(txn => {
+                    return `
                     <tr>
                       <td>${new Date(txn.transaction_date).toLocaleDateString()} ${new Date(txn.transaction_date).toLocaleTimeString()}</td>
                       <td>${txn.item_name}</td>
                       <td>${txn.batch_no}</td>
                       <td>${txn.transaction_type}</td>
                       <td>${txn.quantity}</td>
+                      <td>${txn.returned_by}</td>
                       <td>${txn.remarks}</td>
                     </tr>
-                  `).join('') : '<tr><td colspan="6">No transactions found</td></tr>'}
+                  `}).join('') : '<tr><td colspan="7">No transactions found</td></tr>'}}}
                 </tbody>
               </table>
             </div>
@@ -503,6 +537,229 @@ export default function ExternalTransfer() {
     }
   };
 
+  const handleDownloadPDF = async (transfer) => {
+    try {
+      // Fetch transaction history and return staff details
+      const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
+      const transactions = transactionRes.data || [];
+      
+      // Fetch full transfer details including return staff info
+      const fullTransferRes = await api.get(`/api/external-transfers/${transfer.id}`);
+      const fullTransfer = fullTransferRes.data;
+      
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.width;
+      let yPosition = 20;
+      
+      // Header
+      pdf.setFontSize(18);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('External Transfer History', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 10;
+      
+      pdf.setFontSize(14);
+      pdf.text(transfer.transfer_no, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 20;
+      
+      // Transfer Info
+      pdf.setFontSize(10);
+      pdf.setFont(undefined, 'normal');
+      pdf.text(`Staff: ${transfer.staff_name} (ID: ${transfer.staff_id})`, 20, yPosition);
+      yPosition += 6;
+      pdf.text(`Staff Location: ${transfer.staff_location}`, 20, yPosition);
+      yPosition += 6;
+      pdf.text(`Transfer Location: ${transfer.location}`, 20, yPosition);
+      yPosition += 6;
+      pdf.text(`Status: ${transfer.status}`, 20, yPosition);
+      yPosition += 6;
+      pdf.text(`Created: ${new Date(transfer.created_at).toLocaleDateString()}`, 20, yPosition);
+      yPosition += 6;
+      
+      if (transfer.sent_at) {
+        pdf.text(`Sent: ${new Date(transfer.sent_at).toLocaleDateString()}`, 20, yPosition);
+        yPosition += 6;
+      }
+      if (transfer.returned_at) {
+        pdf.text(`Returned: ${new Date(transfer.returned_at).toLocaleDateString()}`, 20, yPosition);
+        yPosition += 6;
+      }
+      if (transfer.staff_phone) {
+        pdf.text(`Phone: ${transfer.staff_phone}`, 20, yPosition);
+        yPosition += 6;
+      }
+      if (transfer.staff_email) {
+        pdf.text(`Email: ${transfer.staff_email}`, 20, yPosition);
+        yPosition += 6;
+      }
+      
+      // Return Staff Details (if different staff returned)
+      if (fullTransfer.return_staff_details) {
+        yPosition += 5;
+        pdf.setFont(undefined, 'bold');
+        pdf.text('Return Staff Details:', 20, yPosition);
+        yPosition += 6;
+        pdf.setFont(undefined, 'normal');
+        pdf.text(`Return Staff: ${fullTransfer.return_staff_details.staff_name}`, 20, yPosition);
+        yPosition += 6;
+        pdf.text(`Return Phone: ${fullTransfer.return_staff_details.staff_phone}`, 20, yPosition);
+        yPosition += 6;
+        pdf.text(`Return Email: ${fullTransfer.return_staff_details.staff_email}`, 20, yPosition);
+        yPosition += 6;
+        pdf.text(`Change Reason: ${fullTransfer.return_staff_details.change_reason}`, 20, yPosition);
+        yPosition += 6;
+      }
+      
+      yPosition += 10;
+      
+      // Item Summary Table
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('Item Summary', 20, yPosition);
+      yPosition += 10;
+      
+      // Table headers
+      pdf.setFontSize(8);
+      const headers = ['Item', 'Batch', 'Orig Qty', 'Ret Qty', 'Dmg Qty', 'Balance', 'Deadline', 'Status'];
+      const colWidths = [30, 20, 15, 15, 15, 15, 25, 20];
+      let xPosition = 20;
+      
+      headers.forEach((header, index) => {
+        pdf.text(header, xPosition, yPosition);
+        xPosition += colWidths[index];
+      });
+      yPosition += 8;
+      
+      // Table data
+      pdf.setFont(undefined, 'normal');
+      if (transfer.items && transfer.items.length > 0) {
+        transfer.items.forEach(item => {
+          const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+          const balance = item.quantity - totalReturned;
+          const status = balance <= 0 ? 'Completed' : 'Pending';
+          
+          xPosition = 20;
+          const rowData = [
+            item.item_name.substring(0, 12),
+            item.batch_no,
+            item.quantity.toString(),
+            (item.returned_quantity || 0).toString(),
+            (item.damaged_quantity || 0).toString(),
+            balance.toString(),
+            item.return_date ? new Date(item.return_date).toLocaleDateString() : '-',
+            status
+          ];
+          
+          rowData.forEach((data, index) => {
+            pdf.text(data, xPosition, yPosition);
+            xPosition += colWidths[index];
+          });
+          yPosition += 6;
+          
+          if (yPosition > 250) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+        });
+      } else {
+        pdf.text('No items found', 20, yPosition);
+        yPosition += 6;
+      }
+      
+      yPosition += 10;
+      
+      // Summary Statistics
+      if (transfer.items && transfer.items.length > 0) {
+        const totalItems = transfer.items.length;
+        const completedItems = transfer.items.filter(item => {
+          const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+          return item.quantity <= totalReturned;
+        }).length;
+        const pendingItems = totalItems - completedItems;
+        
+        pdf.setFont(undefined, 'bold');
+        pdf.text('Summary:', 20, yPosition);
+        yPosition += 6;
+        pdf.setFont(undefined, 'normal');
+        pdf.text(`Total Items: ${totalItems}`, 20, yPosition);
+        yPosition += 6;
+        pdf.text(`Completed: ${completedItems}`, 20, yPosition);
+        yPosition += 6;
+        pdf.text(`Pending: ${pendingItems}`, 20, yPosition);
+        yPosition += 10;
+      }
+      
+      // Transaction History
+      if (yPosition > 200) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('Transaction History', 20, yPosition);
+      yPosition += 10;
+      
+      if (transactions.length > 0) {
+        pdf.setFontSize(8);
+        const txnHeaders = ['Date & Time', 'Item', 'Batch', 'Type', 'Qty', 'Returned By', 'Remarks'];
+        const txnColWidths = [30, 25, 15, 15, 10, 25, 35];
+        
+        xPosition = 20;
+        txnHeaders.forEach((header, index) => {
+          pdf.text(header, xPosition, yPosition);
+          xPosition += txnColWidths[index];
+        });
+        yPosition += 8;
+        
+        pdf.setFont(undefined, 'normal');
+        transactions.forEach(txn => {
+          xPosition = 20;
+          const txnData = [
+            `${new Date(txn.transaction_date).toLocaleDateString()} ${new Date(txn.transaction_date).toLocaleTimeString()}`,
+            txn.item_name.substring(0, 10),
+            txn.batch_no,
+            txn.transaction_type,
+            txn.quantity.toString(),
+            txn.returned_by.substring(0, 12),
+            (txn.remarks || '').substring(0, 18)
+          ];
+          
+          txnData.forEach((data, index) => {
+            pdf.text(data, xPosition, yPosition);
+            xPosition += txnColWidths[index];
+          });
+          yPosition += 6;
+          
+          if (yPosition > 250) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+        });
+      } else {
+        pdf.setFontSize(8);
+        pdf.setFont(undefined, 'normal');
+        pdf.text('No transactions found', 20, yPosition);
+      }
+      
+      // Footer
+      const finalPage = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= finalPage; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setFont(undefined, 'normal');
+        pdf.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth / 2, 280, { align: 'center' });
+        pdf.text(`Page ${i} of ${finalPage}`, pageWidth - 30, 280);
+      }
+      
+      // Save the PDF
+      pdf.save(`${transfer.transfer_no}_Transfer_History.pdf`);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showMessage('Failed to generate PDF', 'error');
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'DRAFT': return 'bg-gray-100 text-gray-800';
@@ -513,25 +770,106 @@ export default function ExternalTransfer() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
+      {/* Enhanced Header */}
+      <div className="bg-white shadow-lg border-b border-indigo-100">
+        <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">External Transfer</h1>
-                <p className="text-sm text-slate-600">Transfer items to external locations</p>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">External Transfer Dashboard</h1>
+                <p className="text-slate-600 mt-1 flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Manage and track external location transfers
+                </p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-50 px-4 py-2 rounded-lg">
-                <span className="text-sm font-medium text-blue-700">📦 Active Transfers: {transfers.length}</span>
+            <div className="flex items-center space-x-4">
+              {/* Stats Cards */}
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-3 rounded-xl shadow-lg">
+                <div className="flex items-center space-x-2">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  <div className="text-white">
+                    <div className="text-sm font-medium">Active Transfers</div>
+                    <div className="text-xl font-bold">{transfers.length}</div>
+                  </div>
+                </div>
               </div>
+              
+              {(() => {
+                // Split due dates into 4 parts: 25% each of total timeline
+                // Part 1: 75-100% of timeline (earliest)
+                // Part 2: 50-75% of timeline  
+                // Part 3: 25-50% of timeline
+                // Part 4: 0-25% of timeline (Due Soon - last part)
+                
+                const today = new Date();
+                const dueSoonTransfers = transfers.filter(transfer => {
+                  // Skip fully returned transfers
+                  const allItemsReturned = transfer.items?.every(item => {
+                    const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+                    return totalReturned >= item.quantity;
+                  });
+                  
+                  if (allItemsReturned && transfer.items?.length > 0) return false;
+                  
+                  const nearestDeadline = transfer.items?.reduce((nearest, item) => {
+                    if (!item.return_date) return nearest;
+                    const itemDate = new Date(item.return_date);
+                    return !nearest || itemDate < new Date(nearest) ? item.return_date : nearest;
+                  }, null);
+                  
+                  if (!nearestDeadline) return false;
+                  
+                  const deadlineDate = new Date(nearestDeadline);
+                  const daysUntil = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+                  
+                  // Assuming 28-day timeline, last part (0-25%) = 0-7 days
+                  return daysUntil >= 0 && daysUntil <= 7; // Last part: Due Soon (0-7 days)
+                }).length;
+                
+                // Calculate date range for last part (Due Soon)
+                const startDate = today.toLocaleDateString();
+                const endDate = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000)).toLocaleDateString();
+                
+                return dueSoonTransfers > 0 ? (
+                  <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 rounded-xl shadow-lg animate-pulse">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <div className="text-white">
+                        <div className="text-sm font-medium">Due Alert</div>
+                        <div className="text-xl font-bold">{dueSoonTransfers}</div>
+                        <div className="text-xs opacity-90">{startDate} - {endDate}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-r from-green-500 to-green-600 px-6 py-3 rounded-xl shadow-lg">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-white">
+                        <div className="text-sm font-medium">On Track</div>
+                        <div className="text-xl font-bold">✓</div>
+                        <div className="text-xs opacity-90">{startDate} - {endDate}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()} 
             </div>
           </div>
         </div>
@@ -587,13 +925,14 @@ export default function ExternalTransfer() {
                     <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Staff Location</th>
                     <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Status</th>
                     <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Date</th>
+                    <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Deadline</th>
                     <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {transfers.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center py-16">
+                      <td colSpan="7" className="text-center py-16">
                         <div className="text-slate-400">
                           <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -644,24 +983,95 @@ export default function ExternalTransfer() {
                           )}
                         </td>
                         <td className="py-4 px-6">
+                          {(() => {
+                            // Check if all items are fully returned
+                            const allItemsReturned = transfer.items?.every(item => {
+                              const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+                              return totalReturned >= item.quantity;
+                            });
+                            
+                            if (allItemsReturned && transfer.items?.length > 0) {
+                              return (
+                                <div className="text-sm text-green-600 font-medium">
+                                  All Items Returned
+                                </div>
+                              );
+                            }
+                            
+                            const nearestDeadline = transfer.items?.reduce((nearest, item) => {
+                              if (!item.return_date) return nearest;
+                              const itemDate = new Date(item.return_date);
+                              return !nearest || itemDate < new Date(nearest) ? item.return_date : nearest;
+                            }, null);
+                            
+                            if (!nearestDeadline) return <span className="text-gray-400 text-sm">No deadline</span>;
+                            
+                            const deadlineDate = new Date(nearestDeadline);
+                            const today = new Date();
+                            const daysUntil = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+                            
+                            let colorClass = 'text-gray-600';
+                            let urgencyText = '';
+                            
+                            if (daysUntil < 0) {
+                              colorClass = 'text-red-600 font-medium';
+                              urgencyText = 'Overdue';
+                            } else if (daysUntil <= 3) {
+                              colorClass = 'text-red-600 font-medium';
+                              urgencyText = 'Due Soon';
+                            } else if (daysUntil <= 7) {
+                              colorClass = 'text-orange-600 font-medium';
+                              urgencyText = 'Due This Week';
+                            }
+                            
+                            return (
+                              <div>
+                                <div className={`text-sm ${colorClass}`}>
+                                  {deadlineDate.toLocaleDateString()}
+                                </div>
+                                {urgencyText && (
+                                  <div className={`text-xs ${colorClass}`}>
+                                    {urgencyText}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()} 
+                        </td>
+                        <td className="py-4 px-6">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handlePrintHistory(transfer)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Print History"
                             >
-                              Print
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDownloadPDF(transfer)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Download PDF"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                              </svg>
                             </button>
                             {transfer.status === 'DRAFT' && (
                               <>
                                 <button
                                   onClick={() => handleEdit(transfer)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  title="Edit Transfer"
                                 >
-                                  Edit
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
                                 </button>
                                 <button
                                   onClick={() => handleSendTransfer(transfer.id)}
-                                  className="text-green-600 hover:text-green-800 text-sm font-medium"
+                                  className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                                 >
                                   Send
                                 </button>
@@ -669,19 +1079,27 @@ export default function ExternalTransfer() {
                             )}
                             {transfer.status === 'SENT' && (
                               <>
-                                {transfer.items?.some(item => {
-                                  const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
-                                  return item.quantity > totalReturned;
-                                }) ? (
-                                  <button
-                                    onClick={() => handleReturnTransfer(transfer)}
-                                    className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-                                  >
-                                    Return
-                                  </button>
-                                ) : (
-                                  <span className="text-gray-400 text-sm">Fully Returned</span>
-                                )}
+                                {(() => {
+                                  // Check if there are any items with remaining quantities to return
+                                  const hasItemsToReturn = transfer.items?.some(item => {
+                                    const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
+                                    const remaining = item.quantity - totalReturned;
+                                    return remaining > 0;
+                                  });
+                                  
+                                  return hasItemsToReturn ? (
+                                    <button
+                                      onClick={() => handleReturnTransfer(transfer)}
+                                      className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                                    >
+                                      Return
+                                    </button>
+                                  ) : (
+                                    <div className="text-center">
+                                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">Fully Returned</span>
+                                    </div>
+                                  );
+                                })()} 
                               </>
                             )}
                           </div>
@@ -1140,6 +1558,72 @@ export default function ExternalTransfer() {
               <p className="text-gray-600">Staff: {selectedTransfer.staff_name} ({selectedTransfer.staff_id})</p>
             </div>
 
+            {/* Return Staff Change Section */}
+            <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  id="staffChanged"
+                  checked={returnStaffChanged}
+                  onChange={(e) => setReturnStaffChanged(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="staffChanged" className="text-sm font-medium text-gray-700">
+                  Different staff returning items
+                </label>
+              </div>
+              
+              {returnStaffChanged && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Staff Name *</label>
+                    <input
+                      type="text"
+                      value={returnStaffDetails.staff_name}
+                      onChange={(e) => setReturnStaffDetails({...returnStaffDetails, staff_name: e.target.value})}
+                      className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter return staff name"
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Staff Phone *</label>
+                    <input
+                      type="tel"
+                      value={returnStaffDetails.staff_phone}
+                      onChange={(e) => setReturnStaffDetails({...returnStaffDetails, staff_phone: e.target.value})}
+                      className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter phone number"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Staff Email *</label>
+                    <input
+                      type="email"
+                      value={returnStaffDetails.staff_email}
+                      onChange={(e) => setReturnStaffDetails({...returnStaffDetails, staff_email: e.target.value})}
+                      className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter email address"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Staff Change *</label>
+                    <input
+                      type="text"
+                      value={returnStaffDetails.change_reason}
+                      onChange={(e) => setReturnStaffDetails({...returnStaffDetails, change_reason: e.target.value})}
+                      className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="Why staff changed?"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full border border-gray-200">
                 <thead className="bg-gray-50">
@@ -1175,6 +1659,9 @@ export default function ExternalTransfer() {
                         {(item.already_damaged || 0) + (parseInt(item.damaged_quantity) || 0)}
                         <div className="text-xs text-gray-500 mt-1">
                           Total: {item.already_returned + (item.already_damaged || 0) + (parseInt(item.returned_quantity) || 0) + (parseInt(item.damaged_quantity) || 0)}
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1 font-medium">
+                          Balance: {item.original_quantity - (item.already_returned + (item.already_damaged || 0) + (parseInt(item.returned_quantity) || 0) + (parseInt(item.damaged_quantity) || 0))}
                         </div>
                       </td>
                       <td className="px-4 py-2">
@@ -1221,7 +1708,7 @@ export default function ExternalTransfer() {
                       </td>
                     </tr>
                     );
-                  })}}
+                  })}
                 </tbody>
               </table>
             </div>

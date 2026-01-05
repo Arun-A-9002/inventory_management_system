@@ -147,7 +147,7 @@ export default function InventoryLocations() {
                   <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  New Location
+                  Internal Location
                 </button>
                 <button
                   onClick={() => handleExternalLocation()}
@@ -234,7 +234,7 @@ export default function InventoryLocations() {
                 <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
-                Create First Location
+                Create Internal Location
               </button>
               <button
                 onClick={() => handleExternalLocation()}
@@ -355,7 +355,7 @@ export default function InventoryLocations() {
           <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                {editingLocation ? 'Edit Location' : 'Create New Location'}
+                {editingLocation ? 'Edit Location' : 'Create Internal Location'}
               </h3>
               <button
                 onClick={handleCancel}

@@ -10,8 +10,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
     return total + outstanding;
   }, 0);
 
-
-
   const [paymentData, setPaymentData] = useState({
     date: new Date().toISOString().split('T')[0],
     method: 'Cash',
@@ -19,6 +17,17 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
     remarks: '',
     amount: ''
   });
+
+  const [bankDetails, setBankDetails] = useState(null);
+  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [editingBankDetails, setEditingBankDetails] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    ifsc_code: '',
+    account_number: '',
+    account_holder_name: '',
+    branch_name: ''
+  });
+  const [loading, setLoading] = useState(false);
   
   // Pre-fill amount with outstanding amount when component mounts or grn changes
   useEffect(() => {
@@ -33,6 +42,59 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
     }
   }, [grn, payments]);
 
+  const fetchVendorBankDetails = async () => {
+    try {
+      setLoading(true);
+      const vendorRes = await api.get(`/vendors/by-name/${encodeURIComponent(grn.vendor_name)}`);
+      const bankRes = await api.get(`/vendors/${vendorRes.data.id}/bank-details`);
+      
+      setBankDetails(bankRes.data);
+      setBankForm({
+        ifsc_code: bankRes.data.ifsc_code || '',
+        account_number: bankRes.data.account_number || '',
+        account_holder_name: bankRes.data.account_holder_name || '',
+        branch_name: bankRes.data.branch_name || ''
+      });
+      
+      setShowBankDetails(true);
+      
+      if (!bankRes.data.ifsc_code && !bankRes.data.account_number) {
+        setEditingBankDetails(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch vendor bank details:', err);
+      setShowBankDetails(true);
+      setEditingBankDetails(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMethodChange = (method) => {
+    setPaymentData({ ...paymentData, method });
+    
+    if (method === 'Bank Transfer') {
+      fetchVendorBankDetails();
+    } else {
+      setShowBankDetails(false);
+      setEditingBankDetails(false);
+    }
+  };
+
+  const saveBankDetails = async () => {
+    try {
+      setLoading(true);
+      const vendorRes = await api.get(`/vendors/by-name/${encodeURIComponent(grn.vendor_name)}`);
+      await api.put(`/vendors/${vendorRes.data.id}/bank-details`, bankForm);
+      
+      setBankDetails({ ...bankDetails, ...bankForm });
+      setEditingBankDetails(false);
+    } catch (err) {
+      console.error('Failed to save bank details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const paymentAmount = parseFloat(paymentData.amount) || 0;
   const selectedAmount = grn?.total_amount || 0;
@@ -40,11 +102,23 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
   const outstandingAmount = Math.max(0, selectedAmount - paidAmount);
   const totalToPay = outstandingAmount;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (paymentAmount <= 0) {
       alert('Please enter a valid payment amount');
       return;
     }
+    
+    if (paymentData.method === 'Bank Transfer') {
+      if (!bankForm.ifsc_code || !bankForm.account_number || !bankForm.account_holder_name) {
+        alert('Please fill all required bank details');
+        return;
+      }
+      
+      if (editingBankDetails) {
+        await saveBankDetails();
+      }
+    }
+    
     onSave(grn.id, paymentAmount, 0);
   };
 
@@ -64,7 +138,7 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
           <select
             value={paymentData.method}
-            onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
+            onChange={(e) => handleMethodChange(e.target.value)}
             className="w-full border rounded-lg px-3 py-2"
           >
             <option value="Cash">Cash</option>
@@ -84,6 +158,94 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
           />
         </div>
       </div>
+      
+      {/* Bank Details Section */}
+      {showBankDetails && (
+        <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="font-semibold text-blue-900">Bank Details</h4>
+            {bankDetails && !editingBankDetails && (
+              <button
+                type="button"
+                onClick={() => setEditingBankDetails(true)}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+
+          {editingBankDetails ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">IFSC Code *</label>
+                <input
+                  type="text"
+                  value={bankForm.ifsc_code}
+                  onChange={(e) => setBankForm({...bankForm, ifsc_code: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="e.g., SBIN0001234"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Account Number *</label>
+                <input
+                  type="text"
+                  value={bankForm.account_number}
+                  onChange={(e) => setBankForm({...bankForm, account_number: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Account number"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Account Holder Name *</label>
+                <input
+                  type="text"
+                  value={bankForm.account_holder_name}
+                  onChange={(e) => setBankForm({...bankForm, account_holder_name: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Account holder name"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Branch Name</label>
+                <input
+                  type="text"
+                  value={bankForm.branch_name}
+                  onChange={(e) => setBankForm({...bankForm, branch_name: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Branch name"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="font-medium">IFSC Code:</span>
+                <div className="text-gray-600">{bankDetails?.ifsc_code || 'Not provided'}</div>
+              </div>
+              <div>
+                <span className="font-medium">Account Number:</span>
+                <div className="text-gray-600">{bankDetails?.account_number || 'Not provided'}</div>
+              </div>
+              <div>
+                <span className="font-medium">Account Holder:</span>
+                <div className="text-gray-600">{bankDetails?.account_holder_name || 'Not provided'}</div>
+              </div>
+              <div>
+                <span className="font-medium">Branch:</span>
+                <div className="text-gray-600">{bankDetails?.branch_name || 'Not provided'}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -718,7 +880,7 @@ export default function SupplierLedger() {
                               <td className="py-3 px-4">
                                 <div>
                                   <p className="font-medium text-gray-900">{item.item_name}</p>
-                                  <p className="text-xs text-gray-500">Batch: {item.batches?.[0]?.batch_no || 'N/A'}</p>
+                                  <p className="text-xs text-gray-500">Batch: {item.batches?.[0]?.batch_no || 'N/A'} - {item.batches?.[0]?.location || 'N/A'}</p>
                                 </div>
                               </td>
                               <td className="py-3 px-4 text-center text-sm">{item.received_qty}</td>

@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+import os
+import uuid
+from pathlib import Path
 
 from database import get_tenant_db
 from models.tenant_models import Company
@@ -11,6 +14,10 @@ from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/company", tags=["Company"])
 
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
 
 # --------------------------
 # CREATE COMPANY
@@ -20,6 +27,11 @@ def create_company(data: CompanyCreate, db: Session = Depends(get_tenant_db)):
     log_api("CREATE COMPANY")
 
     try:
+        # Check if company already exists
+        existing_company = db.query(Company).first()
+        if existing_company:
+            raise HTTPException(400, "Only one company is allowed per organization")
+            
         company = Company(**data.dict())
         db.add(company)
         db.commit()
@@ -27,6 +39,8 @@ def create_company(data: CompanyCreate, db: Session = Depends(get_tenant_db)):
         log_audit(f"Company created → {company.name}")
         return company
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_error(e, "create_company")
         raise HTTPException(500, "Failed to create company")
@@ -87,3 +101,29 @@ def delete_company(company_id: int, db: Session = Depends(get_tenant_db)):
 
     log_audit(f"Company deleted → {company_id}")
     return {"message": "Company deleted"}
+
+
+# --------------------------
+# UPLOAD LOGO
+# --------------------------
+@router.post("/upload-logo")
+async def upload_logo(file: UploadFile = File(...)):
+    # Validate file type
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(400, "Only image files are allowed")
+    
+    # Generate unique filename
+    file_extension = file.filename.split('.')[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    try:
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        return {"filename": unique_filename, "url": f"/uploads/{unique_filename}"}
+    
+    except Exception as e:
+        raise HTTPException(500, f"Failed to upload file: {str(e)}")

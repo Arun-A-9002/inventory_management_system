@@ -169,11 +169,11 @@ export default function StockOverview() {
                           onChange={(e) => handleBatchChange(item.id, e.target.value)}
                         >
                           <option value="">
-                            {item.batches.length > 1 ? `All Batches` : item.batches[0]?.batch_no}
+                            {item.batches.length > 1 ? `All Batches - ${item.location}` : `${item.batches[0]?.batch_no} - ${item.batches[0]?.location || item.location}`}
                           </option>
                           {item.batches.length > 1 && item.batches.map((batch, index) => (
                             <option key={index} value={index}>
-                              {batch.batch_no}
+                              {batch.batch_no} - {batch.location || item.location}
                             </option>
                           ))}
                         </select>

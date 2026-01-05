@@ -15,6 +15,7 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [companyName, setCompanyName] = useState('NUTRYAH');
 
   useEffect(() => {
     fetchDashboardData();
@@ -25,14 +26,20 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes] = await Promise.allSettled([
+      const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes, companyRes] = await Promise.allSettled([
         api.get('/items/'),
         api.get('/stock-overview/'),
         api.get('/vendors/'),
         api.get('/customers/'),
         api.get('/inventory/locations/'),
-        api.get('/purchase/pr')
+        api.get('/purchase/pr'),
+        api.get('/company/')
       ]);
+
+      // Set company name if available
+      if (companyRes.status === 'fulfilled' && companyRes.value.data && companyRes.value.data.length > 0) {
+        setCompanyName(companyRes.value.data[0].name);
+      }
 
       let totalStockValue = 0;
       let lowStockCount = 0;
@@ -156,7 +163,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent mb-2">Dashboard</h1>
-              <p className="text-gray-600 text-lg">Welcome to NUTRYAH Inventory Management System</p>
+              <p className="text-gray-600 text-lg">Welcome to {companyName} Inventory Management System</p>
             </div>
             {/* Low Stock Alert */}
             {stats.lowStockItems > 0 && (

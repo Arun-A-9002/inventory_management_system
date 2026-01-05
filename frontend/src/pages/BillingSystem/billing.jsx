@@ -1009,7 +1009,7 @@ export default function Billing() {
                   <option value="">Select Batch</option>
                   {availableBatches.map((batch) => (
                     <option key={batch.batch_no} value={batch.batch_no}>
-                      {batch.batch_no} (Available: {batch.qty})
+                      {batch.batch_no} - {batch.location || 'N/A'} (Available: {batch.qty})
                     </option>
                   ))}
                 </select>

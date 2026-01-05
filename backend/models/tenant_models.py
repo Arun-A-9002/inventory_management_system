@@ -437,6 +437,12 @@ class Vendor(TenantBase):
     pan_number = Column(String(20))
     gst_number = Column(String(20))
 
+    # Bank Details
+    ifsc_code = Column(String(20))
+    account_number = Column(String(30))
+    account_holder_name = Column(String(150))
+    branch_name = Column(String(150))
+
     verification_status = Column(
         Enum(VendorVerificationStatus),
         default=VendorVerificationStatus.pending
@@ -1148,6 +1154,11 @@ class ExternalTransfer(TenantBase):
     return_date = Column(Date, nullable=True)
     returned_at = Column(DateTime, nullable=True)
     return_deadline = Column(Date, nullable=True)
+    # Return staff details
+    return_staff_name = Column(String(255), nullable=True)
+    return_staff_phone = Column(String(20), nullable=True)
+    return_staff_email = Column(String(191), nullable=True)
+    staff_change_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     

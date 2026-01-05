@@ -114,7 +114,7 @@ export default function PurchaseManagement() {
   // Fetch vendors for email
   const fetchVendors = async () => {
     try {
-      const res = await api.get('/vendors/');
+      const res = await api.get('/vendors/active');
       setVendors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
@@ -902,7 +902,10 @@ export default function PurchaseManagement() {
                       <td className="py-3 px-4">
                         <div className="font-medium text-slate-900">{po.po_number}</div>
                       </td>
-                      <td className="py-3 px-4">{po.vendor}</td>
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-slate-900">{po.vendor_name || 'Unknown Vendor'}</div>
+                        <div className="text-sm text-slate-500">{po.vendor_email}</div>
+                      </td>
                       <td className="py-3 px-4">{po.pr_number}</td>
                       <td className="py-3 px-4">{new Date(po.po_date).toLocaleDateString()}</td>
                       <td className="py-3 px-4">
