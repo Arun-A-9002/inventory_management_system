@@ -1247,3 +1247,26 @@ class ExternalTransferTransaction(TenantBase):
     # Relationships
     transfer = relationship("ExternalTransfer")
     item = relationship("ExternalTransferItem")
+
+
+# ============================================================
+#                   AUDIT LOG
+# ============================================================
+class AuditLog(TenantBase):
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=True)
+    user_name = Column(String(191), nullable=True)
+    action = Column(String(100), nullable=False)  # CREATE, UPDATE, DELETE, APPROVE, etc.
+    table_name = Column(String(100), nullable=False)  # grns, items, etc.
+    record_id = Column(Integer, nullable=True)
+    old_values = Column(Text, nullable=True)  # JSON string of old values
+    new_values = Column(Text, nullable=True)  # JSON string of new values
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    timestamp = Column(DateTime, server_default=func.now())
+    
+    # Additional context
+    module = Column(String(100), nullable=True)  # GRN, INVENTORY, etc.
+    description = Column(String(500), nullable=True)  # Human readable description

@@ -58,7 +58,9 @@ def get_user_permissions(user_data: dict) -> list:
                 "grn.view", "grn.create", "grn.edit", "grn.delete", "grn.print", "grn.status_qc", "grn.status_approve",
                 "return_disposal.view", "return_disposal.create", "return_disposal.edit", "return_disposal.delete", "return_disposal.status_approve",
                 "vendor_ledger.view", "vendor_ledger.pay", "vendor_ledger.print", "vendor_ledger.invoice_view",
-                "stock_ledger.view", "stock_ledger.dispense", "stock_ledger.available_qty"]
+                "stock_ledger.view", "stock_ledger.dispense", "stock_ledger.available_qty",
+                "external_transfer.create", "external_transfer.view", "external_transfer.print", "external_transfer.download", "external_transfer.return",
+                "damaged_returns.view", "damaged_returns.print"]
     
     return user_data.get("permissions", [])
 
@@ -336,3 +338,26 @@ def require_stock_ledger_dispense():
 
 def require_stock_ledger_available_qty():
     return require_permission("stock_ledger.available_qty")
+
+# External Transfer permission decorators
+def require_external_transfer_create():
+    return require_permission("external_transfer.create")
+
+def require_external_transfer_view():
+    return require_permission("external_transfer.view")
+
+def require_external_transfer_print():
+    return require_permission("external_transfer.print")
+
+def require_external_transfer_download():
+    return require_permission("external_transfer.download")
+
+def require_external_transfer_return():
+    return require_permission("external_transfer.return")
+
+# Damaged Returns permission decorators
+def require_damaged_returns_view():
+    return require_permission("damaged_returns.view")
+
+def require_damaged_returns_print():
+    return require_permission("damaged_returns.print")

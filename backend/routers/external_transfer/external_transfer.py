@@ -12,6 +12,11 @@ from schemas.tenant_schemas import (
     ExternalTransferResponse,
     ExternalTransferReturn
 )
+from utils.permissions import (
+    require_external_transfer_create, require_external_transfer_view, 
+    require_external_transfer_print, require_external_transfer_download, 
+    require_external_transfer_return, require_damaged_returns_view
+)
 
 router = APIRouter(prefix="/api/external-transfers", tags=["External Transfers"])
 
@@ -20,7 +25,7 @@ def generate_transfer_no():
     return f"ET{timestamp}"
 
 @router.post("/", response_model=ExternalTransferResponse)
-def create_external_transfer(transfer_data: ExternalTransferCreate, db: Session = Depends(get_tenant_db)):
+def create_external_transfer(transfer_data: ExternalTransferCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
     try:
         print(f"Creating transfer with data: {transfer_data}")
         
@@ -108,7 +113,7 @@ def debug_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db))
         return {"error": str(e)}
 
 @router.get("/", response_model=List[ExternalTransferResponse])
-def get_external_transfers(db: Session = Depends(get_tenant_db)):
+def get_external_transfers(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_view())):
     try:
         transfers = db.query(ExternalTransfer).all()
         print(f"Found {len(transfers)} transfers")
@@ -242,7 +247,7 @@ def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{transfer_id}/return")
-def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
+def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_return())):
     try:
         print(f"DEBUG: Raw return_data received: {return_data}")
         print(f"DEBUG: return_staff_name: {return_data.get('return_staff_name')}")
@@ -668,7 +673,8 @@ def get_damaged_returns(
     staff_name: str = None,
     item_name: str = None,
     transfer_no: str = None,
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    current_user: dict = Depends(require_damaged_returns_view())
 ):
     """Get all damaged items from external transfers with optional filters"""
     from sqlalchemy import text

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import jsPDF from 'jspdf';
+import { hasPermission } from '../../utils/permissions';
 
 export default function ExternalTransfer() {
   const [transfers, setTransfers] = useState([]);
@@ -37,8 +38,10 @@ export default function ExternalTransfer() {
   });
 
   useEffect(() => {
-    loadTransfers();
-    loadLocations();
+    if (hasPermission("external_transfer.view")) {
+      loadTransfers();
+      loadLocations();
+    }
   }, []);
 
   const loadTransfers = async () => {
@@ -103,6 +106,11 @@ export default function ExternalTransfer() {
   };
 
   const handleSubmit = async () => {
+    if (!hasPermission("external_transfer.create")) {
+      showMessage("Permission denied", "error");
+      return;
+    }
+    
     if (!form.staff_name || !form.staff_id || !form.staff_location || form.items.length === 0) {
       showMessage('All fields and at least one item are required', 'error');
       return;
@@ -231,6 +239,11 @@ export default function ExternalTransfer() {
   };
 
   const handleReturnTransfer = async (transfer) => {
+    if (!hasPermission("external_transfer.return")) {
+      showMessage("Permission denied", "error");
+      return;
+    }
+    
     try {
       // Fetch fresh transfer data with items
       const res = await api.get(`/api/external-transfers/${transfer.id}`);
@@ -409,6 +422,11 @@ export default function ExternalTransfer() {
   };
 
   const handlePrintHistory = async (transfer) => {
+    if (!hasPermission("external_transfer.print")) {
+      showMessage("Permission denied", "error");
+      return;
+    }
+    
     try {
       // Fetch transaction history and full transfer details
       const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
@@ -538,6 +556,11 @@ export default function ExternalTransfer() {
   };
 
   const handleDownloadPDF = async (transfer) => {
+    if (!hasPermission("external_transfer.download")) {
+      showMessage("Permission denied", "error");
+      return;
+    }
+    
     try {
       // Fetch transaction history and return staff details
       const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
@@ -771,6 +794,22 @@ export default function ExternalTransfer() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
+      {/* Check if user has permission to view external transfers */}
+      {!hasPermission("external_transfer.view") ? (
+        <div className="p-6">
+          <div className="bg-white rounded-lg p-8 shadow-sm border text-center">
+            <div className="text-red-500 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-5V9m0 0V7m0 2h2m-2 0H10" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to view External Transfers.</p>
+            <p className="text-sm text-gray-500 mt-2">Please contact your administrator to request access.</p>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Enhanced Header */}
       <div className="bg-white shadow-lg border-b border-indigo-100">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -896,6 +935,7 @@ export default function ExternalTransfer() {
                 </h2>
                 <p className="text-sm text-slate-600 mt-1">Manage transfers to external locations</p>
               </div>
+              {hasPermission("external_transfer.create") && (
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
@@ -905,6 +945,7 @@ export default function ExternalTransfer() {
                 </svg>
                 New Transfer
               </button>
+              )}
             </div>
           </div>
 
@@ -1040,6 +1081,7 @@ export default function ExternalTransfer() {
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-2">
+                            {hasPermission("external_transfer.print") && (
                             <button
                               onClick={() => handlePrintHistory(transfer)}
                               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -1049,6 +1091,8 @@ export default function ExternalTransfer() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                               </svg>
                             </button>
+                            )}
+                            {hasPermission("external_transfer.download") && (
                             <button
                               onClick={() => handleDownloadPDF(transfer)}
                               className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -1058,6 +1102,7 @@ export default function ExternalTransfer() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                               </svg>
                             </button>
+                            )}
                             {transfer.status === 'DRAFT' && (
                               <>
                                 <button
@@ -1088,12 +1133,14 @@ export default function ExternalTransfer() {
                                   });
                                   
                                   return hasItemsToReturn ? (
+                                    hasPermission("external_transfer.return") ? (
                                     <button
                                       onClick={() => handleReturnTransfer(transfer)}
                                       className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                                     >
                                       Return
                                     </button>
+                                    ) : null
                                   ) : (
                                     <div className="text-center">
                                       <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">Fully Returned</span>
@@ -1778,6 +1825,9 @@ export default function ExternalTransfer() {
             </div>
           </div>
         </div>
+      )}
+      )}
+      </>
       )}
     </div>
   );

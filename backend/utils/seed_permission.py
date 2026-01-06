@@ -153,6 +153,17 @@ PERMISSIONS = [
     ("stock_ledger.view", "Stock Ledger — View", "Stock Ledger"),
     ("stock_ledger.dispense", "Stock Ledger — Dispense", "Stock Ledger"),
     ("stock_ledger.available_qty", "Stock Ledger — Available Quantity", "Stock Ledger"),
+
+    # External Transfer
+    ("external_transfer.create", "External Transfer — Create", "External Transfer"),
+    ("external_transfer.view", "External Transfer — View", "External Transfer"),
+    ("external_transfer.print", "External Transfer — Print", "External Transfer"),
+    ("external_transfer.download", "External Transfer — Download", "External Transfer"),
+    ("external_transfer.return", "External Transfer — Return", "External Transfer"),
+
+    # Damaged Returns
+    ("damaged_returns.view", "Damaged Returns — View", "Damaged Returns"),
+    ("damaged_returns.print", "Damaged Returns — Print", "Damaged Returns"),
 ]
 
 
