@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_tenant_db
 from models.tenant_models import VendorPayment, GRN
+from utils.permissions import require_vendor_ledger_view, require_vendor_ledger_pay
 from datetime import date
 from decimal import Decimal
 
@@ -12,7 +13,7 @@ def get_db():
     yield from get_tenant_db(DEFAULT_DB)
 
 @router.post("/payments")
-async def create_payment(grn_id: int, amount: float, db: Session = Depends(get_db)):
+async def create_payment(grn_id: int, amount: float, db: Session = Depends(get_db), current_user: dict = Depends(require_vendor_ledger_pay())):
     try:
         # Get GRN details
         grn = db.query(GRN).filter(GRN.id == grn_id).first()
@@ -54,7 +55,7 @@ async def create_payment(grn_id: int, amount: float, db: Session = Depends(get_d
         return {"error": str(e)}
 
 @router.get("/payments/{grn_number}")
-async def get_payments(grn_number: str, db: Session = Depends(get_db)):
+async def get_payments(grn_number: str, db: Session = Depends(get_db), current_user: dict = Depends(require_vendor_ledger_view())):
     try:
         payment = db.query(VendorPayment).filter(VendorPayment.grn_number == grn_number).first()
         if payment:

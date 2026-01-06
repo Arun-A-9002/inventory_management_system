@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function StockManagement() {
   const [stocks, setStocks] = useState([]);
@@ -46,6 +47,11 @@ export default function StockManagement() {
   };
 
   const handleDispense = async (item, batchNo) => {
+    if (!hasPermission("stock_ledger.dispense")) {
+      alert("Permission denied");
+      return;
+    }
+    
     const batchIndex = item.batches.findIndex(b => b.batch_no === batchNo);
     const batch = item.batches[batchIndex];
     const quantity = batch.qty;
@@ -152,7 +158,9 @@ export default function StockManagement() {
                     <div className="text-xs text-gray-500">{s.item_code}</div>
                   </td>
                   <td className="border p-2">{getDisplayLocation(s)}</td>
-                  <td className="border p-2 font-semibold">{getDisplayQuantity(s)}</td>
+                  <td className="border p-2 font-semibold">
+                    {hasPermission("stock_ledger.available_qty") ? getDisplayQuantity(s) : "***"}
+                  </td>
                   <td className="border p-2">{s.min_stock}</td>
                   <td className="border p-2">
                     {(() => {
@@ -321,7 +329,9 @@ export default function StockManagement() {
                   <div><strong>Item Name:</strong> {viewModal.item.item_name}</div>
                   <div><strong>Item Code:</strong> {viewModal.item.item_code}</div>
                   <div><strong>Location:</strong> {viewModal.item.location}</div>
-                  <div><strong>Total Quantity:</strong> {viewModal.item.available_qty}</div>
+                  <div><strong>Total Quantity:</strong> 
+                    {hasPermission("stock_ledger.available_qty") ? viewModal.item.available_qty : "***"}
+                  </div>
                   <div><strong>Min Stock:</strong> {viewModal.item.min_stock}</div>
                   <div><strong>Status:</strong> 
                     <span className={`ml-2 px-2 py-1 rounded text-xs ${
@@ -355,7 +365,9 @@ export default function StockManagement() {
                             return (
                               <tr key={idx} className={expired ? 'bg-red-50' : ''}>
                                 <td className="border px-3 py-2 font-medium">{batch.batch_no}</td>
-                                <td className="border px-3 py-2 text-center">{batch.qty}</td>
+                                <td className="border px-3 py-2 text-center">
+                                  {hasPermission("stock_ledger.available_qty") ? batch.qty : "***"}
+                                </td>
                                 <td className="border px-3 py-2">{batch.location || viewModal.item.location}</td>
                                 <td className="border px-3 py-2">
                                   <span className={expired ? 'text-red-600 font-semibold' : ''}>
@@ -371,7 +383,7 @@ export default function StockManagement() {
                                   </span>
                                 </td>
                                 <td className="border px-3 py-2 text-center">
-                                  {expired && (
+                                  {expired && hasPermission("stock_ledger.dispense") && (
                                     <button
                                       onClick={() => handleDispense(viewModal.item, batch.batch_no)}
                                       className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
@@ -396,7 +408,9 @@ export default function StockManagement() {
                       <h4 className="font-semibold mb-2">Summary</h4>
                       <div className="text-sm space-y-1">
                         <div>Total Batches: {viewModal.item.batches?.length || 0}</div>
-                        <div>Total Quantity: {viewModal.item.available_qty}</div>
+                        <div>Total Quantity: 
+                          {hasPermission("stock_ledger.available_qty") ? viewModal.item.available_qty : "***"}
+                        </div>
                         <div>Expired Batches: {viewModal.item.batches?.filter(b => isExpired(b.expiry_date)).length || 0}</div>
                       </div>
                     </div>

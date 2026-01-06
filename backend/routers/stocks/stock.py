@@ -4,6 +4,7 @@ from sqlalchemy import func, and_
 from database import get_tenant_db
 from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue, Item, GRNItem, Batch, Department
 from schemas.tenant_schemas import *
+from utils.permissions import require_stock_ledger_view, require_stock_ledger_dispense, require_stock_ledger_available_qty
 from datetime import datetime, date, timedelta
 from typing import List
 
@@ -15,7 +16,7 @@ def get_db():
 
 # ---------------- OVERVIEW ----------------
 @router.get("/")
-def list_stock(db: Session = Depends(get_db)):
+def list_stock(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_available_qty())):
     # Get all active items from item master
     items = db.query(Item).filter(Item.is_active == True).all()
     
@@ -421,7 +422,7 @@ def get_stock_movements(limit: int = 50, db: Session = Depends(get_db)):
     return result
 
 @router.get("/ledger")
-def get_stock_ledger(db: Session = Depends(get_db)):
+def get_stock_ledger(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
     """Get stock ledger with batch information from GRN data"""
     from models.tenant_models import GRN, GRNStatus
     
@@ -633,7 +634,7 @@ def debug_batches(db: Session = Depends(get_db)):
     
     return debug_info
 @router.post("/dispense")
-def dispense_expired_stock(data: dict, db: Session = Depends(get_db)):
+def dispense_expired_stock(data: dict, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_dispense())):
     """Dispense expired stock"""
     item_name = data.get('item_name')
     batch_no = data.get('batch_no')

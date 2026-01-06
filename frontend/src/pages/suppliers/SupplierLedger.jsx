@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 // Payment Form Component
 function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
@@ -322,8 +323,10 @@ export default function SupplierLedger() {
   const [usedAdvances, setUsedAdvances] = useState({});
 
   useEffect(() => {
-    fetchGRNList();
-    fetchVendors();
+    if (hasPermission("vendor_ledger.view")) {
+      fetchGRNList();
+      fetchVendors();
+    }
   }, []);
 
   useEffect(() => {
@@ -338,6 +341,24 @@ export default function SupplierLedger() {
       setFilteredGrnList(grnList);
     }
   }, [selectedVendor, grnList]);
+
+  // Check if user has permission to view vendor ledger
+  if (!hasPermission("vendor_ledger.view")) {
+    return (
+      <div className="p-6">
+        <div className="bg-white rounded-lg p-8 shadow-sm border text-center">
+          <div className="text-red-500 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-5V9m0 0V7m0 2h2m-2 0H10" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
+          <p className="text-gray-600">You don't have permission to view the Vendor Ledger.</p>
+          <p className="text-sm text-gray-500 mt-2">Please contact your administrator to request access.</p>
+        </div>
+      </div>
+    );
+  }
 
   const fetchVendors = async () => {
     try {
@@ -388,14 +409,26 @@ export default function SupplierLedger() {
   }, 0) - (usedAdvances[selectedVendor] || 0);
 
   const handleViewGRN = (grn) => {
+    if (!hasPermission("vendor_ledger.view")) {
+      alert("Permission denied");
+      return;
+    }
     setViewModal({ isOpen: true, grn });
   };
 
   const handlePrintGRN = (grn) => {
+    if (!hasPermission("vendor_ledger.print")) {
+      alert("Permission denied");
+      return;
+    }
     setPrintModal({ isOpen: true, grn });
   };
 
   const handleInvoiceGRN = async (grn) => {
+    if (!hasPermission("vendor_ledger.invoice_view")) {
+      alert("Permission denied");
+      return;
+    }
     try {
       const res = await api.get(`/grn/${grn.id}`);
       setInvoiceModal({ isOpen: true, grn: res.data });
@@ -406,6 +439,10 @@ export default function SupplierLedger() {
   };
 
   const handlePayment = (grn) => {
+    if (!hasPermission("vendor_ledger.pay")) {
+      alert("Permission denied");
+      return;
+    }
     setPaymentModal({ isOpen: true, grn });
   };
 
@@ -580,6 +617,7 @@ export default function SupplierLedger() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
+                        {hasPermission("vendor_ledger.pay") && (
                         <button 
                           onClick={() => handlePayment(grn)}
                           disabled={outstanding === 0}
@@ -591,6 +629,8 @@ export default function SupplierLedger() {
                         >
                           Pay
                         </button>
+                        )}
+                        {hasPermission("vendor_ledger.view") && (
                         <button 
                           onClick={() => handleViewGRN(grn)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
@@ -601,6 +641,8 @@ export default function SupplierLedger() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
+                        )}
+                        {hasPermission("vendor_ledger.print") && (
                         <button 
                           onClick={() => handlePrintGRN(grn)}
                           className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -610,6 +652,8 @@ export default function SupplierLedger() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                           </svg>
                         </button>
+                        )}
+                        {hasPermission("vendor_ledger.invoice_view") && (
                         <button 
                           onClick={() => handleInvoiceGRN(grn)}
                           className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -619,6 +663,7 @@ export default function SupplierLedger() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -784,12 +829,14 @@ export default function SupplierLedger() {
                 </div>
                 
                 <div className="text-center mt-8">
+                  {hasPermission("vendor_ledger.print") && (
                   <button 
                     onClick={() => window.print()}
                     className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
                   >
                     Print
                   </button>
+                  )}
                 </div>
               </div>
             )}
@@ -962,6 +1009,7 @@ export default function SupplierLedger() {
                 </div>
 
                 <div className="flex justify-center space-x-4 pt-4">
+                  {hasPermission("vendor_ledger.print") && (
                   <button 
                     onClick={() => window.print()}
                     className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
@@ -971,6 +1019,7 @@ export default function SupplierLedger() {
                     </svg>
                     Print Invoice
                   </button>
+                  )}
                   <button 
                     className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center"
                   >

@@ -9,12 +9,13 @@ from models.tenant_models import (
     ReturnTypeEnum, ItemConditionEnum, DisposalMethodEnum
 )
 from utils.email import send_email
+from utils.permissions import require_return_disposal_view, require_return_disposal_create, require_return_disposal_edit, require_return_disposal_delete, require_return_disposal_status_approve
 from typing import List, Optional
 
 router = APIRouter(prefix="/returns", tags=["Return & Disposal"])
 
 @router.get("/")
-def list_returns(db: Session = Depends(get_tenant_db)):
+def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all returns with proper location data"""
     returns = db.query(ReturnHeader).order_by(ReturnHeader.created_at.desc()).all()
     
@@ -41,7 +42,7 @@ def list_returns(db: Session = Depends(get_tenant_db)):
 
 # ---------------- CREATE RETURN ----------------
 @router.post("/")
-def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
+def create_return(return_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create new return"""
     # Generate return number
     return_no = f"RTN{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -138,7 +139,7 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
 
 # ---------------- GET RETURN DETAILS ----------------
 @router.get("/{return_id}")
-def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
+def get_return_details(return_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get return details with items"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -152,7 +153,7 @@ def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
     }
 
 @router.get("/{return_id}/items")
-def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
+def get_return_items(return_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get return items for a specific return with correct rates, warranty, and tax info"""
     return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
     
@@ -210,7 +211,7 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
 
 # ---------------- UPDATE RETURN STATUS ----------------
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):
+def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_status_approve())):
     """Update return status and handle stock adjustments"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -343,7 +344,7 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
 
 # ---------------- DISPOSAL ----------------
 @router.post("/disposal")
-def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db)):
+def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Process item disposal"""
     transaction_no = f"DSP{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -368,14 +369,14 @@ def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db)):
 
 # ---------------- LIST DISPOSALS ----------------
 @router.get("/disposals")
-def list_disposals(db: Session = Depends(get_tenant_db)):
+def list_disposals(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all disposal transactions"""
     disposals = db.query(DisposalTransaction).order_by(DisposalTransaction.created_at.desc()).all()
     return disposals
 
 # ---------------- SALVAGE VALUATION ----------------
 @router.post("/salvage")
-def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenant_db)):
+def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create salvage valuation"""
     salvage_no = f"SAL{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -409,14 +410,14 @@ def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenan
 
 # ---------------- LIST SALVAGE VALUATIONS ----------------
 @router.get("/salvage")
-def list_salvage_valuations(db: Session = Depends(get_tenant_db)):
+def list_salvage_valuations(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all salvage valuations"""
     salvages = db.query(SalvageValuation).order_by(SalvageValuation.created_at.desc()).all()
     return salvages
 
 # ---------------- GENERATE INVOICE & SEND EMAIL ----------------
 @router.post("/generate-invoice")
-def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant_db)):
+def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
     """Generate invoice for customer return and send via email"""
     return_id = data.get('return_id')
     customer_id = data.get('customer_id')

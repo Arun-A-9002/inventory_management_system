@@ -135,6 +135,24 @@ PERMISSIONS = [
     ("grn.print", "GRN — Print", "Goods Receipt & Inspection (GRN)"),
     ("grn.status_qc", "GRN — QC Status", "Goods Receipt & Inspection (GRN)"),
     ("grn.status_approve", "GRN — Approve Status", "Goods Receipt & Inspection (GRN)"),
+
+    # Return and Disposal
+    ("return_disposal.view", "Return & Disposal — View", "Return and Disposal"),
+    ("return_disposal.create", "Return & Disposal — Create", "Return and Disposal"),
+    ("return_disposal.edit", "Return & Disposal — Edit", "Return and Disposal"),
+    ("return_disposal.delete", "Return & Disposal — Delete", "Return and Disposal"),
+    ("return_disposal.status_approve", "Return & Disposal — Approve Status", "Return and Disposal"),
+
+    # Vendor Ledger
+    ("vendor_ledger.view", "Vendor Ledger — View", "Vendor Ledger"),
+    ("vendor_ledger.pay", "Vendor Ledger — Pay", "Vendor Ledger"),
+    ("vendor_ledger.print", "Vendor Ledger — Print", "Vendor Ledger"),
+    ("vendor_ledger.invoice_view", "Vendor Ledger — Invoice View", "Vendor Ledger"),
+
+    # Stock Ledger
+    ("stock_ledger.view", "Stock Ledger — View", "Stock Ledger"),
+    ("stock_ledger.dispense", "Stock Ledger — Dispense", "Stock Ledger"),
+    ("stock_ledger.available_qty", "Stock Ledger — Available Quantity", "Stock Ledger"),
 ]
 
 

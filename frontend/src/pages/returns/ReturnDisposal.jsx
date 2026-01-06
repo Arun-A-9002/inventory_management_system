@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function ReturnDisposal() {
   const [returns, setReturns] = useState([]);
@@ -163,6 +164,11 @@ export default function ReturnDisposal() {
   };
 
   const fetchReturns = async () => {
+    if (!hasPermission("return_disposal.view")) {
+      showMessage('Permission denied: Cannot view returns', 'error');
+      return;
+    }
+    
     try {
       setLoading(true);
       const res = await api.get('/returns/');
@@ -354,6 +360,11 @@ export default function ReturnDisposal() {
   };
 
   const viewReturn = async (returnId) => {
+    if (!hasPermission("return_disposal.view")) {
+      showMessage('Permission denied: Cannot view return details', 'error');
+      return;
+    }
+    
     try {
       const res = await api.get(`/returns/${returnId}`);
       const returnData = res.data;
@@ -409,6 +420,11 @@ export default function ReturnDisposal() {
   };
 
   const editReturn = async (returnId) => {
+    if (!hasPermission("return_disposal.edit")) {
+      showMessage('Permission denied: Cannot edit returns', 'error');
+      return;
+    }
+    
     try {
       const res = await api.get(`/returns/${returnId}`);
       const returnData = res.data;
@@ -483,6 +499,11 @@ export default function ReturnDisposal() {
   };
 
   const deleteReturn = async (returnId) => {
+    if (!hasPermission("return_disposal.delete")) {
+      showMessage('Permission denied: Cannot delete returns', 'error');
+      return;
+    }
+    
     // Find the return to check its status
     const returnToDelete = returns.find(r => r.id === returnId);
     
@@ -504,6 +525,11 @@ export default function ReturnDisposal() {
   };
 
   const updateReturnStatus = async (returnId, status) => {
+    if (!hasPermission("return_disposal.status_approve")) {
+      showMessage('Permission denied: Cannot update return status', 'error');
+      return;
+    }
+    
     try {
       await api.patch(`/returns/${returnId}/status?status=${status}`);
       
@@ -557,6 +583,11 @@ export default function ReturnDisposal() {
   };
 
   const createReturn = async () => {
+    if (!hasPermission("return_disposal.create")) {
+      showMessage('Permission denied: Cannot create returns', 'error');
+      return;
+    }
+    
     if (!returnForm.return_type) {
       alert('Please select return type');
       return;
@@ -726,6 +757,18 @@ export default function ReturnDisposal() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {!hasPermission("return_disposal.view") ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+            <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
+            <p className="text-gray-600">You do not have permission to view Return and Disposal module.</p>
+          </div>
+        </div>
+      ) : (
+        <div>
       {/* MODERN HEADER */}
       <div className="bg-white shadow-sm border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -774,15 +817,17 @@ export default function ReturnDisposal() {
                 </h2>
                 <p className="text-sm text-slate-600 mt-1">Manage and track all return transactions</p>
               </div>
-              <button
-                onClick={openNewReturnModal}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                New Return
-              </button>
+              {hasPermission("return_disposal.create") && (
+                <button
+                  onClick={openNewReturnModal}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  New Return
+                </button>
+              )}
             </div>
           </div>
 
@@ -841,53 +886,69 @@ export default function ReturnDisposal() {
                         </td>
                         <td className="py-4 px-6 text-center">
                           <div className="space-y-2">
-                            <select
-                              value={returnItem.status || 'DRAFT'}
-                              onChange={(e) => updateReturnStatus(returnItem.id, e.target.value)}
-                              className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                            {hasPermission("return_disposal.status_approve") ? (
+                              <select
+                                value={returnItem.status || 'DRAFT'}
+                                onChange={(e) => updateReturnStatus(returnItem.id, e.target.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                  returnItem.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 
+                                  returnItem.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}
+                              >
+                                <option value="DRAFT">DRAFT</option>
+                                <option value="APPROVED">APPROVED</option>
+                                <option value="REJECTED">REJECTED</option>
+                                <option value="COMPLETED">COMPLETED</option>
+                                <option value="DELETED">DELETED</option>
+                              </select>
+                            ) : (
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                 returnItem.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 
                                 returnItem.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
                                 'bg-yellow-100 text-yellow-800'
-                              }`}
-                            >
-                              <option value="DRAFT">DRAFT</option>
-                              <option value="APPROVED">APPROVED</option>
-                              <option value="REJECTED">REJECTED</option>
-                              <option value="COMPLETED">COMPLETED</option>
-                              <option value="DELETED">DELETED</option>
-                            </select>
+                              }`}>
+                                {returnItem.status || 'DRAFT'}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center justify-center space-x-2">
-                            <button 
-                              onClick={() => viewReturn(returnItem.id)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                              title="View Details"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            <button 
-                              onClick={() => editReturn(returnItem.id)}
-                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                              title="Edit Return"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            <button 
-                              onClick={() => deleteReturn(returnItem.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete Return"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
+                            {hasPermission("return_disposal.view") && (
+                              <button 
+                                onClick={() => viewReturn(returnItem.id)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                title="View Details"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                            )}
+                            {hasPermission("return_disposal.edit") && (
+                              <button 
+                                onClick={() => editReturn(returnItem.id)}
+                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                title="Edit Return"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                            {hasPermission("return_disposal.delete") && (
+                              <button 
+                                onClick={() => deleteReturn(returnItem.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete Return"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1513,6 +1574,8 @@ export default function ReturnDisposal() {
               <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">Process Returns</button>
             </div>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

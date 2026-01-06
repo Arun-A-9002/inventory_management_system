@@ -55,7 +55,10 @@ def get_user_permissions(user_data: dict) -> list:
                 "locations.view", "locations.create_internal", "locations.create_external", "locations.edit", "locations.delete",
                 "purchase_request.view", "purchase_request.create", "purchase_request.edit", "purchase_request.delete", "purchase_request.status", "purchase_request.send_po",
                 "purchase_order.view", "purchase_order.print", "purchase_order.download",
-                "grn.view", "grn.create", "grn.edit", "grn.delete", "grn.print", "grn.status_qc", "grn.status_approve"]
+                "grn.view", "grn.create", "grn.edit", "grn.delete", "grn.print", "grn.status_qc", "grn.status_approve",
+                "return_disposal.view", "return_disposal.create", "return_disposal.edit", "return_disposal.delete", "return_disposal.status_approve",
+                "vendor_ledger.view", "vendor_ledger.pay", "vendor_ledger.print", "vendor_ledger.invoice_view",
+                "stock_ledger.view", "stock_ledger.dispense", "stock_ledger.available_qty"]
     
     return user_data.get("permissions", [])
 
@@ -294,3 +297,42 @@ def require_grn_status_qc():
 
 def require_grn_status_approve():
     return require_permission("grn.status_approve")
+
+# Return and Disposal permission decorators
+def require_return_disposal_view():
+    return require_permission("return_disposal.view")
+
+def require_return_disposal_create():
+    return require_permission("return_disposal.create")
+
+def require_return_disposal_edit():
+    return require_permission("return_disposal.edit")
+
+def require_return_disposal_delete():
+    return require_permission("return_disposal.delete")
+
+def require_return_disposal_status_approve():
+    return require_permission("return_disposal.status_approve")
+
+# Vendor Ledger permission decorators
+def require_vendor_ledger_view():
+    return require_permission("vendor_ledger.view")
+
+def require_vendor_ledger_pay():
+    return require_permission("vendor_ledger.pay")
+
+def require_vendor_ledger_print():
+    return require_permission("vendor_ledger.print")
+
+def require_vendor_ledger_invoice_view():
+    return require_permission("vendor_ledger.invoice_view")
+
+# Stock Ledger permission decorators
+def require_stock_ledger_view():
+    return require_permission("stock_ledger.view")
+
+def require_stock_ledger_dispense():
+    return require_permission("stock_ledger.dispense")
+
+def require_stock_ledger_available_qty():
+    return require_permission("stock_ledger.available_qty")
