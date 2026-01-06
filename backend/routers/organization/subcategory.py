@@ -7,7 +7,7 @@ from models.tenant_models import SubCategory, Category
 from schemas.tenant_schemas import (
     SubCategoryCreate, SubCategoryUpdate, SubCategoryResponse
 )
-
+from utils.permissions import require_subcategory_view, require_subcategory_create, require_subcategory_edit, require_subcategory_delete
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/subcategory", tags=["SubCategory"])
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/subcategory", tags=["SubCategory"])
 # CREATE SUBCATEGORY
 # --------------------------
 @router.post("/", response_model=SubCategoryResponse)
-def create_subcategory(data: SubCategoryCreate, db: Session = Depends(get_tenant_db)):
+def create_subcategory(data: SubCategoryCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_create())):
     log_api("CREATE SUBCATEGORY")
 
     try:
@@ -43,7 +43,7 @@ def create_subcategory(data: SubCategoryCreate, db: Session = Depends(get_tenant
 # LIST ALL SUBCATEGORIES
 # --------------------------
 @router.get("/", response_model=list[SubCategoryResponse])
-def list_subcategories(db: Session = Depends(get_tenant_db)):
+def list_subcategories(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     return db.query(SubCategory).options(joinedload(SubCategory.category)).all()
 
 
@@ -51,7 +51,7 @@ def list_subcategories(db: Session = Depends(get_tenant_db)):
 # GET SUBCATEGORIES BY CATEGORY
 # --------------------------
 @router.get("/by-category/{category_id}", response_model=list[SubCategoryResponse])
-def get_subcategories_by_category(category_id: int, db: Session = Depends(get_tenant_db)):
+def get_subcategories_by_category(category_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     return db.query(SubCategory).filter(SubCategory.category_id == category_id).all()
 
 
@@ -59,7 +59,7 @@ def get_subcategories_by_category(category_id: int, db: Session = Depends(get_te
 # GET SUBCATEGORY
 # --------------------------
 @router.get("/{sub_id}", response_model=SubCategoryResponse)
-def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db)):
+def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     sub = db.query(SubCategory).options(joinedload(SubCategory.category)).filter(SubCategory.id == sub_id).first()
     if not sub:
         raise HTTPException(404, "SubCategory not found")
@@ -70,7 +70,7 @@ def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE SUBCATEGORY
 # --------------------------
 @router.put("/{sub_id}", response_model=SubCategoryResponse)
-def update_subcategory(sub_id: int, data: SubCategoryUpdate, db: Session = Depends(get_tenant_db)):
+def update_subcategory(sub_id: int, data: SubCategoryUpdate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_edit())):
     log_api("UPDATE SUBCATEGORY")
 
     sub = db.query(SubCategory).filter(SubCategory.id == sub_id).first()
@@ -92,7 +92,7 @@ def update_subcategory(sub_id: int, data: SubCategoryUpdate, db: Session = Depen
 # DELETE SUBCATEGORY
 # --------------------------
 @router.delete("/{sub_id}")
-def delete_subcategory(sub_id: int, db: Session = Depends(get_tenant_db)):
+def delete_subcategory(sub_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_delete())):
     log_api("DELETE SUBCATEGORY")
 
     sub = db.query(SubCategory).filter(SubCategory.id == sub_id).first()

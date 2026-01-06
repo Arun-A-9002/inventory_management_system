@@ -3,6 +3,10 @@ from sqlalchemy.orm import Session
 from database import get_tenant_db
 from models.tenant_models import Customer
 from schemas.tenant_schemas import CustomerCreate, CustomerResponse
+from utils.permissions import (
+    require_customers_view, require_customers_create, require_customers_edit, 
+    require_customers_delete, require_customers_status
+)
 
 router = APIRouter(prefix="/customers", tags=["Customer Management"])
 DEFAULT_DB = "arun"
@@ -11,7 +15,7 @@ def get_db():
     yield from get_tenant_db(DEFAULT_DB)
 
 @router.post("/", response_model=CustomerResponse)
-def create_customer(data: CustomerCreate, db: Session = Depends(get_db)):
+def create_customer(data: CustomerCreate, db: Session = Depends(get_db), _: dict = Depends(require_customers_create())):
     """Create a new customer"""
     customer = Customer(**data.dict())
     db.add(customer)
@@ -20,13 +24,13 @@ def create_customer(data: CustomerCreate, db: Session = Depends(get_db)):
     return customer
 
 @router.get("/", response_model=list[CustomerResponse])
-def list_customers(db: Session = Depends(get_db)):
+def list_customers(db: Session = Depends(get_db), _: dict = Depends(require_customers_view())):
     """Get all customers"""
     customers = db.query(Customer).filter(Customer.is_active == True).all()
     return customers
 
 @router.get("/approved")
-def get_approved_customers(db: Session = Depends(get_db)):
+def get_approved_customers(db: Session = Depends(get_db), _: dict = Depends(require_customers_view())):
     """Get only approved customers for returns and disposal"""
     customers = db.query(Customer).filter(
         Customer.is_active == True,
@@ -35,7 +39,7 @@ def get_approved_customers(db: Session = Depends(get_db)):
     return customers
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
-def get_customer(customer_id: int, db: Session = Depends(get_db)):
+def get_customer(customer_id: int, db: Session = Depends(get_db), _: dict = Depends(require_customers_view())):
     """Get customer by ID"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -43,7 +47,7 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
     return customer
 
 @router.put("/{customer_id}", response_model=CustomerResponse)
-def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depends(get_db)):
+def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depends(get_db), _: dict = Depends(require_customers_edit())):
     """Update customer"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -57,7 +61,7 @@ def update_customer(customer_id: int, data: CustomerCreate, db: Session = Depend
     return customer
 
 @router.put("/{customer_id}/status", response_model=CustomerResponse)
-def update_customer_status(customer_id: int, status_data: dict, db: Session = Depends(get_db)):
+def update_customer_status(customer_id: int, status_data: dict, db: Session = Depends(get_db), _: dict = Depends(require_customers_status())):
     """Update customer status"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -100,7 +104,7 @@ def update_customer_status(customer_id: int, status_data: dict, db: Session = De
     return customer
 
 @router.put("/{customer_id}/approve", response_model=CustomerResponse)
-def approve_customer(customer_id: int, db: Session = Depends(get_db)):
+def approve_customer(customer_id: int, db: Session = Depends(get_db), _: dict = Depends(require_customers_status())):
     """Approve customer and send email notification"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
@@ -144,7 +148,7 @@ def approve_customer(customer_id: int, db: Session = Depends(get_db)):
     return customer
 
 @router.delete("/{customer_id}")
-def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+def delete_customer(customer_id: int, db: Session = Depends(get_db), _: dict = Depends(require_customers_delete())):
     """Delete customer (soft delete)"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:

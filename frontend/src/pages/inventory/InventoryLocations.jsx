@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function InventoryLocations() {
   const [locations, setLocations] = useState([]);
@@ -9,6 +10,7 @@ export default function InventoryLocations() {
   const [editingLocation, setEditingLocation] = useState(null);
   const [viewingLocation, setViewingLocation] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', type: '' });
   const [formData, setFormData] = useState({
     code: "",
     name: "",
@@ -17,10 +19,22 @@ export default function InventoryLocations() {
   });
 
   useEffect(() => {
-    loadLocations();
+    if (hasPermission('locations.view')) {
+      loadLocations();
+    }
   }, []);
 
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+  };
+
   const loadLocations = async () => {
+    if (!hasPermission('locations.view')) {
+      showMessage('You do not have permission to view locations', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await api.get("/inventory/locations/");
@@ -28,7 +42,7 @@ export default function InventoryLocations() {
       setLocations(locationData);
       filterLocations(locationData, activeFilter);
     } catch (error) {
-      console.error("Error loading locations:", error);
+      showMessage('Failed to load locations: ' + (error.response?.data?.detail || error.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -51,8 +65,20 @@ export default function InventoryLocations() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    const requiredPermission = formData.location_type === 'external' ? 'locations.create_external' : 'locations.create_internal';
+    if (!editingLocation && !hasPermission(requiredPermission)) {
+      showMessage(`You do not have permission to create ${formData.location_type} locations`, 'error');
+      return;
+    }
+
+    if (editingLocation && !hasPermission('locations.edit')) {
+      showMessage('You do not have permission to edit locations', 'error');
+      return;
+    }
+
     if (!formData.code || !formData.name) {
-      alert("Code and Name are required");
+      showMessage("Code and Name are required", 'error');
       return;
     }
 
@@ -60,19 +86,26 @@ export default function InventoryLocations() {
     try {
       if (editingLocation) {
         await api.put(`/inventory/locations/${editingLocation.id}`, formData);
+        showMessage('Location updated successfully');
       } else {
         await api.post("/inventory/locations/", formData);
+        showMessage('Location created successfully');
       }
       handleCancel();
       await loadLocations();
     } catch (error) {
-      alert(error.response?.data?.detail || "Error saving location");
+      showMessage(error.response?.data?.detail || "Error saving location", 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = (location) => {
+    if (!hasPermission('locations.edit')) {
+      showMessage('You do not have permission to edit locations', 'error');
+      return;
+    }
+
     setEditingLocation(location);
     setFormData({
       code: location.code,
@@ -88,13 +121,19 @@ export default function InventoryLocations() {
   };
 
   const handleDelete = async (location) => {
+    if (!hasPermission('locations.delete')) {
+      showMessage('You do not have permission to delete locations', 'error');
+      return;
+    }
+
     if (window.confirm(`Are you sure you want to delete location "${location.name}"?`)) {
       setLoading(true);
       try {
         await api.delete(`/inventory/locations/${location.id}`);
+        showMessage('Location deleted successfully');
         await loadLocations();
       } catch (error) {
-        alert(error.response?.data?.detail || "Error deleting location");
+        showMessage(error.response?.data?.detail || "Error deleting location", 'error');
       } finally {
         setLoading(false);
       }
@@ -102,6 +141,11 @@ export default function InventoryLocations() {
   };
 
   const handleExternalLocation = () => {
+    if (!hasPermission('locations.create_external')) {
+      showMessage('You do not have permission to create external locations', 'error');
+      return;
+    }
+
     setFormData({
       code: "EXT",
       name: "External Location",
@@ -111,12 +155,38 @@ export default function InventoryLocations() {
     setShowModal(true);
   };
 
+  const handleInternalLocation = () => {
+    if (!hasPermission('locations.create_internal')) {
+      showMessage('You do not have permission to create internal locations', 'error');
+      return;
+    }
+
+    setFormData({ code: "", name: "", description: "", location_type: "internal" });
+    setShowModal(true);
+  };
+
   const handleCancel = () => {
     setShowModal(false);
     setEditingLocation(null);
     setViewingLocation(null);
     setFormData({ code: "", name: "", description: "", location_type: "internal" });
   };
+
+  if (!hasPermission('locations.view')) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+            <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
+          <p className="text-gray-500">You do not have permission to view location management.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -140,25 +210,29 @@ export default function InventoryLocations() {
                 </div>
               </div>
               <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                >
-                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Internal Location
-                </button>
-                <button
-                  onClick={() => handleExternalLocation()}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                >
-                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  External Location
-                </button>
+                {hasPermission('locations.create_internal') && (
+                  <button
+                    onClick={handleInternalLocation}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  >
+                    <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Internal Location
+                  </button>
+                )}
+                {hasPermission('locations.create_external') && (
+                  <button
+                    onClick={handleExternalLocation}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  >
+                    <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    External Location
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -167,6 +241,13 @@ export default function InventoryLocations() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Message */}
+        {message.text && (
+          <div className={`mb-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            {message.text}
+          </div>
+        )}
+
         {/* Filter Tabs */}
         <div className="mb-6">
           <div className="border-b border-gray-200">
@@ -227,29 +308,33 @@ export default function InventoryLocations() {
                'Get started by creating your first inventory location to organize your stock effectively.'}
             </p>
             <div className="flex space-x-3 justify-center">
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Create Internal Location
-              </button>
-              <button
-                onClick={() => handleExternalLocation()}
-                className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                External Location
-              </button>
+              {hasPermission('locations.create_internal') && (
+                <button
+                  onClick={handleInternalLocation}
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Create Internal Location
+                </button>
+              )}
+              {hasPermission('locations.create_external') && (
+                <button
+                  onClick={handleExternalLocation}
+                  className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  External Location
+                </button>
+              )}
             </div>
           </div>
         ) : (
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">
@@ -310,34 +395,40 @@ export default function InventoryLocations() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => handleView(location)}
-                            className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="View Details"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleEdit(location)}
-                            className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="Edit Location"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(location)}
-                            className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="Delete Location"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {hasPermission('locations.view') && (
+                            <button
+                              onClick={() => handleView(location)}
+                              className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="View Details"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                          )}
+                          {hasPermission('locations.edit') && (
+                            <button
+                              onClick={() => handleEdit(location)}
+                              className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="Edit Location"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
+                          {hasPermission('locations.delete') && (
+                            <button
+                              onClick={() => handleDelete(location)}
+                              className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="Delete Location"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -355,7 +446,7 @@ export default function InventoryLocations() {
           <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                {editingLocation ? 'Edit Location' : 'Create Internal Location'}
+                {editingLocation ? 'Edit Location' : `Create ${formData.location_type === 'external' ? 'External' : 'Internal'} Location`}
               </h3>
               <button
                 onClick={handleCancel}
@@ -500,15 +591,17 @@ export default function InventoryLocations() {
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => {
-                    handleCancel();
-                    handleEdit(viewingLocation);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                >
-                  Edit Location
-                </button>
+                {hasPermission('locations.edit') && (
+                  <button
+                    onClick={() => {
+                      handleCancel();
+                      handleEdit(viewingLocation);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  >
+                    Edit Location
+                  </button>
+                )}
               </div>
             </div>
           </div>

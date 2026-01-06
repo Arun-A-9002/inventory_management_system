@@ -5,6 +5,7 @@ from typing import List
 from database import get_tenant_db
 from models.tenant_models import Item, Category, SubCategory
 from schemas.tenant_schemas import ItemCreate, ItemUpdate, ItemResponse
+from utils.permissions import require_items_view, require_items_create, require_items_edit, require_items_delete
 
 DEFAULT_TENANT_DB = "arun"
 
@@ -18,7 +19,7 @@ def get_db():
 
 # ---------------- CREATE ----------------
 @router.post("/", response_model=ItemResponse)
-def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
+def create_item(payload: ItemCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_items_create())):
     existing = db.query(Item).filter(Item.item_code == payload.item_code).first()
     if existing:
         raise HTTPException(400, "Item code already exists")
@@ -31,7 +32,7 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
 
 # ---------------- GET ALL ----------------
 @router.get("/")
-def list_items(db: Session = Depends(get_db)):
+def list_items(db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
     items = db.query(Item).order_by(Item.id.desc()).all()
     
     # Get category and subcategory names
@@ -132,7 +133,7 @@ def search_items(name: str = None, db: Session = Depends(get_db)):
 
 # ---------------- GET ONE ----------------
 @router.get("/{item_id}", response_model=ItemResponse)
-def get_item(item_id: int, db: Session = Depends(get_db)):
+def get_item(item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")
@@ -140,7 +141,7 @@ def get_item(item_id: int, db: Session = Depends(get_db)):
 
 # ---------------- UPDATE ----------------
 @router.put("/{item_id}", response_model=ItemResponse)
-def update_item(item_id: int, payload: ItemUpdate, db: Session = Depends(get_db)):
+def update_item(item_id: int, payload: ItemUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_items_edit())):
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")
@@ -154,7 +155,7 @@ def update_item(item_id: int, payload: ItemUpdate, db: Session = Depends(get_db)
 
 # ---------------- SOFT DELETE ----------------
 @router.delete("/{item_id}")
-def deactivate_item(item_id: int, db: Session = Depends(get_db)):
+def deactivate_item(item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_items_delete())):
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")

@@ -19,7 +19,7 @@ export default function Department() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    if (hasPermission("departments.view")) loadDepartments();
+    if (hasPermission("department.view")) loadDepartments();
   }, []);
 
   const loadDepartments = async () => {
@@ -97,7 +97,7 @@ export default function Department() {
     });
 
   // VIEW guard
-  if (!hasPermission("departments.view")) {
+  if (!hasPermission("department.view")) {
     return <div className="p-6 text-red-600">You do not have permission to view departments.</div>;
   }
 

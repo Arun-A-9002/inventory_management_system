@@ -9,7 +9,7 @@ from models.tenant_models import Company
 from schemas.tenant_schemas import (
     CompanyCreate, CompanyUpdate, CompanyResponse
 )
-
+from utils.permissions import require_company_view, require_company_create, require_company_edit, require_company_delete
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/company", tags=["Company"])
@@ -23,7 +23,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # CREATE COMPANY
 # --------------------------
 @router.post("/", response_model=CompanyResponse)
-def create_company(data: CompanyCreate, db: Session = Depends(get_tenant_db)):
+def create_company(data: CompanyCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_create())):
     log_api("CREATE COMPANY")
 
     try:
@@ -50,7 +50,7 @@ def create_company(data: CompanyCreate, db: Session = Depends(get_tenant_db)):
 # LIST ALL COMPANIES
 # --------------------------
 @router.get("/", response_model=list[CompanyResponse])
-def list_companies(db: Session = Depends(get_tenant_db)):
+def list_companies(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_view())):
     return db.query(Company).all()
 
 
@@ -58,7 +58,7 @@ def list_companies(db: Session = Depends(get_tenant_db)):
 # GET SINGLE COMPANY
 # --------------------------
 @router.get("/{company_id}", response_model=CompanyResponse)
-def get_company(company_id: int, db: Session = Depends(get_tenant_db)):
+def get_company(company_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_view())):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(404, "Company not found")
@@ -69,7 +69,7 @@ def get_company(company_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE COMPANY
 # --------------------------
 @router.put("/{company_id}", response_model=CompanyResponse)
-def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(get_tenant_db)):
+def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_edit())):
     log_api("UPDATE COMPANY")
 
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -89,7 +89,7 @@ def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(g
 # DELETE COMPANY
 # --------------------------
 @router.delete("/{company_id}")
-def delete_company(company_id: int, db: Session = Depends(get_tenant_db)):
+def delete_company(company_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_delete())):
     log_api("DELETE COMPANY")
 
     company = db.query(Company).filter(Company.id == company_id).first()

@@ -6,7 +6,7 @@ from models.tenant_models import Brand
 from schemas.tenant_schemas import (
     BrandCreate, BrandUpdate, BrandResponse
 )
-
+from utils.permissions import require_brand_view, require_brand_create, require_brand_edit, require_brand_delete
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/brand", tags=["Brand"])
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/brand", tags=["Brand"])
 # CREATE BRAND
 # --------------------------
 @router.post("/", response_model=BrandResponse)
-def create_brand(data: BrandCreate, db: Session = Depends(get_tenant_db)):
+def create_brand(data: BrandCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_create())):
     log_api("CREATE BRAND")
 
     try:
@@ -42,7 +42,7 @@ def create_brand(data: BrandCreate, db: Session = Depends(get_tenant_db)):
 # LIST BRANDS
 # --------------------------
 @router.get("/", response_model=list[BrandResponse])
-def list_brands(db: Session = Depends(get_tenant_db)):
+def list_brands(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_view())):
     return db.query(Brand).all()
 
 
@@ -50,7 +50,7 @@ def list_brands(db: Session = Depends(get_tenant_db)):
 # GET BRAND
 # --------------------------
 @router.get("/{brand_id}", response_model=BrandResponse)
-def get_brand(brand_id: int, db: Session = Depends(get_tenant_db)):
+def get_brand(brand_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_view())):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if not brand:
         raise HTTPException(404, "Brand not found")
@@ -61,7 +61,7 @@ def get_brand(brand_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE BRAND
 # --------------------------
 @router.put("/{brand_id}", response_model=BrandResponse)
-def update_brand(brand_id: int, data: BrandUpdate, db: Session = Depends(get_tenant_db)):
+def update_brand(brand_id: int, data: BrandUpdate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_edit())):
     log_api("UPDATE BRAND")
 
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
@@ -82,7 +82,7 @@ def update_brand(brand_id: int, data: BrandUpdate, db: Session = Depends(get_ten
 # DELETE BRAND
 # --------------------------
 @router.delete("/{brand_id}")
-def delete_brand(brand_id: int, db: Session = Depends(get_tenant_db)):
+def delete_brand(brand_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_delete())):
     log_api("DELETE BRAND")
 
     brand = db.query(Brand).filter(Brand.id == brand_id).first()

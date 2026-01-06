@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import MasterDataHeader from "../../components/MasterDataHeader";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Category() {
   const [categories, setCategories] = useState([]);
@@ -17,7 +18,7 @@ export default function Category() {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    loadCategories();
+    if (hasPermission("category.view")) loadCategories();
   }, []);
 
   const loadCategories = async () => {
@@ -34,6 +35,7 @@ export default function Category() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("category.create")) return alert("Permission denied");
     if (!form.name.trim()) return alert("Category name is required");
 
     try {
@@ -48,11 +50,13 @@ export default function Category() {
   };
 
   const startEdit = (c) => {
+    if (!hasPermission("category.edit")) return alert("Permission denied");
     setEditingId(c.id);
     setEditForm({ ...c });
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("category.edit")) return alert("Permission denied");
     try {
       await api.put(`/category/${editingId}`, editForm);
       setEditingId(null);
@@ -64,6 +68,7 @@ export default function Category() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("category.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this category?")) return;
 
     try {
@@ -78,6 +83,10 @@ export default function Category() {
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (!hasPermission("category.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view categories.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -130,7 +139,7 @@ export default function Category() {
       <MasterDataHeader 
         title="Category Management"
         subtitle="Organize your products using categories."
-        onCreateClick={() => setShowCreateForm(true)}
+        onCreateClick={() => hasPermission("category.create") && setShowCreateForm(true)}
         createButtonText="Create Category"
       />
 
@@ -182,18 +191,22 @@ export default function Category() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
+                        {hasPermission("category.edit") && (
                         <button
                           onClick={() => startEdit(c)}
                           className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Edit
                         </button>
+                        )}
+                        {hasPermission("category.delete") && (
                         <button
                           onClick={() => handleDelete(c.id)}
                           className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Delete
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

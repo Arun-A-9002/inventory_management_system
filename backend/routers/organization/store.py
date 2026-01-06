@@ -7,7 +7,7 @@ from models.tenant_models import Store, Branch
 from schemas.tenant_schemas import (
     StoreCreate, StoreUpdate, StoreResponse
 )
-
+from utils.permissions import require_store_view, require_store_create, require_store_edit, require_store_delete
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/store", tags=["Store"])
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/store", tags=["Store"])
 # CREATE STORE
 # --------------------------
 @router.post("/", response_model=StoreResponse)
-def create_store(data: StoreCreate, db: Session = Depends(get_tenant_db)):
+def create_store(data: StoreCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_create())):
     log_api("CREATE STORE")
 
     try:
@@ -43,7 +43,7 @@ def create_store(data: StoreCreate, db: Session = Depends(get_tenant_db)):
 # LIST ALL STORES
 # --------------------------
 @router.get("/", response_model=list[StoreResponse])
-def list_stores(db: Session = Depends(get_tenant_db)):
+def list_stores(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_view())):
     return db.query(Store).options(joinedload(Store.branch)).all()
 
 
@@ -51,7 +51,7 @@ def list_stores(db: Session = Depends(get_tenant_db)):
 # GET ONE STORE
 # --------------------------
 @router.get("/{store_id}", response_model=StoreResponse)
-def get_store(store_id: int, db: Session = Depends(get_tenant_db)):
+def get_store(store_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_view())):
     store = db.query(Store).filter(Store.id == store_id).first()
     if not store:
         raise HTTPException(404, "Store not found")
@@ -62,7 +62,7 @@ def get_store(store_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE STORE
 # --------------------------
 @router.put("/{store_id}", response_model=StoreResponse)
-def update_store(store_id: int, data: StoreUpdate, db: Session = Depends(get_tenant_db)):
+def update_store(store_id: int, data: StoreUpdate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_edit())):
     log_api("UPDATE STORE")
 
     store = db.query(Store).filter(Store.id == store_id).first()
@@ -83,7 +83,7 @@ def update_store(store_id: int, data: StoreUpdate, db: Session = Depends(get_ten
 # DELETE STORE
 # --------------------------
 @router.delete("/{store_id}")
-def delete_store(store_id: int, db: Session = Depends(get_tenant_db)):
+def delete_store(store_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_delete())):
     log_api("DELETE STORE")
 
     store = db.query(Store).filter(Store.id == store_id).first()

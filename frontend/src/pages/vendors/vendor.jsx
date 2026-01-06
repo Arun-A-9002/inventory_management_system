@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import { getCountries, getStates, getCities } from "../../utils/locationData";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Vendor() {
   // const [activeTab, setActiveTab] = useState("Registration");
@@ -86,9 +87,9 @@ export default function Vendor() {
   });
 
   useEffect(() => {
-    loadVendors();
-    // loadQualifications(); // COMMENTED FOR FUTURE USE
-    // loadPerformances(); // COMMENTED FOR FUTURE USE
+    if (hasPermission("vendors.view")) {
+      loadVendors();
+    }
   }, []);
 
   const loadVendors = async () => {
@@ -153,6 +154,9 @@ export default function Vendor() {
   };
 
   const registerVendor = async () => {
+    if (!hasPermission(editingId ? "vendors.edit" : "vendors.create")) {
+      return alert("Permission denied");
+    }
     if (!vendorForm.vendor_name || !vendorForm.phone || !vendorForm.email) {
       return alert("Vendor name, phone, and email are required");
     }
@@ -173,6 +177,9 @@ export default function Vendor() {
   };
 
   const handleEdit = (vendor) => {
+    if (!hasPermission("vendors.edit")) {
+      return alert("Permission denied");
+    }
     setEditingId(vendor.id);
     const country = vendor.country || "";
     const state = vendor.state || "";
@@ -206,6 +213,9 @@ export default function Vendor() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("vendors.delete")) {
+      return alert("Permission denied");
+    }
     if (!window.confirm("Delete this vendor?")) return;
     try {
       await api.delete(`/vendors/${id}`);
@@ -217,6 +227,9 @@ export default function Vendor() {
   };
 
   const updateVendorStatus = async (vendorId, newStatus) => {
+    if (!hasPermission("vendors.status")) {
+      return alert("Permission denied");
+    }
     try {
       const statusValue = newStatus === "Active" ? "active" : "inactive";
       await api.patch(`/vendors/${vendorId}/status?status=${statusValue}`);
@@ -423,12 +436,14 @@ export default function Vendor() {
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Registered Vendors</h3>
               <div className="flex gap-2">
+                {hasPermission("vendors.create") && (
                 <button 
                   onClick={() => setShowVendorModal(true)}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                 >
                   New Vendor
                 </button>
+                )}
               </div>
             </div>
             <div className="mb-2 text-sm text-slate-600">
@@ -490,6 +505,7 @@ export default function Vendor() {
                           </div>
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
+                          {hasPermission("vendors.status") ? (
                           <select 
                             value={vendor.status === "active" || !vendor.status ? "Active" : "Inactive"}
                             onChange={(e) => updateVendorStatus(vendor.id, e.target.value)}
@@ -502,6 +518,15 @@ export default function Vendor() {
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                           </select>
+                          ) : (
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              (vendor.status === "active" || !vendor.status)
+                                ? "bg-green-100 text-green-800" 
+                                : "bg-red-100 text-red-800"
+                            }`}>
+                              {(vendor.status === "active" || !vendor.status) ? "Active" : "Inactive"}
+                            </span>
+                          )}
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
                           <div className="flex items-center justify-center space-x-2">
@@ -518,6 +543,7 @@ export default function Vendor() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
                             </button>
+                            {hasPermission("vendors.edit") && (
                             <button 
                               onClick={() => handleEdit(vendor)} 
                               className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
@@ -527,6 +553,8 @@ export default function Vendor() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
+                            )}
+                            {hasPermission("vendors.delete") && (
                             <button 
                               onClick={() => handleDelete(vendor.id)} 
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -536,6 +564,7 @@ export default function Vendor() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
+                            )}
                           </div>
                         </td>
                       </tr>

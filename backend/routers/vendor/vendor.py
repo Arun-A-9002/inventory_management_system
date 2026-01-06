@@ -6,6 +6,7 @@ from models.tenant_models import (
     VendorPerformance, VendorLeadTime
 )
 from schemas.tenant_schemas import *
+from utils.permissions import require_vendors_view, require_vendors_create, require_vendors_edit, require_vendors_delete, require_vendors_status
 import uuid
 
 router = APIRouter(
@@ -20,19 +21,19 @@ def get_tenant_session():
 
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
-def get_vendors(db: Session = Depends(get_tenant_session)):
+def get_vendors(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
     vendors = db.query(Vendor).all()
     return vendors
 
 # ---------------- GET ACTIVE VENDORS ONLY ----------------
 @router.get("/active")
-def get_active_vendors(db: Session = Depends(get_tenant_session)):
+def get_active_vendors(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
     vendors = db.query(Vendor).filter(Vendor.verification_status == "active").all()
     return vendors
 
 # ---------------- GET VENDOR BY NAME ----------------
 @router.get("/by-name/{vendor_name}")
-def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_session)):
+def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
     vendor = db.query(Vendor).filter(Vendor.vendor_name == vendor_name).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -40,7 +41,7 @@ def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_sessio
 
 # ---------------- STEP 1: REGISTER VENDOR ----------------
 @router.post("/", response_model=VendorResponse)
-def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session)):
+def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_create())):
     vendor_code = f"VND-{uuid.uuid4().hex[:6].upper()}"
 
     vendor = Vendor(
@@ -157,7 +158,7 @@ def migrate_vendor_status(db: Session = Depends(get_tenant_session)):
 
 # ---------------- UPDATE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/status")
-def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_tenant_session)):
+def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -172,7 +173,7 @@ def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_
 
 # ---------------- TOGGLE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/toggle-status")
-def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_session)):
+def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -186,7 +187,7 @@ def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_sessio
 
 # ---------------- UPDATE VENDOR ----------------
 @router.put("/{vendor_id}")
-def update_vendor(vendor_id: int, data: VendorCreate, db: Session = Depends(get_tenant_session)):
+def update_vendor(vendor_id: int, data: VendorCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_edit())):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -200,7 +201,7 @@ def update_vendor(vendor_id: int, data: VendorCreate, db: Session = Depends(get_
 
 # ---------------- DELETE VENDOR ----------------
 @router.delete("/{vendor_id}")
-def delete_vendor(vendor_id: int, db: Session = Depends(get_tenant_session)):
+def delete_vendor(vendor_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_delete())):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")

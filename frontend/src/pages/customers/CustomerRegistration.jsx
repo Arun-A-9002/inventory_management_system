@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../api';
+import { hasPermission } from '../../utils/permissions';
 
 export default function CustomerRegistration() {
   const [customers, setCustomers] = useState([]);
@@ -9,33 +10,19 @@ export default function CustomerRegistration() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({
     customer_type: '',
-    // Organization fields
-    org_name: '',
-    org_address: '',
-    org_pan: '',
-    org_gst: '',
-    org_mobile: '',
-    org_type: '',
-    // Self fields
-    name: '',
-    address: '',
-    pan: '',
-    gst: '',
-    mobile: '',
-    type: '',
-    // Optional fields
-    email: '',
-    reference_source: '',
-    reference_details: '',
-    staff_reference: ''
+    org_name: '', org_address: '', org_pan: '', org_gst: '', org_mobile: '', org_type: '',
+    name: '', address: '', pan: '', gst: '', mobile: '', type: '',
+    email: '', reference_source: '', reference_details: '', staff_reference: ''
   });
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
   useEffect(() => {
-    fetchCustomers();
-    fetchUsers();
+    if (hasPermission('customers.view')) {
+      fetchCustomers();
+      fetchUsers();
+    }
   }, []);
 
   const fetchUsers = async () => {
@@ -48,21 +35,15 @@ export default function CustomerRegistration() {
   };
 
   const fetchCustomers = async () => {
+    if (!hasPermission('customers.view')) {
+      showMessage('You do not have permission to view customers', 'error');
+      return;
+    }
+    
     try {
-      console.log('Fetching customers...');
       const res = await api.get('/customers/');
-      console.log('Customers response:', res.data);
       setCustomers(res.data || []);
-      
-      // If no customers found, show helpful message
-      if (!res.data || res.data.length === 0) {
-        console.log('No customers found in database');
-      }
     } catch (err) {
-      console.error('Failed to fetch customers:', err);
-      console.error('Error details:', err.response?.data);
-      
-      // Check if it's a 404 or table doesn't exist error
       if (err.response?.status === 404 || err.response?.data?.detail?.includes('table')) {
         showMessage('Customer table not found. Please run database migrations.', 'error');
       } else if (err.message === 'Network Error') {
@@ -70,8 +51,6 @@ export default function CustomerRegistration() {
       } else {
         showMessage('Failed to load customers: ' + (err.response?.data?.detail || err.message), 'error');
       }
-      
-      // Set empty array so UI still works
       setCustomers([]);
     }
   };
@@ -82,34 +61,21 @@ export default function CustomerRegistration() {
   };
 
   const updateCustomerStatus = async (customerId, status) => {
-    console.log('Updating customer status:', customerId, status);
+    if (!hasPermission('customers.status')) {
+      showMessage('You do not have permission to change customer status', 'error');
+      return;
+    }
+    
     try {
       const response = await api.put(`/customers/${customerId}/status`, { status });
-      console.log('API response:', response.data);
-      console.log('API status:', response.status);
-      
-      // Only update local state if API call was successful
       if (response.status === 200) {
         setCustomers(customers.map(customer => 
           customer.id === customerId ? { ...customer, status: status } : customer
         ));
-        
-        if (status === 'approved') {
-          showMessage('Customer approved and email sent successfully');
-        } else {
-          showMessage(`Customer status updated to ${status}`);
-        }
-      } else {
-        throw new Error('API call failed with status: ' + response.status);
+        showMessage(status === 'approved' ? 'Customer approved and email sent successfully' : `Customer status updated to ${status}`);
       }
-      
     } catch (err) {
-      console.error('API call failed:', err);
-      console.error('Error response:', err.response?.data);
-      console.error('Error status:', err.response?.status);
       showMessage('Failed to update customer status: ' + (err.response?.data?.detail || err.message), 'error');
-      
-      // Revert to database state on error
       fetchCustomers();
     }
   };
@@ -117,12 +83,16 @@ export default function CustomerRegistration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!hasPermission(editingCustomer ? 'customers.edit' : 'customers.create')) {
+      showMessage(`You do not have permission to ${editingCustomer ? 'edit' : 'create'} customers`, 'error');
+      return;
+    }
+    
     if (!customerForm.customer_type) {
       showMessage('Please select customer type', 'error');
       return;
     }
 
-    // Validate based on customer type
     if (customerForm.customer_type === 'organization') {
       if (!customerForm.org_name || !customerForm.org_mobile) {
         showMessage('Organization name and mobile are required', 'error');
@@ -137,10 +107,14 @@ export default function CustomerRegistration() {
 
     try {
       setLoading(true);
-      await api.post('/customers/', customerForm);
-      showMessage('Customer registered successfully');
+      if (editingCustomer) {
+        await api.put(`/customers/${editingCustomer.id}`, customerForm);
+        showMessage('Customer updated successfully');
+      } else {
+        await api.post('/customers/', customerForm);
+        showMessage('Customer registered successfully');
+      }
       
-      // Reset form and refresh list
       setCustomerForm({
         customer_type: '',
         org_name: '', org_address: '', org_pan: '', org_gst: '', org_mobile: '', org_type: '',
@@ -148,10 +122,10 @@ export default function CustomerRegistration() {
         email: '', reference_source: '', reference_details: '', staff_reference: ''
       });
       setShowForm(false);
+      setEditingCustomer(null);
       fetchCustomers();
     } catch (err) {
-      console.error('Failed to register customer:', err);
-      showMessage('Failed to register customer: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage(`Failed to ${editingCustomer ? 'update' : 'register'} customer: ` + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -188,7 +162,6 @@ export default function CustomerRegistration() {
               </select>
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-2">Organization Address</label>
             <textarea
@@ -199,7 +172,6 @@ export default function CustomerRegistration() {
               placeholder="Enter organization address"
             />
           </div>
-
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Mobile *</label>
@@ -262,7 +234,6 @@ export default function CustomerRegistration() {
               </select>
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-2">Address</label>
             <textarea
@@ -273,7 +244,6 @@ export default function CustomerRegistration() {
               placeholder="Enter address"
             />
           </div>
-
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Mobile *</label>
@@ -308,19 +278,6 @@ export default function CustomerRegistration() {
           </div>
         </>
       );
-    } else if (customerForm.customer_type === 'optional') {
-      return (
-        <div className="text-center py-8 text-gray-500">
-          <p>Manual entry fields can be customized based on requirements</p>
-          <div className="mt-4">
-            <input
-              type="text"
-              placeholder="Enter customer details manually"
-              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      );
     }
     return null;
   };
@@ -330,30 +287,32 @@ export default function CustomerRegistration() {
   };
 
   const handleEdit = (customer) => {
+    if (!hasPermission('customers.edit')) {
+      showMessage('You do not have permission to edit customers', 'error');
+      return;
+    }
+    
     setEditingCustomer(customer);
     setCustomerForm({
       customer_type: customer.customer_type,
-      org_name: customer.org_name || '',
-      org_address: customer.org_address || '',
-      org_pan: customer.org_pan || '',
-      org_gst: customer.org_gst || '',
-      org_mobile: customer.org_mobile || '',
-      org_type: customer.org_type || '',
-      name: customer.name || '',
-      address: customer.address || '',
-      pan: customer.pan || '',
-      gst: customer.gst || '',
-      mobile: customer.mobile || '',
-      type: customer.type || '',
-      email: customer.email || '',
-      reference_source: customer.reference_source || '',
-      reference_details: customer.reference_details || '',
-      staff_reference: customer.staff_reference || ''
+      org_name: customer.org_name || '', org_address: customer.org_address || '',
+      org_pan: customer.org_pan || '', org_gst: customer.org_gst || '',
+      org_mobile: customer.org_mobile || '', org_type: customer.org_type || '',
+      name: customer.name || '', address: customer.address || '',
+      pan: customer.pan || '', gst: customer.gst || '',
+      mobile: customer.mobile || '', type: customer.type || '',
+      email: customer.email || '', reference_source: customer.reference_source || '',
+      reference_details: customer.reference_details || '', staff_reference: customer.staff_reference || ''
     });
     setShowForm(true);
   };
 
   const handleDelete = async (customer) => {
+    if (!hasPermission('customers.delete')) {
+      showMessage('You do not have permission to delete customers', 'error');
+      return;
+    }
+    
     if (window.confirm(`Are you sure you want to delete customer "${customer.customer_type === 'organization' ? customer.org_name : customer.name}"?`)) {
       try {
         await api.delete(`/customers/${customer.id}`);
@@ -377,6 +336,22 @@ export default function CustomerRegistration() {
     });
   };
 
+  if (!hasPermission('customers.view')) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+            <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
+          <p className="text-gray-500">You do not have permission to view customer management.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header Section */}
@@ -397,15 +372,17 @@ export default function CustomerRegistration() {
                   <p className="text-sm text-gray-600 mt-1">Manage customer registrations and information</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowForm(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              >
-                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                New Customer
-              </button>
+              {hasPermission('customers.create') && (
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  New Customer
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -413,13 +390,12 @@ export default function CustomerRegistration() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-      {/* Message */}
-      {message.text && (
-        <div className={`mb-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-          {message.text}
-        </div>
-      )}
+        {/* Message */}
+        {message.text && (
+          <div className={`mb-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            {message.text}
+          </div>
+        )}
 
         {/* Customer List */}
         {loading && customers.length === 0 ? (
@@ -430,20 +406,22 @@ export default function CustomerRegistration() {
           <div className="text-center py-16">
             <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
               <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No customers found</h3>
             <p className="text-gray-500 mb-6 max-w-sm mx-auto">Get started by registering your first customer to manage their information effectively.</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Register First Customer
-            </button>
+            {hasPermission('customers.create') && (
+              <button
+                onClick={() => setShowForm(true)}
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Register First Customer
+              </button>
+            )}
           </div>
         ) : (
           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
@@ -507,51 +485,67 @@ export default function CustomerRegistration() {
                         })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={customer.status || 'pending'}
-                          onChange={(e) => updateCustomerStatus(customer.id, e.target.value)}
-                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 focus:ring-2 focus:ring-blue-500 ${
+                        {hasPermission('customers.status') ? (
+                          <select
+                            value={customer.status || 'pending'}
+                            onChange={(e) => updateCustomerStatus(customer.id, e.target.value)}
+                            className={`text-xs font-semibold rounded-full px-2 py-1 border-0 focus:ring-2 focus:ring-blue-500 ${
+                              customer.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              customer.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="draft">Draft</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             customer.status === 'approved' ? 'bg-green-100 text-green-800' :
                             customer.status === 'rejected' ? 'bg-red-100 text-red-800' :
                             'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                          <option value="draft">Draft</option>
-                        </select>
+                          }`}>
+                            {customer.status || 'Pending'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => handleView(customer)}
-                            className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="View Details"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleEdit(customer)}
-                            className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="Edit Customer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(customer)}
-                            className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded transition-colors duration-150"
-                            title="Delete Customer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {hasPermission('customers.view') && (
+                            <button
+                              onClick={() => handleView(customer)}
+                              className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="View Details"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                          )}
+                          {hasPermission('customers.edit') && (
+                            <button
+                              onClick={() => handleEdit(customer)}
+                              className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="Edit Customer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
+                          {hasPermission('customers.delete') && (
+                            <button
+                              onClick={() => handleDelete(customer)}
+                              className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded transition-colors duration-150"
+                              title="Delete Customer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -577,95 +571,87 @@ export default function CustomerRegistration() {
               </button>
             </div>
             
-            <p className="text-gray-600 mb-6">Start with mandatory fields. Optional sections can be completed later.</p>
             <form onSubmit={handleSubmit}>
-              {/* Mandatory Fields Section */}
               <div className="border rounded-lg p-6 mb-6">
-                <h3 className="text-lg font-medium mb-4">Mandatory fields</h3>
-                <p className="text-sm text-gray-600 mb-6">Keep it clean. Mandatory first.</p>
+                <h3 className="text-lg font-medium mb-4">Customer Information</h3>
 
-            {/* Customer Type */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Customer Type *</label>
-              <select
-                value={customerForm.customer_type}
-                onChange={(e) => setCustomerForm({...customerForm, customer_type: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select customer type</option>
-                <option value="organization">Organization</option>
-                <option value="self">Self</option>
-                <option value="optional">Optional (Enter manually)</option>
-              </select>
-            </div>
-
-            {/* Dynamic Fields Based on Customer Type */}
-            <div className="space-y-4">
-              {renderCustomerFields()}
-            </div>
-
-            {/* Common Optional Fields */}
-            {customerForm.customer_type && customerForm.customer_type !== 'optional' && (
-              <>
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={customerForm.email}
-                      onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})}
-                      className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Reference Source</label>
-                    <select
-                      value={customerForm.reference_source}
-                      onChange={(e) => setCustomerForm({...customerForm, reference_source: e.target.value})}
-                      className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select</option>
-                      <option value="social-media">Social media</option>
-                      <option value="advertisement">Advertisement</option>
-                      <option value="google">Google</option>
-                      <option value="other">Other</option>
-                      <option value="reference">Reference</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <label className="block text-sm font-medium mb-2">Reference Details</label>
-                  <textarea
-                    value={customerForm.reference_details}
-                    onChange={(e) => setCustomerForm({...customerForm, reference_details: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                    placeholder="Walk-in / Google / Camp / Insurance desk / Doctor referral..."
-                  />
-                </div>
-
-                <div className="mt-4">
-                  <label className="block text-sm font-medium mb-2">Staff Reference *</label>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium mb-2">Customer Type *</label>
                   <select
-                    value={customerForm.staff_reference || ''}
-                    onChange={(e) => setCustomerForm({...customerForm, staff_reference: e.target.value})}
+                    value={customerForm.customer_type}
+                    onChange={(e) => setCustomerForm({...customerForm, customer_type: e.target.value})}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select staff member</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.full_name} - {user.email}
-                      </option>
-                    ))}
+                    <option value="">Select customer type</option>
+                    <option value="organization">Organization</option>
+                    <option value="self">Self</option>
                   </select>
                 </div>
-              </>
-            )}
+
+                <div className="space-y-4">
+                  {renderCustomerFields()}
+                </div>
+
+                {customerForm.customer_type && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 mt-6">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Email</label>
+                        <input
+                          type="email"
+                          value={customerForm.email}
+                          onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})}
+                          className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Reference Source</label>
+                        <select
+                          value={customerForm.reference_source}
+                          onChange={(e) => setCustomerForm({...customerForm, reference_source: e.target.value})}
+                          className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select</option>
+                          <option value="social-media">Social media</option>
+                          <option value="advertisement">Advertisement</option>
+                          <option value="google">Google</option>
+                          <option value="other">Other</option>
+                          <option value="reference">Reference</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-2">Reference Details</label>
+                      <textarea
+                        value={customerForm.reference_details}
+                        onChange={(e) => setCustomerForm({...customerForm, reference_details: e.target.value})}
+                        className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                        placeholder="Walk-in / Google / Camp / Insurance desk / Doctor referral..."
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-2">Staff Reference</label>
+                      <select
+                        value={customerForm.staff_reference || ''}
+                        onChange={(e) => setCustomerForm({...customerForm, staff_reference: e.target.value})}
+                        className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select staff member</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.full_name} - {user.email}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Submit Button */}
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
@@ -766,15 +752,17 @@ export default function CustomerRegistration() {
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => {
-                    handleCancel();
-                    handleEdit(viewingCustomer);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                >
-                  Edit Customer
-                </button>
+                {hasPermission('customers.edit') && (
+                  <button
+                    onClick={() => {
+                      handleCancel();
+                      handleEdit(viewingCustomer);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  >
+                    Edit Customer
+                  </button>
+                )}
               </div>
             </div>
           </div>

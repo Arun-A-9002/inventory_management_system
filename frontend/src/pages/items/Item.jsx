@@ -3,6 +3,7 @@ import api from "../../api";
 import QRCode from "react-qr-code";
 import JsBarcode from "jsbarcode";
 import { useToast } from "../../utils/useToast";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Item() {
   const [items, setItems] = useState([]);
@@ -54,8 +55,10 @@ export default function Item() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    loadItems();
-    loadMasterData();
+    if (hasPermission("items.view")) {
+      loadItems();
+      loadMasterData();
+    }
   }, []);
 
   const loadMasterData = async () => {
@@ -166,6 +169,10 @@ export default function Item() {
   };
 
   const handleSubmit = async () => {
+    if (!hasPermission(editingId ? "items.edit" : "items.create")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     if (!form.name || !form.item_code || !form.item_type) {
       showToast("Item name, code, and type are required", 'error');
       return;
@@ -207,6 +214,10 @@ export default function Item() {
   };
 
   const handleEdit = (item) => {
+    if (!hasPermission("items.edit")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     setEditingId(item.id);
     setForm({
       name: item.name,
@@ -339,6 +350,10 @@ export default function Item() {
   };
 
   const handleDeactivate = async (id) => {
+    if (!hasPermission("items.delete")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     if (!window.confirm("Deactivate this item?")) return;
     try {
       await api.delete(`/items/${id}`);
@@ -479,6 +494,10 @@ const downloadQR = () => {
     (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  if (!hasPermission("items.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view items.</div>;
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -491,6 +510,7 @@ const downloadQR = () => {
               <p className="text-sm text-gray-500 mt-1">All inventory items with their specifications and stock details.</p>
             </div>
             <div className="flex items-center space-x-4">
+              {hasPermission("masterdata.setup") && (
               <button
                 onClick={() => window.location.href = '/app/organization/master-data'}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
@@ -498,9 +518,11 @@ const downloadQR = () => {
                 <span>⚙️</span>
                 <span>Master Data Setup</span>
               </button>
+              )}
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                disabled={!hasPermission("items.create")}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 <span>+</span>
                 <span>Create Item</span>
@@ -580,18 +602,22 @@ const downloadQR = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
+                        {hasPermission("items.edit") && (
                         <button
                           onClick={() => handleEdit(item)}
                           className="text-indigo-600 hover:text-indigo-900"
                         >
                           Edit
                         </button>
+                        )}
+                        {hasPermission("items.delete") && (
                         <button
                           onClick={() => handleDeactivate(item.id)}
                           className="text-red-600 hover:text-red-900"
                         >
                           Delete
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

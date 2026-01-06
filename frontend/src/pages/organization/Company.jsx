@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Company() {
   const [companies, setCompanies] = useState([]);
@@ -21,7 +22,7 @@ export default function Company() {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    loadCompanies();
+    if (hasPermission("company.view")) loadCompanies();
   }, []);
 
   const loadCompanies = async () => {
@@ -38,6 +39,7 @@ export default function Company() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("company.create")) return alert("Permission denied");
     // Validate all required fields
     const requiredFields = ['name', 'code', 'gst_number', 'address', 'contact_person', 'email', 'phone'];
     const missingFields = requiredFields.filter(field => !form[field].trim());
@@ -71,11 +73,13 @@ export default function Company() {
   };
 
   const startEdit = (c) => {
+    if (!hasPermission("company.edit")) return alert("Permission denied");
     setEditingId(c.id);
     setEditForm({ ...c });
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("company.edit")) return alert("Permission denied");
     try {
       await api.put(`/company/${editingId}`, editForm);
       setEditingId(null);
@@ -87,6 +91,7 @@ export default function Company() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("company.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this company?")) return;
 
     try {
@@ -119,6 +124,10 @@ export default function Company() {
     }
   };
 
+  if (!hasPermission("company.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view companies.</div>;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       {/* HEADER CARD */}
@@ -139,6 +148,10 @@ export default function Company() {
               <>
                 <h2 className="text-xl font-semibold mb-3">Create Company</h2>
                 
+                {!hasPermission("company.create") ? (
+                  <div className="text-sm text-slate-500">You do not have permission to create companies.</div>
+                ) : (
+                  <>
                 {companies.length > 0 && (
                   <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-800">
@@ -182,15 +195,17 @@ export default function Company() {
 
                 <button
                   onClick={handleCreate}
-                  disabled={companies.length > 0}
+                  disabled={companies.length > 0 || !hasPermission("company.create")}
                   className={`mt-3 inline-flex items-center justify-center rounded-full px-5 py-2 ${
-                    companies.length > 0 
+                    companies.length > 0 || !hasPermission("company.create")
                       ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                   }`}
                 >
                   Create Company
                 </button>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -376,6 +391,7 @@ export default function Company() {
                           
                           <td className="px-4 py-6">
                             <div className="flex justify-center space-x-2">
+                              {hasPermission("company.edit") && (
                               <button
                                 onClick={() => startEdit(c)}
                                 className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
@@ -385,6 +401,8 @@ export default function Company() {
                                 </svg>
                                 Edit
                               </button>
+                              )}
+                              {hasPermission("company.delete") && (
                               <button
                                 onClick={() => handleDelete(c.id)}
                                 className="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
@@ -394,6 +412,7 @@ export default function Company() {
                                 </svg>
                                 Delete
                               </button>
+                              )}
                             </div>
                           </td>
                         </tr>

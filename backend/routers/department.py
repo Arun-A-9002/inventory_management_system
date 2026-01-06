@@ -12,6 +12,7 @@ from schemas.tenant_schemas import (
     DepartmentResponse
 )
 from utils.auth import check_permission
+from utils.permissions import require_department_view
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
 
@@ -53,7 +54,7 @@ def create_department(
 @router.get("/", response_model=List[DepartmentResponse])
 def list_departments(
     db: Session = Depends(get_tenant_session),
-    current_user: dict = Depends(check_permission("departments.view")),
+    current_user: dict = Depends(require_department_view()),
 ):
     return db.query(Department).all()
 
@@ -65,7 +66,7 @@ def list_departments(
 def get_department(
     dept_id: int,
     db: Session = Depends(get_tenant_session),
-    current_user: dict = Depends(check_permission("departments.view")),
+    current_user: dict = Depends(require_department_view()),
 ):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import MasterDataHeader from "../../components/MasterDataHeader";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Brand() {
   const [brands, setBrands] = useState([]);
@@ -20,7 +21,7 @@ export default function Brand() {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    loadBrands();
+    if (hasPermission("brand.view")) loadBrands();
   }, []);
 
   const loadBrands = async () => {
@@ -37,6 +38,7 @@ export default function Brand() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("brand.create")) return alert("Permission denied");
     if (!form.brand_name.trim()) return alert("Brand name is required");
 
     try {
@@ -57,11 +59,13 @@ export default function Brand() {
   };
 
   const startEdit = (b) => {
+    if (!hasPermission("brand.edit")) return alert("Permission denied");
     setEditingId(b.id);
     setEditForm({ ...b });
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("brand.edit")) return alert("Permission denied");
     try {
       await api.put(`/brand/${editingId}`, editForm);
       setEditingId(null);
@@ -73,6 +77,7 @@ export default function Brand() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("brand.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this brand?")) return;
 
     try {
@@ -88,6 +93,10 @@ export default function Brand() {
     brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     brand.manufacturer_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (!hasPermission("brand.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view brands.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -170,7 +179,7 @@ export default function Brand() {
       <MasterDataHeader 
         title="Brand Management"
         subtitle="Manage product brands and manufacturer information."
-        onCreateClick={() => setShowCreateForm(true)}
+        onCreateClick={() => hasPermission("brand.create") && setShowCreateForm(true)}
         createButtonText="Create Brand"
       />
 
@@ -245,18 +254,22 @@ export default function Brand() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
+                        {hasPermission("brand.edit") && (
                         <button
                           onClick={() => startEdit(brand)}
                           className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Edit
                         </button>
+                        )}
+                        {hasPermission("brand.delete") && (
                         <button
                           onClick={() => handleDelete(brand.id)}
                           className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Delete
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

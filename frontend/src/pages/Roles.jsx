@@ -138,21 +138,33 @@ export default function Roles() {
 
                 <div className="text-sm font-medium mb-2">Permissions <span className="text-xs text-slate-400">({permissions.length} total)</span></div>
                 <div className="h-64 overflow-auto border rounded-md p-3 bg-slate-50">
-                  {permissions.map(p => {
-                    const checked = editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id);
-                    return (
-                      <label key={p.id} className="flex items-start gap-3 p-2 rounded hover:bg-white/50">
-                        <input type="checkbox" checked={checked} onChange={() => {
-                          if (editingId) setEditSelectedPerms(prev => toggleSet(prev, p.id));
-                          else setSelectedPerms(prev => toggleSet(prev, p.id));
-                        }} />
-                        <div>
-                          <div className="font-medium">{p.label}</div>
-                          <div className="text-xs text-slate-400">{p.name}</div>
-                        </div>
-                      </label>
-                    );
-                  })}
+                  {Object.entries(
+                    permissions.reduce((groups, p) => {
+                      const group = p.group || 'Other';
+                      if (!groups[group]) groups[group] = [];
+                      groups[group].push(p);
+                      return groups;
+                    }, {})
+                  ).map(([groupName, groupPerms]) => (
+                    <div key={groupName} className="mb-4">
+                      <div className="text-xs font-semibold text-slate-600 mb-2 uppercase">{groupName}</div>
+                      {groupPerms.map(p => {
+                        const checked = editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id);
+                        return (
+                          <label key={p.id} className="flex items-start gap-3 p-2 rounded hover:bg-white/50">
+                            <input type="checkbox" checked={checked} onChange={() => {
+                              if (editingId) setEditSelectedPerms(prev => toggleSet(prev, p.id));
+                              else setSelectedPerms(prev => toggleSet(prev, p.id));
+                            }} />
+                            <div>
+                              <div className="font-medium">{p.label}</div>
+                              <div className="text-xs text-slate-400">{p.name}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="mt-4 flex gap-2">

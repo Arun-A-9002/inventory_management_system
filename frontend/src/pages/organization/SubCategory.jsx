@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import MasterDataHeader from "../../components/MasterDataHeader";
+import { hasPermission } from "../../utils/permissions";
 
 export default function SubCategory() {
   const [subcategories, setSubcategories] = useState([]);
@@ -19,8 +20,10 @@ export default function SubCategory() {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    loadCategories();
-    loadSubcategories();
+    if (hasPermission("subcategory.view")) {
+      loadCategories();
+      loadSubcategories();
+    }
   }, []);
 
   const loadCategories = async () => {
@@ -47,6 +50,7 @@ export default function SubCategory() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("subcategory.create")) return alert("Permission denied");
     if (!form.category_id) return alert("Select a category");
     if (!form.name.trim()) return alert("Sub-category name is required");
 
@@ -66,6 +70,7 @@ export default function SubCategory() {
   };
 
   const startEdit = (sc) => {
+    if (!hasPermission("subcategory.edit")) return alert("Permission denied");
     setEditingId(sc.id);
     setEditForm({
       id: sc.id,
@@ -76,6 +81,7 @@ export default function SubCategory() {
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("subcategory.edit")) return alert("Permission denied");
     if (!editForm.category_id) return alert("Select a category");
     if (!editForm.name.trim()) return alert("Name required");
 
@@ -94,6 +100,7 @@ export default function SubCategory() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("subcategory.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this sub-category?")) return;
 
     try {
@@ -109,6 +116,10 @@ export default function SubCategory() {
     subcategory.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     subcategory.category?.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (!hasPermission("subcategory.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view subcategories.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +188,7 @@ export default function SubCategory() {
       <MasterDataHeader 
         title="Sub Category Management"
         subtitle="Create subcategories under main categories."
-        onCreateClick={() => setShowCreateForm(true)}
+        onCreateClick={() => hasPermission("subcategory.create") && setShowCreateForm(true)}
         createButtonText="Create Sub Category"
       />
 
@@ -235,18 +246,22 @@ export default function SubCategory() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
+                        {hasPermission("subcategory.edit") && (
                         <button
                           onClick={() => startEdit(sc)}
                           className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Edit
                         </button>
+                        )}
+                        {hasPermission("subcategory.delete") && (
                         <button
                           onClick={() => handleDelete(sc.id)}
                           className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded-md transition-colors"
                         >
                           Delete
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

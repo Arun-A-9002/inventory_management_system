@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Branch() {
   const [branches, setBranches] = useState([]);
@@ -22,8 +23,10 @@ export default function Branch() {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    loadBranches();
-    loadCompanies();
+    if (hasPermission("branch.view")) {
+      loadBranches();
+      loadCompanies();
+    }
   }, []);
 
   const loadCompanies = async () => {
@@ -49,6 +52,7 @@ export default function Branch() {
   };
 
   const handleCreate = async () => {
+    if (!hasPermission("branch.create")) return alert("Permission denied");
     if (!form.name.trim()) return alert("Branch name is required");
     if (!form.company_id) return alert("Company is required");
 
@@ -77,11 +81,13 @@ export default function Branch() {
   };
 
   const startEdit = (b) => {
+    if (!hasPermission("branch.edit")) return alert("Permission denied");
     setEditingId(b.id);
     setEditForm({ ...b });
   };
 
   const handleUpdate = async () => {
+    if (!hasPermission("branch.edit")) return alert("Permission denied");
     try {
       await api.put(`/branch/${editingId}`, editForm);
       setEditingId(null);
@@ -93,6 +99,7 @@ export default function Branch() {
   };
 
   const handleDelete = async (id) => {
+    if (!hasPermission("branch.delete")) return alert("Permission denied");
     if (!window.confirm("Delete this branch?")) return;
 
     try {
@@ -103,6 +110,10 @@ export default function Branch() {
       alert(err?.response?.data?.detail || "Delete failed");
     }
   };
+
+  if (!hasPermission("branch.view")) {
+    return <div className="p-6 text-red-600">You do not have permission to view branches.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -127,6 +138,10 @@ export default function Branch() {
               <>
                 <h2 className="text-xl font-semibold mb-3">Create Branch</h2>
 
+                {!hasPermission("branch.create") ? (
+                  <div className="text-sm text-slate-500">You do not have permission to create branches.</div>
+                ) : (
+                  <>
                 {Object.keys(form).map((key) => (
                   <div key={key} className="mb-3">
                     <label className="block text-sm font-medium text-slate-700">
@@ -161,10 +176,13 @@ export default function Branch() {
 
                 <button
                   onClick={handleCreate}
-                  className="mt-3 inline-flex items-center justify-center rounded-full bg-blue-600 text-white px-5 py-2"
+                  disabled={!hasPermission("branch.create")}
+                  className="mt-3 inline-flex items-center justify-center rounded-full bg-blue-600 text-white px-5 py-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   Create Branch
                 </button>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -242,19 +260,23 @@ export default function Branch() {
                         <td className="py-3">{b.city || "-"}</td>
                         <td className="py-3">
                           <div className="flex gap-2">
+                            {hasPermission("branch.edit") && (
                             <button
                               onClick={() => startEdit(b)}
                               className="text-sm px-3 py-1 rounded-full border hover:bg-slate-100"
                             >
                               Edit
                             </button>
+                            )}
 
+                            {hasPermission("branch.delete") && (
                             <button
                               onClick={() => handleDelete(b.id)}
                               className="text-sm px-3 py-1 rounded-full border text-red-600 hover:bg-red-50"
                             >
                               Delete
                             </button>
+                            )}
                           </div>
                         </td>
                       </tr>

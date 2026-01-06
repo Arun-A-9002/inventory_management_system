@@ -7,7 +7,7 @@ from models.tenant_models import Branch, Company
 from schemas.tenant_schemas import (
     BranchCreate, BranchUpdate, BranchResponse
 )
-
+from utils.permissions import require_branch_view, require_branch_create, require_branch_edit, require_branch_delete
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/branch", tags=["Branch"])
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/branch", tags=["Branch"])
 # CREATE BRANCH
 # --------------------------
 @router.post("/", response_model=BranchResponse)
-def create_branch(data: BranchCreate, db: Session = Depends(get_tenant_db)):
+def create_branch(data: BranchCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_create())):
     log_api("CREATE BRANCH")
 
     try:
@@ -43,7 +43,7 @@ def create_branch(data: BranchCreate, db: Session = Depends(get_tenant_db)):
 # LIST ALL BRANCHES
 # --------------------------
 @router.get("/", response_model=list[BranchResponse])
-def list_branches(db: Session = Depends(get_tenant_db)):
+def list_branches(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_view())):
     return db.query(Branch).all()
 
 
@@ -51,7 +51,7 @@ def list_branches(db: Session = Depends(get_tenant_db)):
 # GET A BRANCH
 # --------------------------
 @router.get("/{branch_id}", response_model=BranchResponse)
-def get_branch(branch_id: int, db: Session = Depends(get_tenant_db)):
+def get_branch(branch_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_view())):
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(404, "Branch not found")
@@ -62,7 +62,7 @@ def get_branch(branch_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE BRANCH
 # --------------------------
 @router.put("/{branch_id}", response_model=BranchResponse)
-def update_branch(branch_id: int, data: BranchUpdate, db: Session = Depends(get_tenant_db)):
+def update_branch(branch_id: int, data: BranchUpdate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_edit())):
     log_api("UPDATE BRANCH")
 
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
@@ -83,7 +83,7 @@ def update_branch(branch_id: int, data: BranchUpdate, db: Session = Depends(get_
 # DELETE BRANCH
 # --------------------------
 @router.delete("/{branch_id}")
-def delete_branch(branch_id: int, db: Session = Depends(get_tenant_db)):
+def delete_branch(branch_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_delete())):
     log_api("DELETE BRANCH")
 
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
