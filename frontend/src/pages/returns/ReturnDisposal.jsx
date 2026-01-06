@@ -931,11 +931,11 @@ export default function ReturnDisposal() {
                     onChange={(e) => setReturnForm({...returnForm, return_type: e.target.value})}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="TO VENDOR">To Vendor</option>
-                    <option value="FROM CUSTOMER">From Customer</option>
-                    <option value="TO_CUSTOMER">To Customer</option>
+                    {/*<option value="TO VENDOR">To Vendor</option>
+                    {/* <option value="FROM CUSTOMER">From Customer</option> 
+                    <option value="TO_CUSTOMER">To Customer</option>*/}
                     <option value="INTERNAL">Internal</option>
-                    <option value="EXTERNAL">External</option>
+                    {/*<option value="EXTERNAL">External</option>*/}
                   </select>
                 </div>
                 {returnForm.return_type === 'INTERNAL' ? (

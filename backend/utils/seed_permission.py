@@ -115,6 +115,17 @@ PERMISSIONS = [
     # Settings (for future modules)
     ("settings.view", "Settings — View", "Settings"),
     ("settings.update", "Settings — Update", "Settings"),
+
+    # Purchase Management
+    ("purchase_request.view", "Purchase Request — View", "Purchase Management"),
+    ("purchase_request.create", "Purchase Request — Create", "Purchase Management"),
+    ("purchase_request.edit", "Purchase Request — Edit", "Purchase Management"),
+    ("purchase_request.delete", "Purchase Request — Delete", "Purchase Management"),
+    ("purchase_request.status", "Purchase Request — Change Status", "Purchase Management"),
+    ("purchase_request.send_po", "Purchase Request — Send Purchase Order", "Purchase Management"),
+    ("purchase_order.view", "Purchase Order — View", "Purchase Management"),
+    ("purchase_order.print", "Purchase Order — Print", "Purchase Management"),
+    ("purchase_order.download", "Purchase Order — Download", "Purchase Management"),
 ]
 
 

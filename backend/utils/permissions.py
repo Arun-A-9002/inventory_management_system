@@ -52,7 +52,9 @@ def get_user_permissions(user_data: dict) -> list:
                 "masterdata.setup",
                 "vendors.view", "vendors.create", "vendors.edit", "vendors.delete", "vendors.status",
                 "customers.view", "customers.create", "customers.edit", "customers.delete", "customers.status",
-                "locations.view", "locations.create_internal", "locations.create_external", "locations.edit", "locations.delete"]
+                "locations.view", "locations.create_internal", "locations.create_external", "locations.edit", "locations.delete",
+                "purchase_request.view", "purchase_request.create", "purchase_request.edit", "purchase_request.delete", "purchase_request.status", "purchase_request.send_po",
+                "purchase_order.view", "purchase_order.print", "purchase_order.download"]
     
     return user_data.get("permissions", [])
 
@@ -241,3 +243,31 @@ def require_locations_edit():
 
 def require_locations_delete():
     return require_permission("locations.delete")
+
+# Purchase Management permission decorators
+def require_purchase_request_view():
+    return require_permission("purchase_request.view")
+
+def require_purchase_request_create():
+    return require_permission("purchase_request.create")
+
+def require_purchase_request_edit():
+    return require_permission("purchase_request.edit")
+
+def require_purchase_request_delete():
+    return require_permission("purchase_request.delete")
+
+def require_purchase_request_status():
+    return require_permission("purchase_request.status")
+
+def require_purchase_request_send_po():
+    return require_permission("purchase_request.send_po")
+
+def require_purchase_order_view():
+    return require_permission("purchase_order.view")
+
+def require_purchase_order_print():
+    return require_permission("purchase_order.print")
+
+def require_purchase_order_download():
+    return require_permission("purchase_order.download")

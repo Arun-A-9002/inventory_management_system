@@ -15,6 +15,11 @@ from models.tenant_models import (
 )
 
 from schemas.tenant_schemas import *
+from utils.permissions import (
+    require_purchase_request_view, require_purchase_request_create, require_purchase_request_edit,
+    require_purchase_request_delete, require_purchase_request_status, require_purchase_request_send_po,
+    require_purchase_order_view, require_purchase_order_print, require_purchase_order_download
+)
 
 router = APIRouter(
     prefix="/purchase",
@@ -30,7 +35,7 @@ def get_tenant_session():
 # PURCHASE REQUEST (PR)
 # =====================================================
 @router.post("/")
-def create_purchase_request(data: PRCreate, db: Session = Depends(get_tenant_session)):
+def create_purchase_request(data: PRCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_create())):
     pr_number = f"PR-{uuid.uuid4().hex[:6].upper()}"
 
     pr = PurchaseRequest(
@@ -53,7 +58,7 @@ def create_purchase_request(data: PRCreate, db: Session = Depends(get_tenant_ses
     return pr
 
 @router.post("/pr")
-def create_purchase_request_pr(data: PRCreate, db: Session = Depends(get_tenant_session)):
+def create_purchase_request_pr(data: PRCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_create())):
     pr_number = f"PR-{uuid.uuid4().hex[:6].upper()}"
 
     pr = PurchaseRequest(
@@ -77,17 +82,17 @@ def create_purchase_request_pr(data: PRCreate, db: Session = Depends(get_tenant_
 
 
 @router.get("/")
-def get_purchase_requests(db: Session = Depends(get_tenant_session)):
+def get_purchase_requests(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_view())):
     prs = db.query(PurchaseRequest).all()
     return prs
 
 @router.get("/pr")
-def get_purchase_requests_pr(db: Session = Depends(get_tenant_session)):
+def get_purchase_requests_pr(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_view())):
     prs = db.query(PurchaseRequest).all()
     return prs
 
 @router.get("/po/{po_number}")
-def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_session)):
+def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_order_view())):
     """Get PO details with items"""
     po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
     if not po:
@@ -115,7 +120,7 @@ def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_
     return po_data
 
 @router.get("/po/{po_number}/print")
-def get_po_print_data(po_number: str, db: Session = Depends(get_tenant_session)):
+def get_po_print_data(po_number: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_order_print())):
     """Get detailed PO data for printing/download"""
     from models.tenant_models import Vendor
     
@@ -172,7 +177,7 @@ def get_po_print_data(po_number: str, db: Session = Depends(get_tenant_session))
     return po_data
 
 @router.get("/po")
-def list_purchase_orders(db: Session = Depends(get_tenant_session)):
+def list_purchase_orders(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_order_view())):
     from models.tenant_models import Vendor
     
     pos = db.query(PurchaseOrder).all()
@@ -210,7 +215,7 @@ def list_purchase_orders(db: Session = Depends(get_tenant_session)):
     return enhanced_pos
 
 @router.get("/{pr_id}")
-def get_purchase_request_by_id(pr_id: int, db: Session = Depends(get_tenant_session)):
+def get_purchase_request_by_id(pr_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_view())):
     pr = db.query(PurchaseRequest).filter(PurchaseRequest.id == pr_id).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase Request not found")
@@ -586,7 +591,7 @@ def get_items_for_purchase(db: Session = Depends(get_tenant_session)):
 
 # ---------------- UPDATE PURCHASE REQUEST ----------------
 @router.put("/{pr_id}")
-def update_purchase_request(pr_id: int, data: PRCreate, db: Session = Depends(get_tenant_session)):
+def update_purchase_request(pr_id: int, data: PRCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_edit())):
     pr = db.query(PurchaseRequest).filter(PurchaseRequest.id == pr_id).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase Request not found")
@@ -611,7 +616,7 @@ def update_purchase_request(pr_id: int, data: PRCreate, db: Session = Depends(ge
 
 # ---------------- UPDATE PR STATUS ----------------
 @router.patch("/{pr_id}/status")
-def update_pr_status(pr_id: int, status: str, db: Session = Depends(get_tenant_session)):
+def update_pr_status(pr_id: int, status: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_status())):
     from models.tenant_models import PRStatus
     
     pr = db.query(PurchaseRequest).filter(PurchaseRequest.id == pr_id).first()
@@ -638,7 +643,7 @@ def update_pr_status(pr_id: int, status: str, db: Session = Depends(get_tenant_s
 
 # ---------------- DELETE PURCHASE REQUEST ----------------
 @router.delete("/{pr_id}")
-def delete_purchase_request(pr_id: int, db: Session = Depends(get_tenant_session)):
+def delete_purchase_request(pr_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_delete())):
     pr = db.query(PurchaseRequest).filter(PurchaseRequest.id == pr_id).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase Request not found")
@@ -663,7 +668,7 @@ def test_api():
 
 # ---------------- SEND EMAIL TO VENDOR ----------------
 @router.post("/send-email")
-def send_email_to_vendor(data: dict, db: Session = Depends(get_tenant_session)):
+def send_email_to_vendor(data: dict, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_purchase_request_send_po())):
     """Send email to vendor for approved PR"""
     try:
         import os
