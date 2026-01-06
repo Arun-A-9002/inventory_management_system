@@ -126,6 +126,15 @@ PERMISSIONS = [
     ("purchase_order.view", "Purchase Order — View", "Purchase Management"),
     ("purchase_order.print", "Purchase Order — Print", "Purchase Management"),
     ("purchase_order.download", "Purchase Order — Download", "Purchase Management"),
+
+    # Goods Receipt & Inspection (GRN)
+    ("grn.view", "GRN — View", "Goods Receipt & Inspection (GRN)"),
+    ("grn.create", "GRN — Create", "Goods Receipt & Inspection (GRN)"),
+    ("grn.edit", "GRN — Edit", "Goods Receipt & Inspection (GRN)"),
+    ("grn.delete", "GRN — Delete", "Goods Receipt & Inspection (GRN)"),
+    ("grn.print", "GRN — Print", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_qc", "GRN — QC Status", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_approve", "GRN — Approve Status", "Goods Receipt & Inspection (GRN)"),
 ]
 
 

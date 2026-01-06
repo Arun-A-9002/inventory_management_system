@@ -54,7 +54,8 @@ def get_user_permissions(user_data: dict) -> list:
                 "customers.view", "customers.create", "customers.edit", "customers.delete", "customers.status",
                 "locations.view", "locations.create_internal", "locations.create_external", "locations.edit", "locations.delete",
                 "purchase_request.view", "purchase_request.create", "purchase_request.edit", "purchase_request.delete", "purchase_request.status", "purchase_request.send_po",
-                "purchase_order.view", "purchase_order.print", "purchase_order.download"]
+                "purchase_order.view", "purchase_order.print", "purchase_order.download",
+                "grn.view", "grn.create", "grn.edit", "grn.delete", "grn.print", "grn.status_qc", "grn.status_approve"]
     
     return user_data.get("permissions", [])
 
@@ -271,3 +272,25 @@ def require_purchase_order_print():
 
 def require_purchase_order_download():
     return require_permission("purchase_order.download")
+
+# GRN (Goods Receipt & Inspection) permission decorators
+def require_grn_view():
+    return require_permission("grn.view")
+
+def require_grn_create():
+    return require_permission("grn.create")
+
+def require_grn_edit():
+    return require_permission("grn.edit")
+
+def require_grn_delete():
+    return require_permission("grn.delete")
+
+def require_grn_print():
+    return require_permission("grn.print")
+
+def require_grn_status_qc():
+    return require_permission("grn.status_qc")
+
+def require_grn_status_approve():
+    return require_permission("grn.status_approve")

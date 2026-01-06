@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import api from "../../api";
 import Toast from "../../components/Toast";
 import { useToast } from "../../utils/useToast";
+import { hasPermission } from "../../utils/permissions";
 
 export default function GoodsReceipt() {
   const { toast, showToast, hideToast } = useToast();
@@ -90,6 +91,8 @@ export default function GoodsReceipt() {
 
   // Fetch GRN list
   const fetchGRNList = async () => {
+    if (!hasPermission("grn.view")) return;
+    
     try {
       setLoading(true);
       const res = await api.get("/grn/list");
@@ -355,6 +358,11 @@ export default function GoodsReceipt() {
 
   // Update quality check status
   const updateQualityCheck = async (grnId, checked) => {
+    if (!hasPermission("grn.status_qc")) {
+      showToast('Permission denied: Cannot update quality check', 'error');
+      return;
+    }
+    
     try {
       await api.put(`/grn/${grnId}/quality-check`, { quality_check: checked });
       setQualityChecks(prev => ({
@@ -368,6 +376,11 @@ export default function GoodsReceipt() {
 
   // Update GRN status
   const updateGRNStatus = async (grnId, status) => {
+    if (!hasPermission("grn.status_approve")) {
+      showToast('Permission denied: Cannot update GRN status', 'error');
+      return;
+    }
+    
     try {
       await api.put(`/grn/${grnId}/status`, { status });
       showToast(`GRN status updated to ${status}`, 'success');
@@ -379,6 +392,11 @@ export default function GoodsReceipt() {
 
   // Handle View GRN
   const handleViewGRN = async (grn) => {
+    if (!hasPermission("grn.view")) {
+      showToast('Permission denied: Cannot view GRN details', 'error');
+      return;
+    }
+    
     try {
       const res = await api.get(`/grn/${grn.id}`);
       setViewModal({ isOpen: true, grn: res.data });
@@ -389,6 +407,11 @@ export default function GoodsReceipt() {
 
   // Handle Print GRN
   const handlePrintGRN = async (grn) => {
+    if (!hasPermission("grn.print")) {
+      showToast('Permission denied: Cannot print GRN', 'error');
+      return;
+    }
+    
     try {
       const res = await api.get(`/grn/${grn.id}`);
       setPrintModal({ isOpen: true, grn: res.data });
@@ -414,6 +437,11 @@ export default function GoodsReceipt() {
 
   // Handle Edit GRN
   const handleEditGRN = async (grn) => {
+    if (!hasPermission("grn.edit")) {
+      showToast('Permission denied: Cannot edit GRN', 'error');
+      return;
+    }
+    
     try {
       const res = await api.get(`/grn/${grn.id}`);
       const grnData = res.data;
@@ -452,6 +480,11 @@ export default function GoodsReceipt() {
 
   // Handle Delete GRN
   const handleDeleteGRN = async (grn) => {
+    if (!hasPermission("grn.delete")) {
+      showToast('Permission denied: Cannot delete GRN', 'error');
+      return;
+    }
+    
     if (window.confirm(`Are you sure you want to delete GRN ${grn.grn_number}?`)) {
       try {
         await api.delete(`/grn/${grn.id}`);
@@ -464,6 +497,11 @@ export default function GoodsReceipt() {
   };
 
   const handleSubmit = async () => {
+    if (!hasPermission(editMode.isEditing ? "grn.edit" : "grn.create")) {
+      showToast(`Permission denied: Cannot ${editMode.isEditing ? 'edit' : 'create'} GRN`, 'error');
+      return;
+    }
+    
     if (!form.store) {
       showToast("Please select location", 'error');
       return;
@@ -558,6 +596,18 @@ export default function GoodsReceipt() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {!hasPermission("grn.view") ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+            <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
+            <p className="text-gray-600">You do not have permission to view Goods Receipt & Inspection (GRN) module.</p>
+          </div>
+        </div>
+      ) : (
+        <div>
       {/* MODERN HEADER */}
       <div className="bg-white shadow-sm border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -735,6 +785,7 @@ export default function GoodsReceipt() {
                     <button
                       onClick={addItemRow}
                       className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center"
+                      disabled={!hasPermission("grn.create") && !hasPermission("grn.edit")}
                     >
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1073,15 +1124,17 @@ export default function GoodsReceipt() {
 
                 {/* Action Buttons */}
                 <div className="space-y-3">
-                  <button
-                    onClick={handleSubmit}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {editMode.isEditing ? 'Update GRN' : 'Create GRN'}
-                  </button>
+                  {hasPermission(editMode.isEditing ? "grn.edit" : "grn.create") && (
+                    <button
+                      onClick={handleSubmit}
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {editMode.isEditing ? 'Update GRN' : 'Create GRN'}
+                    </button>
+                  )}
                   
                   {editMode.isEditing && (
                     <button
@@ -1214,77 +1267,100 @@ export default function GoodsReceipt() {
                             <td className="py-4 px-6 text-center">
                               <div className="space-y-2">
                                 <div className="flex items-center justify-center mb-2">
-                                  <label className="flex items-center cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={qualityChecks[grn.id] || false}
-                                      onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
-                                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <span className="text-xs font-medium text-slate-700">Quality Check</span>
-                                  </label>
+                                  {hasPermission("grn.status_qc") && (
+                                    <label className="flex items-center cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={qualityChecks[grn.id] || false}
+                                        onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
+                                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                      />
+                                      <span className="text-xs font-medium text-slate-700">Quality Check</span>
+                                    </label>
+                                  )}
+                                  {!hasPermission("grn.status_qc") && (
+                                    <span className="text-xs text-gray-400">QC: {qualityChecks[grn.id] ? 'Done' : 'Pending'}</span>
+                                  )}
                                 </div>
-                                <select
-                                  value={grn.status || 'Pending'}
-                                  onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
-                                  disabled={!qualityChecks[grn.id]}
-                                  className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
-                                    !qualityChecks[grn.id] ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                                {hasPermission("grn.status_approve") ? (
+                                  <select
+                                    value={grn.status || 'Pending'}
+                                    onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
+                                    disabled={!qualityChecks[grn.id]}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                      !qualityChecks[grn.id] ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                                      grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                                      grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                      'bg-yellow-100 text-yellow-800'
+                                    }`}
+                                  >
+                                    <option value="Pending">Pending</option>
+                                    <option value="Approved">Approved</option>
+                                    <option value="Rejected">Rejected</option>
+                                  </select>
+                                ) : (
+                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                     grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
                                     grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                     'bg-yellow-100 text-yellow-800'
-                                  }`}
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="Approved">Approved</option>
-                                  <option value="Rejected">Rejected</option>
-                                </select>
+                                  }`}>
+                                    {grn.status || 'Pending'}
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="py-4 px-6">
                               <div className="flex items-center justify-center space-x-2">
-                                <button 
-                                  onClick={() => handleViewGRN(grn)}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                                  title="View Details"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </button>
-                                <button 
-                                  onClick={() => handlePrintGRN(grn)}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                  title="Print GRN"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                  </svg>
-                                </button>
-                                <button 
-                                  onClick={() => handleEditGRN(grn)}
-                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                  title="Edit GRN"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteGRN(grn)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete GRN"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                {hasPermission("grn.view") && (
+                                  <button 
+                                    onClick={() => handleViewGRN(grn)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                    title="View Details"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {hasPermission("grn.print") && (
+                                  <button 
+                                    onClick={() => handlePrintGRN(grn)}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Print GRN"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {hasPermission("grn.edit") && (
+                                  <button 
+                                    onClick={() => handleEditGRN(grn)}
+                                    className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                    title="Edit GRN"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {hasPermission("grn.delete") && (
+                                  <button 
+                                    onClick={() => handleDeleteGRN(grn)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete GRN"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
                         ))
-                      )}}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1736,6 +1812,8 @@ export default function GoodsReceipt() {
           .no-print { display: none !important; }
         }
       `}</style>
+        </div>
+      )}
     </div>
   );
 }

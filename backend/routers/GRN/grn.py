@@ -6,6 +6,7 @@ import uuid
 from database import get_tenant_db
 from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, Stock, StockLedger, StockOverview, VendorPayment
 from schemas.tenant_schemas import GRNCreate, QCCreate, GRNStatusUpdate
+from utils.permissions import require_grn_view, require_grn_create, require_grn_edit, require_grn_delete, require_grn_print, require_grn_status_qc, require_grn_status_approve
 
 router = APIRouter(prefix="/grn", tags=["Goods Receipt & Inspection"])
 
@@ -78,7 +79,7 @@ def _update_stock_from_grn(grn_id: int, db: Session):
 
 # ---------------- CREATE GRN ----------------
 @router.post("/create")
-def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
+def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_create())):
     grn = GRN(
         grn_number=f"GRN-{uuid.uuid4().hex[:8]}",
         grn_date=data.grn_date,
@@ -156,7 +157,7 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session)):
 
 # ---------------- LIST GRN ----------------
 @router.get("/list")
-def list_grns(db: Session = Depends(get_tenant_session)):
+def list_grns(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_view())):
     """Get all GRN records"""
     try:
         grns = db.query(GRN).all()
@@ -168,7 +169,7 @@ def list_grns(db: Session = Depends(get_tenant_session)):
 
 # ---------------- GET GRN DETAILS ----------------
 @router.get("/{grn_id}")
-def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session)):
+def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_view())):
     """Get detailed GRN information with items and batches"""
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
@@ -309,7 +310,7 @@ def save_price_to_item_master(data: dict, db: Session = Depends(get_tenant_sessi
 
 # ---------------- QC ----------------
 @router.post("/{grn_id}/qc")
-def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_session)):
+def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -333,7 +334,7 @@ def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_
 
 # ---------------- APPROVAL ----------------
 @router.post("/{grn_id}/approve")
-def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session)):
+def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -349,7 +350,7 @@ def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session)):
 
 # ---------------- UPDATE GRN ----------------
 @router.put("/{grn_id}")
-def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_session)):
+def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_edit())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -430,7 +431,7 @@ def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_se
 
 # ---------------- UPDATE QUALITY CHECK ----------------
 @router.put("/{grn_id}/quality-check")
-def update_quality_check(grn_id: int, data: dict, db: Session = Depends(get_tenant_session)):
+def update_quality_check(grn_id: int, data: dict, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -441,7 +442,7 @@ def update_quality_check(grn_id: int, data: dict, db: Session = Depends(get_tena
 
 # ---------------- UPDATE STATUS ----------------
 @router.put("/{grn_id}/status")
-def update_grn_status(grn_id: int, data: GRNStatusUpdate, db: Session = Depends(get_tenant_session)):
+def update_grn_status(grn_id: int, data: GRNStatusUpdate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -518,7 +519,7 @@ def create_test_grn_with_batches(db: Session = Depends(get_tenant_session)):
         "batches_created": len(batches_data)
     }
 @router.delete("/{grn_id}")
-def delete_grn(grn_id: int, db: Session = Depends(get_tenant_session)):
+def delete_grn(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_delete())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
