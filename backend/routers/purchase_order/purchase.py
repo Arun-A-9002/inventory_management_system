@@ -114,27 +114,96 @@ def get_purchase_order_details(po_number: str, db: Session = Depends(get_tenant_
     }
     return po_data
 
+@router.get("/po/{po_number}/print")
+def get_po_print_data(po_number: str, db: Session = Depends(get_tenant_session)):
+    """Get detailed PO data for printing/download"""
+    from models.tenant_models import Vendor
+    
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    
+    # Get vendor details
+    vendor = db.query(Vendor).filter(Vendor.email == po.vendor).first()
+    
+    # Calculate totals with null safety, excluding "Items from PR"
+    filtered_items = [item for item in po.items if item.item_name != "Items from PR"]
+    subtotal = sum((item.quantity or 0) * (item.rate or 0) for item in filtered_items)
+    total_tax = sum((item.quantity or 0) * (item.rate or 0) * ((item.tax or 0) / 100) for item in filtered_items)
+    total_discount = sum((item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100) for item in filtered_items)
+    grand_total = subtotal + total_tax - total_discount
+    
+    po_data = {
+        "po_number": po.po_number,
+        "pr_number": po.pr_number,
+        "po_date": po.po_date.strftime("%d/%m/%Y") if po.po_date else "",
+        "vendor": {
+            "name": vendor.vendor_name if vendor else "Unknown Vendor",
+            "email": po.vendor,
+            "phone": vendor.phone if vendor else "",
+            "address": vendor.address if vendor else "",
+            "city": vendor.city if vendor else "",
+            "state": vendor.state if vendor else "",
+            "country": vendor.country if vendor else ""
+        },
+        "items": [
+            {
+                "item_name": item.item_name,
+                "quantity": item.quantity or 0,
+                "rate": item.rate or 0,
+                "tax": item.tax or 0,
+                "discount": item.discount or 0,
+                "amount": (item.quantity or 0) * (item.rate or 0),
+                "tax_amount": (item.quantity or 0) * (item.rate or 0) * ((item.tax or 0) / 100),
+                "discount_amount": (item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100),
+                "net_amount": ((item.quantity or 0) * (item.rate or 0)) + ((item.quantity or 0) * (item.rate or 0) * ((item.tax or 0) / 100)) - ((item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100))
+            }
+            for item in po.items
+            if item.item_name != "Items from PR"
+        ],
+        "totals": {
+            "subtotal": subtotal,
+            "total_tax": total_tax,
+            "total_discount": total_discount,
+            "grand_total": grand_total,
+            "items_count": len([item for item in po.items if item.item_name != "Items from PR"])
+        }
+    }
+    return po_data
+
 @router.get("/po")
 def list_purchase_orders(db: Session = Depends(get_tenant_session)):
     from models.tenant_models import Vendor
     
     pos = db.query(PurchaseOrder).all()
     
-    # Enhance PO data with vendor details
+    # Enhance PO data with vendor details and calculations
     enhanced_pos = []
     for po in pos:
-        # Find vendor by email
-        vendor = db.query(Vendor).filter(Vendor.email == po.vendor).first()
+        # Find vendor by email or name
+        vendor = db.query(Vendor).filter(
+            (Vendor.email == po.vendor) | (Vendor.vendor_name == po.vendor)
+        ).first()
+        
+        # Calculate totals
+        subtotal = sum((item.quantity or 0) * (item.rate or 0) for item in po.items)
+        total_tax = sum((item.quantity or 0) * (item.rate or 0) * ((item.tax or 0) / 100) for item in po.items)
+        total_discount = sum((item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100) for item in po.items)
+        grand_total = subtotal + total_tax - total_discount
         
         po_data = {
             "id": po.id,
             "po_number": po.po_number,
             "pr_number": po.pr_number,
-            "vendor": po.vendor,  # Keep original email
-            "vendor_name": vendor.vendor_name if vendor else "Unknown Vendor",
-            "vendor_email": po.vendor,
+            "vendor": po.vendor,
+            "vendor_name": vendor.vendor_name if vendor else po.vendor,
+            "vendor_email": vendor.email if vendor else po.vendor,
+            "vendor_phone": vendor.phone if vendor else "",
+            "vendor_address": vendor.address if vendor else "",
             "po_date": po.po_date,
-            "status": po.status.value if po.status else "Draft"
+            "status": po.status.value if po.status else "Draft",
+            "total_amount": grand_total,
+            "items_count": len(po.items)
         }
         enhanced_pos.append(po_data)
     

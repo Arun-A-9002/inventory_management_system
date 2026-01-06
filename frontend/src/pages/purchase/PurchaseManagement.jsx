@@ -120,11 +120,9 @@ export default function PurchaseManagement() {
   const fetchVendors = async () => {
     try {
       const res = await api.get('/vendors/');
-      console.log('All vendors response:', res.data);
       const activeVendors = res.data.filter(vendor => 
-        vendor.email && (vendor.status === 'active' || !vendor.status)
+        vendor.email && vendor.status === 'active'
       );
-      console.log('Filtered active vendors:', activeVendors);
       setVendors(activeVendors || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
@@ -400,6 +398,146 @@ export default function PurchaseManagement() {
       showToast(editingPR ? "Failed to update PR" : "Failed to create PR", 'error');
       console.error(err);
     }
+  };
+
+  /* ---------------- PO PRINT/DOWNLOAD ---------------- */
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printData, setPrintData] = useState(null);
+  const [loadingPrint, setLoadingPrint] = useState(false);
+
+  const openPrintModal = async (po) => {
+    try {
+      setLoadingPrint(true);
+      const res = await api.get(`/purchase/po/${po.po_number}/print`);
+      setPrintData(res.data);
+      setShowPrintModal(true);
+    } catch (err) {
+      showToast('Failed to load PO details', 'error');
+    } finally {
+      setLoadingPrint(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownload = () => {
+    if (!printData) return;
+    
+    const content = generatePOContent(printData);
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PO_${printData.po_number}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('PO downloaded successfully', 'success');
+  };
+
+  const generatePOContent = (data) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Purchase Order - ${data.po_number}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .company-info { text-align: center; margin-bottom: 20px; }
+        .po-details { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .vendor-info { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .totals { text-align: right; margin-top: 20px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 12px; }
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="company-info">
+        <h1>NUTRYAH</h1>
+        <p>Inventory Management System</p>
+    </div>
+    
+    <div class="header">
+        <h2>PURCHASE ORDER</h2>
+    </div>
+    
+    <div class="po-details">
+        <div>
+            <strong>PO Number:</strong> ${data.po_number}<br>
+            <strong>PR Number:</strong> ${data.pr_number}<br>
+            <strong>Date:</strong> ${data.po_date}
+        </div>
+        <div>
+            <strong>Items Count:</strong> ${data.totals.items_count}<br>
+            <strong>Total Amount:</strong> ₹${data.totals.grand_total.toFixed(2)}
+        </div>
+    </div>
+    
+    <div class="vendor-info">
+        <h3>Vendor Details:</h3>
+        <strong>${data.vendor.name}</strong><br>
+        Email: ${data.vendor.email}<br>
+        ${data.vendor.phone ? `Phone: ${data.vendor.phone}<br>` : ''}
+        ${data.vendor.address ? `Address: ${data.vendor.address}<br>` : ''}
+        ${data.vendor.city ? `${data.vendor.city}, ` : ''}${data.vendor.state ? `${data.vendor.state}, ` : ''}${data.vendor.country || ''}
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>S.No</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Rate</th>
+                <th>Amount</th>
+                <th>Tax (%)</th>
+                <th>Tax Amount</th>
+                <th>Discount (%)</th>
+                <th>Discount Amount</th>
+                <th>Net Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${data.items.map((item, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${item.item_name}</td>
+                <td>${item.quantity}</td>
+                <td>₹${item.rate.toFixed(2)}</td>
+                <td>₹${item.amount.toFixed(2)}</td>
+                <td>${item.tax}%</td>
+                <td>₹${item.tax_amount.toFixed(2)}</td>
+                <td>${item.discount}%</td>
+                <td>₹${item.discount_amount.toFixed(2)}</td>
+                <td>₹${item.net_amount.toFixed(2)}</td>
+            </tr>
+            `).join('')}
+        </tbody>
+    </table>
+    
+    <div class="totals">
+        <table style="width: 300px; margin-left: auto;">
+            <tr><td><strong>Subtotal:</strong></td><td>₹${data.totals.subtotal.toFixed(2)}</td></tr>
+            <tr><td><strong>Total Tax:</strong></td><td>₹${data.totals.total_tax.toFixed(2)}</td></tr>
+            <tr><td><strong>Total Discount:</strong></td><td>₹${data.totals.total_discount.toFixed(2)}</td></tr>
+            <tr style="border-top: 2px solid #000;"><td><strong>Grand Total:</strong></td><td><strong>₹${data.totals.grand_total.toFixed(2)}</strong></td></tr>
+        </table>
+    </div>
+    
+    <div class="footer">
+        <p>This is a computer generated document. No signature required.</p>
+        <p>Generated on: ${new Date().toLocaleString()}</p>
+    </div>
+</body>
+</html>
+    `;
   };
 
   /* ---------------- PO ---------------- */
@@ -943,9 +1081,27 @@ export default function PurchaseManagement() {
                       <td className="py-3 px-4">{po.pr_number}</td>
                       <td className="py-3 px-4">{new Date(po.po_date).toLocaleDateString()}</td>
                       <td className="py-3 px-4">
-                        <span className="bg-green-100 text-green-700 text-sm px-3 py-1 rounded">
-                          Purchase Order Sent
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="bg-green-100 text-green-700 text-sm px-3 py-1 rounded">
+                            Purchase Order Sent
+                          </span>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => openPrintModal(po)}
+                              disabled={loadingPrint}
+                              className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200 transition-colors"
+                            >
+                              Print
+                            </button>
+                            <button 
+                              onClick={() => openPrintModal(po)}
+                              disabled={loadingPrint}
+                              className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm hover:bg-green-200 transition-colors"
+                            >
+                              Download
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1300,12 +1456,163 @@ export default function PurchaseManagement() {
         </div>
       )}
 
+      {/* Print Modal */}
+      {showPrintModal && printData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4 no-print">
+                <h3 className="text-lg font-semibold">Purchase Order - {printData.po_number}</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePrint}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    Print
+                  </button>
+                  <button
+                    onClick={handleDownload}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    Download
+                  </button>
+                  <button
+                    onClick={() => setShowPrintModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              
+              {/* Print Content */}
+              <div className="print-content">
+                <div className="text-center mb-6">
+                  <h1 className="text-2xl font-bold">NUTRYAH</h1>
+                  <p className="text-gray-600">Inventory Management System</p>
+                  <h2 className="text-xl font-semibold mt-4">PURCHASE ORDER</h2>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <h3 className="font-semibold mb-2">PO Details:</h3>
+                    <p><strong>PO Number:</strong> {printData.po_number}</p>
+                    <p><strong>PR Number:</strong> {printData.pr_number}</p>
+                    <p><strong>Date:</strong> {printData.po_date}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">Summary:</h3>
+                    <p><strong>Items Count:</strong> {printData.totals.items_count}</p>
+                    <p><strong>Total Amount:</strong> ₹{printData.totals.grand_total.toFixed(2)}</p>
+                  </div>
+                </div>
+                
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Vendor Details:</h3>
+                  <div className="bg-gray-50 p-4 rounded">
+                    <p className="font-medium">{printData.vendor.name}</p>
+                    <p>Email: {printData.vendor.email}</p>
+                    {printData.vendor.phone && <p>Phone: {printData.vendor.phone}</p>}
+                    {printData.vendor.address && <p>Address: {printData.vendor.address}</p>}
+                    {(printData.vendor.city || printData.vendor.state || printData.vendor.country) && (
+                      <p>
+                        {printData.vendor.city && printData.vendor.city + ', '}
+                        {printData.vendor.state && printData.vendor.state + ', '}
+                        {printData.vendor.country}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Items:</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border border-gray-300 px-3 py-2 text-left">S.No</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Item Name</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Quantity</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Rate</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Amount</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Tax (%)</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Tax Amount</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Discount (%)</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Discount Amount</th>
+                          <th className="border border-gray-300 px-3 py-2 text-left">Net Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printData.items.map((item, index) => (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-3 py-2">{index + 1}</td>
+                            <td className="border border-gray-300 px-3 py-2">{item.item_name}</td>
+                            <td className="border border-gray-300 px-3 py-2">{item.quantity}</td>
+                            <td className="border border-gray-300 px-3 py-2">₹{item.rate.toFixed(2)}</td>
+                            <td className="border border-gray-300 px-3 py-2">₹{item.amount.toFixed(2)}</td>
+                            <td className="border border-gray-300 px-3 py-2">{item.tax}%</td>
+                            <td className="border border-gray-300 px-3 py-2">₹{item.tax_amount.toFixed(2)}</td>
+                            <td className="border border-gray-300 px-3 py-2">{item.discount}%</td>
+                            <td className="border border-gray-300 px-3 py-2">₹{item.discount_amount.toFixed(2)}</td>
+                            <td className="border border-gray-300 px-3 py-2">₹{item.net_amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end mb-6">
+                  <div className="w-80">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 font-medium">Subtotal:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">₹{printData.totals.subtotal.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 font-medium">Total Tax:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">₹{printData.totals.total_tax.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-300 px-3 py-2 font-medium">Total Discount:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">₹{printData.totals.total_discount.toFixed(2)}</td>
+                      </tr>
+                      <tr className="bg-gray-100">
+                        <td className="border border-gray-300 px-3 py-2 font-bold">Grand Total:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right font-bold">₹{printData.totals.grand_total.toFixed(2)}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+                
+                <div className="text-center text-sm text-gray-600 mt-8">
+                  <p>This is a computer generated document. No signature required.</p>
+                  <p>Generated on: {new Date().toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast 
         message={toast.message}
         type={toast.type}
         isVisible={toast.isVisible}
         onClose={hideToast}
       />
+      
+      <style jsx>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .print-content {
+            margin: 0;
+            padding: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }
