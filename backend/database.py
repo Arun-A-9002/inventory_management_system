@@ -214,7 +214,11 @@ def ensure_missing_columns(engine):
                 ("returned_at", "DATETIME NULL"),
                 ("return_deadline", "DATE NULL"),
                 ("staff_phone", "VARCHAR(20) NULL"),
-                ("staff_email", "VARCHAR(100) NULL")
+                ("staff_email", "VARCHAR(100) NULL"),
+                ("return_staff_name", "VARCHAR(255) NULL"),
+                ("return_staff_phone", "VARCHAR(20) NULL"),
+                ("return_staff_email", "VARCHAR(191) NULL"),
+                ("staff_change_reason", "TEXT NULL")
             ]
             
             for column_name, column_def in external_transfer_columns:
@@ -230,7 +234,8 @@ def ensure_missing_columns(engine):
                 ("returned_quantity", "INT DEFAULT 0"),
                 ("damaged_quantity", "INT DEFAULT 0"),
                 ("damage_reason", "TEXT NULL"),
-                ("returned_at", "DATETIME NULL")
+                ("returned_at", "DATETIME NULL"),
+                ("status", "VARCHAR(50) DEFAULT 'pending'")
             ]
             
             for column_name, column_def in item_columns_to_add:
@@ -249,6 +254,44 @@ def ensure_missing_columns(engine):
             except Exception as e:
                 if "Duplicate column name" not in str(e):
                     print(f"Error adding returned_qty column: {e}")
+            
+            # Add missing columns to grn_items table
+            grn_item_columns = [
+                ("container", "INT DEFAULT 0"),
+                ("package", "INT DEFAULT 0"),
+                ("piece", "INT DEFAULT 0"),
+                ("package_cost", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("package_mrp", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("total_pieces", "INT DEFAULT 0"),
+                ("cost_per_piece", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("mrp_per_piece", "DECIMAL(10, 2) DEFAULT 0.00")
+            ]
+            
+            for column_name, column_def in grn_item_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE grn_items ADD COLUMN {column_name} {column_def}"))
+                    print(f"Added {column_name} column to grn_items table")
+                except Exception as e:
+                    if "Duplicate column name" not in str(e):
+                        print(f"Error adding {column_name} column to grn_items: {e}")
+            
+            # Add missing billing columns
+            billing_columns = [
+                ("discount_amount", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("cgst_amount", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("sgst_amount", "DECIMAL(10, 2) DEFAULT 0.00"),
+                ("igst_amount", "DECIMAL(10, 2) DEFAULT 0.00")
+            ]
+            
+            for column_name, column_def in billing_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE billing ADD COLUMN {column_name} {column_def}"))
+                    print(f"Added {column_name} column to billing table")
+                except Exception as e:
+                    if "Duplicate column name" not in str(e):
+                        print(f"Error adding {column_name} column to billing: {e}")
+            
+            conn.commit()
                 
     except Exception as e:
         print(f"Error in ensure_missing_columns: {e}")

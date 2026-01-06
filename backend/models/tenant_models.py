@@ -665,6 +665,14 @@ class GRNItem(TenantBase):
     item_name = Column(String(100))
     po_qty = Column(Float)
     received_qty = Column(Float)
+    container = Column(Integer, default=0)
+    package = Column(Integer, default=0)
+    piece = Column(Integer, default=0)
+    package_cost = Column(DECIMAL(10, 2), default=0.00)
+    package_mrp = Column(DECIMAL(10, 2), default=0.00)
+    total_pieces = Column(Integer, default=0)
+    cost_per_piece = Column(DECIMAL(10, 2), default=0.00)
+    mrp_per_piece = Column(DECIMAL(10, 2), default=0.00)
     uom = Column(String(20))
     rate = Column(Float)
 
@@ -1084,6 +1092,10 @@ class Billing(TenantBase):
     grn_id = Column(Integer, ForeignKey("grns.id"), nullable=False)
     gross_amount = Column(DECIMAL(10, 2), nullable=False)
     tax_amount = Column(DECIMAL(10, 2), default=0.00)
+    discount_amount = Column(DECIMAL(10, 2), default=0.00)
+    cgst_amount = Column(DECIMAL(10, 2), default=0.00)
+    sgst_amount = Column(DECIMAL(10, 2), default=0.00)
+    igst_amount = Column(DECIMAL(10, 2), default=0.00)
     net_amount = Column(DECIMAL(10, 2), nullable=False)
     paid_amount = Column(DECIMAL(10, 2), default=0.00)
     balance_amount = Column(DECIMAL(10, 2), nullable=False)
@@ -1093,6 +1105,22 @@ class Billing(TenantBase):
     
     # Relationships
     grn = relationship("GRN")
+
+
+class BillingPayment(TenantBase):
+    __tablename__ = "billing_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    billing_id = Column(Integer, ForeignKey("billing.id"), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
+    payment_mode = Column(Enum(PaymentMode), default=PaymentMode.CASH)
+    reference_no = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    billing = relationship("Billing")
 
 
 class ReturnBilling(TenantBase):
@@ -1128,6 +1156,21 @@ class ReturnBillingPayment(TenantBase):
     
     # Relationships
     billing = relationship("ReturnBilling")
+
+
+# ============================================================
+#                   PAYMENTS
+# ============================================================
+class Payment(TenantBase):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    grn_id = Column(Integer, ForeignKey("grns.id"), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
+    payment_date = Column(DateTime, server_default=func.now())
+    
+    # Relationship
+    grn = relationship("GRN")
 
 
 # ============================================================
@@ -1183,6 +1226,7 @@ class ExternalTransferItem(TenantBase):
     damaged_quantity = Column(Integer, default=0)
     damage_reason = Column(Text, nullable=True)
     returned_at = Column(DateTime, nullable=True)
+    status = Column(String(50), default="pending")
     created_at = Column(DateTime, server_default=func.now())
     
     # Relationship to transfer

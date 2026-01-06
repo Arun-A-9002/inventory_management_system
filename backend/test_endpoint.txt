@@ -1,3 +1,0 @@
-@router.get("/test")
-def test_endpoint():
-    return {"message": "External transfer API is working", "timestamp": datetime.now().isoformat()}

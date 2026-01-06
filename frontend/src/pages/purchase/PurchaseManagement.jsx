@@ -111,13 +111,47 @@ export default function PurchaseManagement() {
     }
   }, [activeTab]);
 
+  // Debug vendors state
+  useEffect(() => {
+    console.log('Vendors state updated:', vendors);
+  }, [vendors]);
+
   // Fetch vendors for email
   const fetchVendors = async () => {
     try {
-      const res = await api.get('/vendors/active');
-      setVendors(res.data || []);
+      const res = await api.get('/vendors/');
+      console.log('All vendors response:', res.data);
+      const activeVendors = res.data.filter(vendor => 
+        vendor.email && (vendor.status === 'active' || !vendor.status)
+      );
+      console.log('Filtered active vendors:', activeVendors);
+      setVendors(activeVendors || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+      setVendors([]);
+    }
+  };
+
+  // Create test vendor if none exist
+  const createTestVendor = async () => {
+    try {
+      const testVendor = {
+        vendor_name: "Test Vendor",
+        contact_person: "John Doe",
+        phone: "1234567890",
+        email: "test@vendor.com",
+        address: "123 Test Street",
+        country: "India",
+        state: "Maharashtra",
+        city: "Mumbai"
+      };
+      
+      await api.post('/vendors/', testVendor);
+      showToast('Test vendor created successfully', 'success');
+      fetchVendors();
+    } catch (err) {
+      console.error('Failed to create test vendor:', err);
+      showToast('Failed to create test vendor', 'error');
     }
   };
 
@@ -1090,18 +1124,56 @@ export default function PurchaseManagement() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Email *</label>
-                <select
-                  value={emailForm.vendor_email}
-                  onChange={(e) => setEmailForm({...emailForm, vendor_email: e.target.value})}
-                  className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select vendor email</option>
-                  {vendors.map(vendor => (
-                    <option key={vendor.id} value={vendor.email}>
-                      {vendor.vendor_name} - {vendor.email}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={emailForm.vendor_email}
+                    onChange={(e) => setEmailForm({...emailForm, vendor_email: e.target.value})}
+                    className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select vendor email</option>
+                    {vendors && vendors.length > 0 ? (
+                      vendors.map(vendor => (
+                        <option key={vendor.id} value={vendor.email}>
+                          {vendor.vendor_name} ({vendor.email})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading vendors...</option>
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={fetchVendors}
+                    className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                    title="Refresh vendors"
+                  >
+                    ↻
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open('/vendors', '_blank')}
+                    className="px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                    title="Manage vendors"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {vendors.length === 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span>No vendors with email found.</span>
+                      <button
+                        type="button"
+                        onClick={createTestVendor}
+                        className="text-blue-600 hover:text-blue-800 underline text-xs"
+                      >
+                        Create test vendor
+                      </button>
+                    </div>
+                  ) : (
+                    `${vendors.length} vendors with email available`
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Location *</label>
