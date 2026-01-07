@@ -48,10 +48,6 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
     db.add(audit_log)
     db.commit()
 
-
-# --------------------------
-# CREATE TAX CODE
-# --------------------------
 @router.post("/", response_model=TaxCodeResponse)
 def create_tax_code(data: TaxCodeCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     log_api("CREATE TAX CODE")
@@ -84,18 +80,10 @@ def create_tax_code(data: TaxCodeCreate, request: Request, db: Session = Depends
         log_error(e, "create_tax_code")
         raise HTTPException(500, "Failed to create tax code")
 
-
-# --------------------------
-# LIST TAX CODES
-# --------------------------
 @router.get("/", response_model=list[TaxCodeResponse])
 def list_tax_codes(db: Session = Depends(get_tenant_db)):
     return db.query(TaxCode).all()
 
-
-# --------------------------
-# GET ONE TAX CODE
-# --------------------------
 @router.get("/{tax_id}", response_model=TaxCodeResponse)
 def get_tax_code(tax_id: int, db: Session = Depends(get_tenant_db)):
     tax = db.query(TaxCode).filter(TaxCode.id == tax_id).first()
@@ -103,10 +91,6 @@ def get_tax_code(tax_id: int, db: Session = Depends(get_tenant_db)):
         raise HTTPException(404, "Tax code not found")
     return tax
 
-
-# --------------------------
-# UPDATE TAX CODE
-# --------------------------
 @router.put("/{tax_id}", response_model=TaxCodeResponse)
 def update_tax_code(tax_id: int, data: TaxCodeUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     log_api("UPDATE TAX CODE")
@@ -140,10 +124,6 @@ def update_tax_code(tax_id: int, data: TaxCodeUpdate, request: Request, db: Sess
     log_audit(f"Tax code updated → ID {tax_id}")
     return tax
 
-
-# --------------------------
-# DELETE TAX CODE
-# --------------------------
 @router.delete("/{tax_id}")
 def delete_tax_code(tax_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     log_api("DELETE TAX CODE")

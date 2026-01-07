@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 from typing import List
+import json
 
 from database import get_tenant_db
-from models.tenant_models import Item, Category, SubCategory
+from models.tenant_models import Item, Category, SubCategory, AuditLog
 from schemas.tenant_schemas import ItemCreate, ItemUpdate, ItemResponse
 from utils.permissions import require_items_view, require_items_create, require_items_edit, require_items_delete
+from utils.logger import log_api, log_error, log_audit
 
 DEFAULT_TENANT_DB = "arun"
 
@@ -17,18 +19,85 @@ router = APIRouter(
 def get_db():
     yield from get_tenant_db(DEFAULT_TENANT_DB)
 
+# Helper function for audit logging
+def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
+    user_id = None
+    user_name = 'System'
+    
+    if current_user:
+        user_id = current_user.get('id') or current_user.get('sub')
+        user_name = current_user.get('full_name') or current_user.get('email') or current_user.get('name', 'System')
+        
+        if user_id and isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    
+    # Extract IP and User Agent from request
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent')
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_name=user_name,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        module="ITEM_MASTER",
+        description=description
+    )
+    db.add(audit_log)
+    db.commit()
+
 # ---------------- CREATE ----------------
 @router.post("/", response_model=ItemResponse)
-def create_item(payload: ItemCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_items_create())):
-    existing = db.query(Item).filter(Item.item_code == payload.item_code).first()
-    if existing:
-        raise HTTPException(400, "Item code already exists")
+def create_item(payload: ItemCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_items_create())):
+    log_api("CREATE ITEM")
+    
+    try:
+        existing = db.query(Item).filter(Item.item_code == payload.item_code).first()
+        if existing:
+            raise HTTPException(400, "Item code already exists")
 
-    item = Item(**payload.dict())
-    db.add(item)
-    db.commit()
-    db.refresh(item)
-    return item
+        item = Item(**payload.dict())
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        
+        # Audit log
+        log_audit_trail(
+            db=db,
+            current_user=current_user,
+            action="CREATE",
+            table_name="items",
+            record_id=item.id,
+            new_values={
+                "name": item.name,
+                "item_code": item.item_code,
+                "category": item.category,
+                "brand": item.brand,
+                "item_type": item.item_type,
+                "fixing_price": float(item.fixing_price) if item.fixing_price else 0,
+                "mrp": float(item.mrp) if item.mrp else 0
+            },
+            description=f"Created item {item.name} ({item.item_code})",
+            request=request
+        )
+        
+        log_audit(f"Item created → {item.name}")
+        return item
+        
+    except Exception as e:
+        log_error(e, "create_item")
+        raise HTTPException(500, "Failed to create item")
 
 # ---------------- GET ALL ----------------
 @router.get("/")
@@ -141,27 +210,92 @@ def get_item(item_id: int, db: Session = Depends(get_db), current_user: dict = D
 
 # ---------------- UPDATE ----------------
 @router.put("/{item_id}", response_model=ItemResponse)
-def update_item(item_id: int, payload: ItemUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_items_edit())):
+def update_item(item_id: int, payload: ItemUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_items_edit())):
+    log_api("UPDATE ITEM")
+    
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")
+
+    # Store old values for audit
+    old_values = {
+        "name": item.name,
+        "item_code": item.item_code,
+        "category": item.category,
+        "brand": item.brand,
+        "item_type": item.item_type,
+        "fixing_price": float(item.fixing_price) if item.fixing_price else 0,
+        "mrp": float(item.mrp) if item.mrp else 0
+    }
 
     for key, value in payload.dict(exclude_unset=True).items():
         setattr(item, key, value)
 
     db.commit()
     db.refresh(item)
+    
+    # Store new values for audit
+    new_values = {
+        "name": item.name,
+        "item_code": item.item_code,
+        "category": item.category,
+        "brand": item.brand,
+        "item_type": item.item_type,
+        "fixing_price": float(item.fixing_price) if item.fixing_price else 0,
+        "mrp": float(item.mrp) if item.mrp else 0
+    }
+    
+    # Audit log
+    log_audit_trail(
+        db=db,
+        current_user=current_user,
+        action="UPDATE",
+        table_name="items",
+        record_id=item.id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated item {item.name} ({item.item_code})",
+        request=request
+    )
+    
+    log_audit(f"Item updated → {item.name}")
     return item
 
 # ---------------- SOFT DELETE ----------------
 @router.delete("/{item_id}")
-def deactivate_item(item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_items_delete())):
+def deactivate_item(item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_items_delete())):
+    log_api("DELETE ITEM")
+    
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")
 
+    # Store item details for audit before deactivation
+    item_details = {
+        "name": item.name,
+        "item_code": item.item_code,
+        "category": item.category,
+        "brand": item.brand,
+        "item_type": item.item_type,
+        "is_active": item.is_active
+    }
+
     item.is_active = False
     db.commit()
+    
+    # Audit log
+    log_audit_trail(
+        db=db,
+        current_user=current_user,
+        action="DELETE",
+        table_name="items",
+        record_id=item_id,
+        old_values=item_details,
+        description=f"Deactivated item {item_details['name']} ({item_details['item_code']})",
+        request=request
+    )
+    
+    log_audit(f"Item deactivated → {item_id}")
     return {"message": "Item deactivated"}
 
 # ---------------- SEARCH ----------------

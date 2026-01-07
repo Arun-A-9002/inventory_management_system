@@ -291,6 +291,29 @@ def ensure_missing_columns(engine):
                     if "Duplicate column name" not in str(e):
                         print(f"Error adding {column_name} column to billing: {e}")
             
+            # Create audit_logs table if not exists
+            try:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS audit_logs (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NULL,
+                        user_name VARCHAR(191) NULL,
+                        action VARCHAR(100) NOT NULL,
+                        table_name VARCHAR(100) NOT NULL,
+                        record_id INT NULL,
+                        old_values TEXT NULL,
+                        new_values TEXT NULL,
+                        ip_address VARCHAR(45) NULL,
+                        user_agent VARCHAR(500) NULL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        module VARCHAR(100) NULL,
+                        description VARCHAR(500) NULL
+                    )
+                """))
+                print("Created audit_logs table")
+            except Exception as e:
+                print(f"Error creating audit_logs table: {e}")
+            
             conn.commit()
                 
     except Exception as e:

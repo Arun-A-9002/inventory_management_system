@@ -49,10 +49,6 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
     db.add(audit_log)
     db.commit()
 
-
-# --------------------------
-# CREATE SUBCATEGORY
-# --------------------------
 @router.post("/", response_model=SubCategoryResponse)
 def create_subcategory(data: SubCategoryCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_create())):
     log_api("CREATE SUBCATEGORY")
@@ -85,26 +81,14 @@ def create_subcategory(data: SubCategoryCreate, request: Request, db: Session = 
         log_error(e, "create_subcategory")
         raise HTTPException(500, "Failed to create subcategory")
 
-
-# --------------------------
-# LIST ALL SUBCATEGORIES
-# --------------------------
 @router.get("/", response_model=list[SubCategoryResponse])
 def list_subcategories(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     return db.query(SubCategory).options(joinedload(SubCategory.category)).all()
 
-
-# --------------------------
-# GET SUBCATEGORIES BY CATEGORY
-# --------------------------
 @router.get("/by-category/{category_id}", response_model=list[SubCategoryResponse])
 def get_subcategories_by_category(category_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     return db.query(SubCategory).filter(SubCategory.category_id == category_id).all()
 
-
-# --------------------------
-# GET SUBCATEGORY
-# --------------------------
 @router.get("/{sub_id}", response_model=SubCategoryResponse)
 def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_view())):
     sub = db.query(SubCategory).options(joinedload(SubCategory.category)).filter(SubCategory.id == sub_id).first()
@@ -112,10 +96,6 @@ def get_subcategory(sub_id: int, db: Session = Depends(get_tenant_db), current_u
         raise HTTPException(404, "SubCategory not found")
     return sub
 
-
-# --------------------------
-# UPDATE SUBCATEGORY
-# --------------------------
 @router.put("/{sub_id}", response_model=SubCategoryResponse)
 def update_subcategory(sub_id: int, data: SubCategoryUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_edit())):
     log_api("UPDATE SUBCATEGORY")
@@ -150,10 +130,6 @@ def update_subcategory(sub_id: int, data: SubCategoryUpdate, request: Request, d
     log_audit(f"Subcategory updated → {sub.name}")
     return sub
 
-
-# --------------------------
-# DELETE SUBCATEGORY
-# --------------------------
 @router.delete("/{sub_id}")
 def delete_subcategory(sub_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_subcategory_delete())):
     log_api("DELETE SUBCATEGORY")

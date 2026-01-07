@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+import json
 from database import get_tenant_db
 from models.tenant_models import (
     Vendor, VendorQualification,
-    VendorPerformance, VendorLeadTime
+    VendorPerformance, VendorLeadTime, AuditLog
 )
 from schemas.tenant_schemas import *
 from utils.permissions import require_vendors_view, require_vendors_create, require_vendors_edit, require_vendors_delete, require_vendors_status
+from utils.logger import log_api, log_error, log_audit
 import uuid
 
 router = APIRouter(
@@ -18,6 +20,43 @@ DEFAULT_TENANT_DB = "arun"
 
 def get_tenant_session():
     yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+# Helper function for audit logging
+def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
+    user_id = None
+    user_name = 'System'
+    
+    if current_user:
+        user_id = current_user.get('id') or current_user.get('sub')
+        user_name = current_user.get('full_name') or current_user.get('email') or current_user.get('name', 'System')
+        
+        if user_id and isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent')
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_name=user_name,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        module="VENDOR_MASTER",
+        description=description
+    )
+    db.add(audit_log)
+    db.commit()
 
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
@@ -41,20 +80,46 @@ def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_sessio
 
 # ---------------- STEP 1: REGISTER VENDOR ----------------
 @router.post("/", response_model=VendorResponse)
-def create_vendor(data: VendorCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_create())):
-    vendor_code = f"VND-{uuid.uuid4().hex[:6].upper()}"
+def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_create())):
+    log_api("CREATE VENDOR")
+    
+    try:
+        vendor_code = f"VND-{uuid.uuid4().hex[:6].upper()}"
 
-    vendor = Vendor(
-        **data.dict(),
-        vendor_code=vendor_code,
-        verification_status="active",
-        status="inactive"  # Default to inactive, can be activated later
-    )
+        vendor = Vendor(
+            **data.dict(),
+            vendor_code=vendor_code,
+            verification_status="active",
+            status="inactive"
+        )
 
-    db.add(vendor)
-    db.commit()
-    db.refresh(vendor)
-    return vendor
+        db.add(vendor)
+        db.commit()
+        db.refresh(vendor)
+        
+        log_audit_trail(
+            db=db,
+            current_user=current_user,
+            action="CREATE",
+            table_name="vendors",
+            record_id=vendor.id,
+            new_values={
+                "vendor_name": vendor.vendor_name,
+                "vendor_code": vendor.vendor_code,
+                "phone": vendor.phone,
+                "email": vendor.email,
+                "status": vendor.status
+            },
+            description=f"Created vendor {vendor.vendor_name} ({vendor.vendor_code})",
+            request=request
+        )
+        
+        log_audit(f"Vendor created → {vendor.vendor_name}")
+        return vendor
+        
+    except Exception as e:
+        log_error(e, "create_vendor")
+        raise HTTPException(500, "Failed to create vendor")
 
 # ---------------- STEP 2: QUALIFICATION ----------------
 @router.get("/qualification")
@@ -158,7 +223,9 @@ def migrate_vendor_status(db: Session = Depends(get_tenant_session)):
 
 # ---------------- UPDATE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/status")
-def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
+def update_vendor_status(vendor_id: int, status: str, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
+    log_api("UPDATE VENDOR STATUS")
+    
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -166,9 +233,24 @@ def update_vendor_status(vendor_id: int, status: str, db: Session = Depends(get_
     if status not in ["active", "inactive"]:
         raise HTTPException(status_code=400, detail="Invalid status. Only 'active' or 'inactive' allowed")
     
+    old_status = vendor.status
     vendor.status = status
     db.commit()
     db.refresh(vendor)
+    
+    log_audit_trail(
+        db=db,
+        current_user=current_user,
+        action="UPDATE",
+        table_name="vendors",
+        record_id=vendor.id,
+        old_values={"status": old_status},
+        new_values={"status": vendor.status},
+        description=f"Updated vendor {vendor.vendor_name} status from {old_status} to {status}",
+        request=request
+    )
+    
+    log_audit(f"Vendor status updated → {vendor.vendor_name}: {status}")
     return {"message": "Vendor status updated successfully", "status": vendor.status}
 
 # ---------------- TOGGLE VENDOR STATUS ----------------
@@ -187,27 +269,80 @@ def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_sessio
 
 # ---------------- UPDATE VENDOR ----------------
 @router.put("/{vendor_id}")
-def update_vendor(vendor_id: int, data: VendorCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_edit())):
+def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_edit())):
+    log_api("UPDATE VENDOR")
+    
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    old_values = {
+        "vendor_name": vendor.vendor_name,
+        "phone": vendor.phone,
+        "email": vendor.email,
+        "status": vendor.status
+    }
     
     for key, value in data.dict().items():
         setattr(vendor, key, value)
     
     db.commit()
     db.refresh(vendor)
+    
+    new_values = {
+        "vendor_name": vendor.vendor_name,
+        "phone": vendor.phone,
+        "email": vendor.email,
+        "status": vendor.status
+    }
+    
+    log_audit_trail(
+        db=db,
+        current_user=current_user,
+        action="UPDATE",
+        table_name="vendors",
+        record_id=vendor.id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated vendor {vendor.vendor_name}",
+        request=request
+    )
+    
+    log_audit(f"Vendor updated → {vendor.vendor_name}")
     return vendor
 
 # ---------------- DELETE VENDOR ----------------
 @router.delete("/{vendor_id}")
-def delete_vendor(vendor_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_delete())):
+def delete_vendor(vendor_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_delete())):
+    log_api("DELETE VENDOR")
+    
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
+    vendor_details = {
+        "vendor_name": vendor.vendor_name,
+        "vendor_code": vendor.vendor_code,
+        "phone": vendor.phone,
+        "email": vendor.email,
+        "status": vendor.status
+    }
+    
     db.delete(vendor)
     db.commit()
+    
+    log_audit_trail(
+        db=db,
+        current_user=current_user,
+        action="DELETE",
+        table_name="vendors",
+        record_id=vendor_id,
+        old_values=vendor_details,
+        description=f"Deleted vendor {vendor_details['vendor_name']}",
+        request=request
+    )
+    
+    log_audit(f"Vendor deleted → {vendor_id}")
     return {"message": "Vendor deleted successfully"}
 
 # ---------------- GET VENDOR BANK DETAILS ----------------

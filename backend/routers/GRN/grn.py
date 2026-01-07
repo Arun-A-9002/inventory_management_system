@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import date
 import uuid
+import json
 
 from database import get_tenant_db
-from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, Stock, StockLedger, StockOverview, VendorPayment
+from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, Stock, StockLedger, StockOverview, VendorPayment, AuditLog
 from schemas.tenant_schemas import GRNCreate, QCCreate, GRNStatusUpdate
 from utils.permissions import require_grn_view, require_grn_create, require_grn_edit, require_grn_delete, require_grn_print, require_grn_status_qc, require_grn_status_approve
 
@@ -14,6 +15,46 @@ DEFAULT_TENANT_DB = "arun"
 
 def get_tenant_session():
     yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+# Helper function for audit logging
+def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
+    # Extract user info with fallbacks
+    user_id = None
+    user_name = 'System'
+    
+    if current_user:
+        user_id = current_user.get('id') or current_user.get('sub')
+        user_name = current_user.get('full_name') or current_user.get('email') or current_user.get('name', 'System')
+        
+        # Convert user_id to int if it's a string
+        if user_id and isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    
+    # Extract IP and User Agent from request
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent')
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_name=user_name,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        module="GRN",
+        description=description
+    )
+    db.add(audit_log)
+    db.commit()
 
 # Helper function to update stock from GRN
 def _update_stock_from_grn(grn_id: int, db: Session):
@@ -79,7 +120,7 @@ def _update_stock_from_grn(grn_id: int, db: Session):
 
 # ---------------- CREATE GRN ----------------
 @router.post("/create")
-def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_create())):
+def create_grn(data: GRNCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_create())):
     grn = GRN(
         grn_number=f"GRN-{uuid.uuid4().hex[:8]}",
         grn_date=data.grn_date,
@@ -153,6 +194,19 @@ def create_grn(data: GRNCreate, db: Session = Depends(get_tenant_session), curre
     db.add(vendor_payment)
 
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="CREATE",
+        table_name="grns",
+        record_id=grn.id,
+        new_values={"grn_number": grn.grn_number, "vendor_name": grn.vendor_name, "total_amount": float(grn.total_amount)},
+        description=f"Created GRN {grn.grn_number} for vendor {grn.vendor_name}",
+        request=request
+    )
+    
     return {"message": "GRN Created", "grn_number": grn.grn_number}
 
 # ---------------- LIST GRN ----------------
@@ -287,7 +341,7 @@ def extract_invoice_data(data: dict):
 
 # ---------------- SAVE PRICE TO ITEM MASTER ----------------
 @router.post("/save-price")
-def save_price_to_item_master(data: dict, db: Session = Depends(get_tenant_session)):
+def save_price_to_item_master(data: dict, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_edit())):
     item_name = data.get('item_name')
     unit_price = data.get('unit_price')
     mrp = data.get('mrp', 0)
@@ -300,21 +354,47 @@ def save_price_to_item_master(data: dict, db: Session = Depends(get_tenant_sessi
     if not item:
         raise HTTPException(404, f"Item '{item_name}' not found in item master")
     
+    # Store old values for audit
+    old_values = {
+        "fixing_price": float(item.fixing_price) if item.fixing_price else 0,
+        "mrp": float(item.mrp) if item.mrp else 0
+    }
+    
     # Update fixing price and MRP
     item.fixing_price = float(unit_price)
     if mrp > 0:
         item.mrp = float(mrp)
     
     db.commit()
+    
+    # Store new values for audit
+    new_values = {
+        "fixing_price": float(item.fixing_price),
+        "mrp": float(item.mrp) if item.mrp else 0
+    }
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="PRICE_UPDATE",
+        table_name="items",
+        record_id=item.id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated prices for item {item_name}"
+    )
+    
     return {"message": f"Prices updated for {item_name}"}
 
 # ---------------- QC ----------------
 @router.post("/{grn_id}/qc")
-def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
+def qc_inspection(grn_id: int, data: QCCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
 
+    old_status = grn.status
     qc = QCInspection(
         grn_id=grn_id,
         qc_required=data.qc_required,
@@ -330,15 +410,30 @@ def qc_inspection(grn_id: int, data: QCCreate, db: Session = Depends(get_tenant_
 
     db.add(qc)
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="QC_INSPECTION",
+        table_name="grns",
+        record_id=grn_id,
+        old_values={"status": old_status.value if old_status else None},
+        new_values={"qc_status": data.qc_status, "qc_by": data.qc_by, "status": grn.status.value},
+        description=f"QC inspection completed for GRN {grn.grn_number} with status {data.qc_status}",
+        request=request
+    )
+    
     return {"message": "QC Completed"}
 
 # ---------------- APPROVAL ----------------
 @router.post("/{grn_id}/approve")
-def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
+def approve_grn(grn_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
 
+    old_status = grn.status
     # Update GRN status
     grn.status = GRNStatus.approved
     
@@ -346,14 +441,36 @@ def approve_grn(grn_id: int, db: Session = Depends(get_tenant_session), current_
     _update_stock_from_grn(grn_id, db)
     
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="APPROVE",
+        table_name="grns",
+        record_id=grn_id,
+        old_values={"status": old_status.value},
+        new_values={"status": grn.status.value},
+        description=f"GRN {grn.grn_number} approved and stock updated",
+        request=request
+    )
+    
     return {"message": "GRN Approved & Stock Updated"}
 
 # ---------------- UPDATE GRN ----------------
 @router.put("/{grn_id}")
-def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_edit())):
+def update_grn(grn_id: int, data: GRNCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_edit())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
+    
+    # Store old values for audit
+    old_values = {
+        "vendor_name": grn.vendor_name,
+        "total_amount": float(grn.total_amount) if grn.total_amount else 0,
+        "status": grn.status.value,
+        "po_number": grn.po_number
+    }
     
     old_status = grn.status
     
@@ -427,22 +544,59 @@ def update_grn(grn_id: int, data: GRNCreate, db: Session = Depends(get_tenant_se
         _update_stock_from_grn(grn_id, db)
 
     db.commit()
+    
+    # Store new values for audit
+    new_values = {
+        "vendor_name": grn.vendor_name,
+        "total_amount": float(grn.total_amount) if grn.total_amount else 0,
+        "status": grn.status.value,
+        "po_number": grn.po_number
+    }
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="UPDATE",
+        table_name="grns",
+        record_id=grn_id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated GRN {grn.grn_number}",
+        request=request
+    )
+    
     return {"message": "GRN Updated", "grn_number": grn.grn_number}
 
 # ---------------- UPDATE QUALITY CHECK ----------------
 @router.put("/{grn_id}/quality-check")
-def update_quality_check(grn_id: int, data: dict, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
+def update_quality_check(grn_id: int, data: dict, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_qc())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
     
+    old_quality_check = grn.quality_check
     grn.quality_check = data.get('quality_check', False)
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_QC",
+        table_name="grns",
+        record_id=grn_id,
+        old_values={"quality_check": old_quality_check},
+        new_values={"quality_check": grn.quality_check},
+        description=f"Quality check updated for GRN {grn.grn_number} to {grn.quality_check}",
+        request=request
+    )
+    
     return {"message": f"Quality check updated to {grn.quality_check}"}
 
 # ---------------- UPDATE STATUS ----------------
 @router.put("/{grn_id}/status")
-def update_grn_status(grn_id: int, data: GRNStatusUpdate, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
+def update_grn_status(grn_id: int, data: GRNStatusUpdate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_status_approve())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
@@ -455,6 +609,20 @@ def update_grn_status(grn_id: int, data: GRNStatusUpdate, db: Session = Depends(
         _update_stock_from_grn(grn_id, db)
     
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="STATUS_UPDATE",
+        table_name="grns",
+        record_id=grn_id,
+        old_values={"status": old_status.value},
+        new_values={"status": data.status.value},
+        description=f"GRN {grn.grn_number} status updated from {old_status.value} to {data.status.value}",
+        request=request
+    )
+    
     return {"message": f"GRN status updated to {data.status.value}"}
 
 @router.post("/test-grn-batches")
@@ -519,11 +687,32 @@ def create_test_grn_with_batches(db: Session = Depends(get_tenant_session)):
         "batches_created": len(batches_data)
     }
 @router.delete("/{grn_id}")
-def delete_grn(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_delete())):
+def delete_grn(grn_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_delete())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
     
+    # Store GRN details for audit before deletion
+    grn_details = {
+        "grn_number": grn.grn_number,
+        "vendor_name": grn.vendor_name,
+        "total_amount": float(grn.total_amount) if grn.total_amount else 0,
+        "status": grn.status.value
+    }
+    
     db.delete(grn)
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="DELETE",
+        table_name="grns",
+        record_id=grn_id,
+        old_values=grn_details,
+        description=f"Deleted GRN {grn_details['grn_number']}",
+        request=request
+    )
+    
     return {"message": "GRN deleted successfully"}
