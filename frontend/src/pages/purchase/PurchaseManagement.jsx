@@ -116,6 +116,22 @@ export default function PurchaseManagement() {
         fetchTrackingList(); // Fetch tracking list
       }
     }
+
+    // Listen for refresh events from header
+    const handleRefreshEvent = () => {
+      if (activeTab === "PR") {
+        fetchPRList();
+        fetchItemList();
+      } else if (activeTab === "PO") {
+        fetchPOList();
+      }
+    };
+
+    window.addEventListener('refreshData', handleRefreshEvent);
+    
+    return () => {
+      window.removeEventListener('refreshData', handleRefreshEvent);
+    };
   }, [activeTab]);
 
   // Debug vendors state

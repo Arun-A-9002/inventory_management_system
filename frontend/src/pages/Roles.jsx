@@ -19,6 +19,7 @@ export default function Roles() {
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [permissionSearch, setPermissionSearch] = useState("");
 
   useEffect(() => {
     if (hasPermission("roles.view")) loadAll();
@@ -43,6 +44,52 @@ export default function Roles() {
     if (copy.has(id)) copy.delete(id); else copy.add(id);
     return copy;
   }
+
+  // Select all permissions
+  const handleSelectAll = (isEdit = false) => {
+    const allPermIds = permissions.map(p => p.id);
+    if (isEdit) {
+      setEditSelectedPerms(new Set(allPermIds));
+    } else {
+      setSelectedPerms(new Set(allPermIds));
+    }
+  };
+
+  // Deselect all permissions
+  const handleDeselectAll = (isEdit = false) => {
+    if (isEdit) {
+      setEditSelectedPerms(new Set());
+    } else {
+      setSelectedPerms(new Set());
+    }
+  };
+
+  // Toggle module permissions
+  const handleModuleToggle = (groupPerms, isEdit = false) => {
+    const groupPermIds = groupPerms.map(p => p.id);
+    const currentSet = isEdit ? editSelectedPerms : selectedPerms;
+    const allSelected = groupPermIds.every(id => currentSet.has(id));
+    
+    if (allSelected) {
+      // Deselect all in this module
+      const newSet = new Set(currentSet);
+      groupPermIds.forEach(id => newSet.delete(id));
+      if (isEdit) {
+        setEditSelectedPerms(newSet);
+      } else {
+        setSelectedPerms(newSet);
+      }
+    } else {
+      // Select all in this module
+      const newSet = new Set(currentSet);
+      groupPermIds.forEach(id => newSet.add(id));
+      if (isEdit) {
+        setEditSelectedPerms(newSet);
+      } else {
+        setSelectedPerms(newSet);
+      }
+    }
+  };
 
   const handleCreate = async () => {
     if (!hasPermission("roles.create")) return alert("Permission denied");
@@ -136,7 +183,34 @@ export default function Roles() {
                 <label className="block text-sm font-medium text-slate-700">Description (optional)</label>
                 <textarea value={editingId ? editDescription : description} onChange={(e)=> editingId ? setEditDescription(e.target.value) : setDescription(e.target.value)} className="mt-2 mb-3 w-full rounded-lg border px-4 py-2" rows={3} />
 
-                <div className="text-sm font-medium mb-2">Permissions <span className="text-xs text-slate-400">({permissions.length} total)</span></div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">Permissions <span className="text-xs text-slate-400">({permissions.length} total)</span></div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAll(!!editingId)}
+                      className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeselectAll(!!editingId)}
+                      className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search modules or permissions..."
+                    value={permissionSearch}
+                    onChange={(e) => setPermissionSearch(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
                 <div className="h-64 overflow-auto border rounded-md p-3 bg-slate-50">
                   {Object.entries(
                     permissions.reduce((groups, p) => {
@@ -145,10 +219,32 @@ export default function Roles() {
                       groups[group].push(p);
                       return groups;
                     }, {})
-                  ).map(([groupName, groupPerms]) => (
+                  ).filter(([groupName, groupPerms]) => {
+                    if (!permissionSearch.trim()) return true;
+                    const searchTerm = permissionSearch.toLowerCase();
+                    return groupName.toLowerCase().includes(searchTerm) || 
+                           groupPerms.some(p => 
+                             p.label.toLowerCase().includes(searchTerm) || 
+                             p.name.toLowerCase().includes(searchTerm)
+                           );
+                  }).map(([groupName, groupPerms]) => (
                     <div key={groupName} className="mb-4">
-                      <div className="text-xs font-semibold text-slate-600 mb-2 uppercase">{groupName}</div>
-                      {groupPerms.map(p => {
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold text-slate-600 uppercase">{groupName}</div>
+                        <button
+                          type="button"
+                          onClick={() => handleModuleToggle(groupPerms, !!editingId)}
+                          className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        >
+                          {groupPerms.every(p => (editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id))) ? 'Deselect' : 'Select'} Module
+                        </button>
+                      </div>
+                      {groupPerms.filter(p => {
+                        if (!permissionSearch.trim()) return true;
+                        const searchTerm = permissionSearch.toLowerCase();
+                        return p.label.toLowerCase().includes(searchTerm) || 
+                               p.name.toLowerCase().includes(searchTerm);
+                      }).map(p => {
                         const checked = editingId ? editSelectedPerms.has(p.id) : selectedPerms.has(p.id);
                         return (
                           <label key={p.id} className="flex items-start gap-3 p-2 rounded hover:bg-white/50">

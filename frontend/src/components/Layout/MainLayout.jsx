@@ -41,9 +41,17 @@ export default function MainLayout() {
 
   const handleRefresh = async () => {
     await fetchPendingCount();
-    // Trigger refresh for current page if it's dashboard
-    if (location.pathname === '/app/dashboard') {
+    await fetchCompanyDetails();
+    
+    // Trigger refresh for current page based on pathname
+    if (location.pathname.includes('/purchase')) {
+      // For purchase pages, dispatch a custom event that components can listen to
+      window.dispatchEvent(new CustomEvent('refreshData'));
+    } else if (location.pathname === '/app/dashboard') {
       window.location.reload();
+    } else {
+      // For other pages, dispatch refresh event
+      window.dispatchEvent(new CustomEvent('refreshData'));
     }
   };
 

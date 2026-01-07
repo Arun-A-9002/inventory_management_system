@@ -5,6 +5,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
   const [userInfo, setUserInfo] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [companyName, setCompanyName] = useState('NUTRYAH');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -81,16 +82,35 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
   };
 
   const handleRefresh = async () => {
-    if (onRefresh) {
-      setIsRefreshing(true);
-      try {
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) {
         await onRefresh();
-      } finally {
-        setIsRefreshing(false);
+      } else {
+        // If no onRefresh callback provided, refresh the page
+        window.location.reload();
       }
-    } else {
-      // If no onRefresh callback provided, refresh the page
-      window.location.reload();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      // Sync all data - refresh company info, user profile, and trigger page refresh
+      await Promise.all([
+        fetchCompanyName(),
+        fetchUserProfile(),
+        onRefresh ? onRefresh() : Promise.resolve()
+      ]);
+      
+      // Force a complete page refresh for thorough sync
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -125,6 +145,20 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
               </div>
             </div>
           </div>
+
+          {/* Sync Button */}
+          <button 
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl border border-blue-300 hover:from-blue-600 hover:to-blue-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 group"
+          >
+            <svg className={`w-4 h-4 mr-2 transition-transform duration-200 ${isSyncing ? 'animate-spin' : 'group-hover:rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="text-sm font-medium">
+              {isSyncing ? 'Syncing...' : 'Sync'}
+            </span>
+          </button>
 
           {/* Refresh Button */}
           <button 
