@@ -113,172 +113,152 @@ export default function Store() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-
-      {/* HEADER CARD */}
-      <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-rose-600 to-pink-500 p-6 text-white shadow-md">
-          <div className="text-sm uppercase opacity-80">Organization Structure</div>
-          <h1 className="text-3xl font-semibold mt-2">Store / Inventory Point Management</h1>
-          <p className="mt-2 opacity-90">Create and configure inventory storage locations.</p>
-        </div>
-      </div>
-
+    <div>
       <div className="grid grid-cols-12 gap-6">
-
-        {/* LEFT — CREATE / EDIT */}
+        {/* LEFT CARD — CREATE / EDIT */}
         <div className="col-span-12 lg:col-span-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border">
-
             {!editingId ? (
               <>
                 <h2 className="text-xl font-semibold mb-3">Create Store</h2>
-
                 {!hasPermission("store.create") ? (
                   <div className="text-sm text-slate-500">You do not have permission to create stores.</div>
                 ) : (
                   <>
-                {/* Fields */}
-                <label className="block text-sm font-medium">Store Name *</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                />
-
-                <label className="block text-sm font-medium">Store Type *</label>
-                <select
-                  value={form.store_type}
-                  onChange={(e) => setForm({ ...form, store_type: e.target.value })}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                >
-                  <option value="">Select</option>
-                  <option value="Pharmacy">Pharmacy</option>
-                  <option value="Warehouse">Warehouse</option>
-                  <option value="General Store">General Store</option>
-                  <option value="Biomedical">Biomedical</option>
-                  <option value="Custom">Custom</option>
-                </select>
-
-                <label className="block text-sm font-medium">Linked Branch *</label>
-                <select
-                  value={form.branch_id}
-                  onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                >
-                  <option value="">Select a branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="checkbox"
-                    checked={form.is_central}
-                    onChange={(e) =>
-                      setForm({ ...form, is_central: e.target.checked })
-                    }
-                  />
-                  <label>Is Central Store?</label>
-                </div>
-
-                <label className="block text-sm font-medium">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  rows={4}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                />
-
-                <button
-                  onClick={handleCreate}
-                  disabled={!hasPermission("store.create")}
-                  className="rounded-full bg-rose-600 text-white px-5 py-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  Create Store
-                </button>
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-slate-700">STORE NAME</label>
+                      <input
+                        value={form.name}
+                        onChange={(e) => setForm({ ...form, name: e.target.value })}
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-slate-700">STORE TYPE</label>
+                      <select
+                        value={form.store_type}
+                        onChange={(e) => setForm({ ...form, store_type: e.target.value })}
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      >
+                        <option value="">Select</option>
+                        <option value="Pharmacy">Pharmacy</option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="General Store">General Store</option>
+                        <option value="Biomedical">Biomedical</option>
+                        <option value="Custom">Custom</option>
+                      </select>
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-slate-700">LINKED BRANCH</label>
+                      <select
+                        value={form.branch_id}
+                        onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      >
+                        <option value="">Select a branch</option>
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={form.is_central}
+                          onChange={(e) => setForm({ ...form, is_central: e.target.checked })}
+                        />
+                        <label className="text-sm font-medium text-slate-700">Is Central Store?</label>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-slate-700">DESCRIPTION</label>
+                      <textarea
+                        value={form.description}
+                        onChange={(e) => setForm({ ...form, description: e.target.value })}
+                        rows={3}
+                        className="mt-1 w-full rounded-lg border px-4 py-2"
+                      />
+                    </div>
+                    <button
+                      onClick={handleCreate}
+                      disabled={!hasPermission("store.create")}
+                      className="mt-3 inline-flex items-center justify-center rounded-full px-5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Create Store
+                    </button>
                   </>
                 )}
               </>
             ) : (
               <>
-                {/* EDIT MODE */}
                 <h2 className="text-xl font-semibold mb-3">Edit Store</h2>
-
-                <label className="block text-sm font-medium">Store Name *</label>
-                <input
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                />
-
-                <label className="block text-sm font-medium">Store Type *</label>
-                <select
-                  value={editForm.store_type}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, store_type: e.target.value })
-                  }
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                >
-                  <option value="">Select</option>
-                  <option value="Pharmacy">Pharmacy</option>
-                  <option value="Warehouse">Warehouse</option>
-                  <option value="General Store">General Store</option>
-                  <option value="Biomedical">Biomedical</option>
-                  <option value="Custom">Custom</option>
-                </select>
-
-                <label className="block text-sm font-medium">Linked Branch *</label>
-                <select
-                  value={editForm.branch_id}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, branch_id: e.target.value })
-                  }
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                >
-                  <option value="">Select a branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="flex items-center gap-2 mb-3">
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-slate-700">STORE NAME</label>
                   <input
-                    type="checkbox"
-                    checked={editForm.is_central}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        is_central: e.target.checked,
-                      })
-                    }
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="mt-1 w-full rounded-lg border px-4 py-2"
                   />
-                  <label>Is Central Store?</label>
                 </div>
-
-                <label className="block text-sm font-medium">Description</label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, description: e.target.value })
-                  }
-                  rows={4}
-                  className="w-full border rounded-lg px-4 py-2 mb-3"
-                />
-
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-slate-700">STORE TYPE</label>
+                  <select
+                    value={editForm.store_type}
+                    onChange={(e) => setEditForm({ ...editForm, store_type: e.target.value })}
+                    className="mt-1 w-full rounded-lg border px-4 py-2"
+                  >
+                    <option value="">Select</option>
+                    <option value="Pharmacy">Pharmacy</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="General Store">General Store</option>
+                    <option value="Biomedical">Biomedical</option>
+                    <option value="Custom">Custom</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-slate-700">LINKED BRANCH</label>
+                  <select
+                    value={editForm.branch_id}
+                    onChange={(e) => setEditForm({ ...editForm, branch_id: e.target.value })}
+                    className="mt-1 w-full rounded-lg border px-4 py-2"
+                  >
+                    <option value="">Select a branch</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={editForm.is_central}
+                      onChange={(e) => setEditForm({ ...editForm, is_central: e.target.checked })}
+                    />
+                    <label className="text-sm font-medium text-slate-700">Is Central Store?</label>
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-slate-700">DESCRIPTION</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border px-4 py-2"
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleUpdate}
-                    className="rounded-full bg-pink-600 text-white px-4 py-2"
+                    className="rounded-full bg-purple-600 text-white px-4 py-2"
                   >
                     Save
                   </button>
-
                   <button
                     onClick={() => setEditingId(null)}
                     className="rounded-full border px-4 py-2"
@@ -291,72 +271,85 @@ export default function Store() {
           </div>
         </div>
 
-        {/* RIGHT LIST */}
+        {/* RIGHT SIDE — LIST */}
         <div className="col-span-12 lg:col-span-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border">
-
-            <h3 className="text-lg font-semibold">Store List</h3>
-            <p className="text-sm text-slate-500 mb-4">List of all stores / inventory points.</p>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full table-auto">
-                <thead>
-                  <tr className="text-sm text-slate-500 border-b">
-                    <th className="py-3 text-left">#</th>
-                    <th className="py-3 text-left">Name</th>
-                    <th className="py-3 text-left">Type</th>
-                    <th className="py-3 text-left">Branch</th>
-                    <th className="py-3 text-left">Central?</th>
-                    <th className="py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={6} className="py-6 text-center">Loading...</td></tr>
-                  ) : stores.length === 0 ? (
-                    <tr><td colSpan={6} className="py-6 text-center text-slate-500">No stores found</td></tr>
-                  ) : (
-                    stores.map((s, idx) => (
-                      <tr key={s.id} className="hover:bg-slate-50">
-                        <td className="py-3">{idx + 1}</td>
-                        <td className="py-3">{s.name}</td>
-                        <td className="py-3">{s.store_type}</td>
-                        <td className="py-3">{s.branch?.name || "-"}</td>
-                        <td className="py-3">{s.is_central ? "Yes" : "No"}</td>
-
-                        <td className="py-3">
-                          <div className="flex gap-2">
-                            {hasPermission("store.edit") && (
-                            <button
-                              onClick={() => startEdit(s)}
-                              className="text-sm px-3 py-1 rounded-full border hover:bg-slate-100"
-                            >
-                              Edit
-                            </button>
-                            )}
-
-                            {hasPermission("store.delete") && (
-                            <button
-                              onClick={() => handleDelete(s.id)}
-                              className="text-sm px-3 py-1 rounded-full border text-red-600 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                            )}
-                          </div>
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-xl font-bold text-gray-800">Store Directory</h3>
+              <p className="text-sm text-gray-500 mt-1">Complete overview of your organization's store information</p>
+            </div>
+            <div className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Store</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Branch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Central</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 mx-auto"></div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-
-              </table>
+                    ) : stores.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                          No stores registered
+                        </td>
+                      </tr>
+                    ) : (
+                      stores.map((s, idx) => (
+                        <tr key={s.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 text-center">{idx + 1}</td>
+                          <td className="px-4 py-4">
+                            <div className="font-semibold">{s.name}</div>
+                            <div className="text-sm text-gray-600">{s.description}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                              {s.store_type || 'No type'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="text-sm">{s.branch?.name || '-'}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`px-2 py-1 text-xs rounded ${
+                              s.is_central ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {s.is_central ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <div className="flex justify-center space-x-1">
+                              {hasPermission("store.edit") && (
+                                <button onClick={() => startEdit(s)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">
+                                  Edit
+                                </button>
+                              )}
+                              {hasPermission("store.delete") && (
+                                <button onClick={() => handleDelete(s.id)} className="px-2 py-1 text-xs border border-red-300 text-red-700 rounded hover:bg-red-50">
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-
           </div>
         </div>
-
       </div>
     </div>
   );

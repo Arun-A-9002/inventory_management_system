@@ -116,79 +116,58 @@ export default function Branch() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      
-      {/* HEADER CARD */}
-      <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 p-6 text-white shadow-md">
-          <div className="text-sm uppercase opacity-80">Organization Structure</div>
-          <h1 className="text-3xl font-semibold mt-2">Branch / Location Management</h1>
-          <p className="mt-2 opacity-90">Manage your branches and their locations.</p>
-        </div>
-      </div>
-
+    <div>
       <div className="grid grid-cols-12 gap-6">
-        
-        {/* LEFT — CREATE / EDIT */}
+        {/* LEFT CARD — CREATE / EDIT */}
         <div className="col-span-12 lg:col-span-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border">
-
-            {/* CREATE MODE */}
             {!editingId ? (
               <>
                 <h2 className="text-xl font-semibold mb-3">Create Branch</h2>
-
                 {!hasPermission("branch.create") ? (
                   <div className="text-sm text-slate-500">You do not have permission to create branches.</div>
                 ) : (
                   <>
-                {Object.keys(form).map((key) => (
-                  <div key={key} className="mb-3">
-                    <label className="block text-sm font-medium text-slate-700">
-                      {key.replace("_", " ").toUpperCase()}
-                    </label>
-                    {key === "company_id" ? (
-                      <select
-                        value={form[key]}
-                        onChange={(e) =>
-                          setForm({ ...form, [key]: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border px-4 py-2"
-                      >
-                        <option value="">Select Company</option>
-                        {companies.map((company) => (
-                          <option key={company.id} value={company.id}>
-                            {company.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={form[key]}
-                        onChange={(e) =>
-                          setForm({ ...form, [key]: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border px-4 py-2"
-                      />
-                    )}
-                  </div>
-                ))}
-
-                <button
-                  onClick={handleCreate}
-                  disabled={!hasPermission("branch.create")}
-                  className="mt-3 inline-flex items-center justify-center rounded-full bg-blue-600 text-white px-5 py-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  Create Branch
-                </button>
+                    {Object.keys(form).map((key) => (
+                      <div key={key} className="mb-3">
+                        <label className="block text-sm font-medium text-slate-700">
+                          {key.replace("_", " ").toUpperCase()}
+                        </label>
+                        {key === "company_id" ? (
+                          <select
+                            value={form[key]}
+                            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                            className="mt-1 w-full rounded-lg border px-4 py-2"
+                          >
+                            <option value="">Select Company</option>
+                            {companies.map((company) => (
+                              <option key={company.id} value={company.id}>
+                                {company.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            value={form[key]}
+                            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                            className="mt-1 w-full rounded-lg border px-4 py-2"
+                          />
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={handleCreate}
+                      disabled={!hasPermission("branch.create")}
+                      className="mt-3 inline-flex items-center justify-center rounded-full px-5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Create Branch
+                    </button>
                   </>
                 )}
               </>
             ) : (
               <>
-                {/* EDIT MODE */}
                 <h2 className="text-xl font-semibold mb-3">Edit Branch</h2>
-
                 {Object.keys(editForm).map((key) =>
                   key === "id" ? null : (
                     <div key={key} className="mb-3">
@@ -197,23 +176,19 @@ export default function Branch() {
                       </label>
                       <input
                         value={editForm[key] || ""}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, [key]: e.target.value })
-                        }
+                        onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
                         className="mt-1 w-full rounded-lg border px-4 py-2"
                       />
                     </div>
                   )
                 )}
-
                 <div className="flex gap-2">
                   <button
                     onClick={handleUpdate}
-                    className="rounded-full bg-cyan-600 text-white px-4 py-2"
+                    className="rounded-full bg-purple-600 text-white px-4 py-2"
                   >
                     Save
                   </button>
-
                   <button
                     onClick={() => setEditingId(null)}
                     className="rounded-full border px-4 py-2"
@@ -223,73 +198,81 @@ export default function Branch() {
                 </div>
               </>
             )}
-
           </div>
         </div>
 
-        {/* RIGHT — LIST */}
+        {/* RIGHT SIDE — LIST */}
         <div className="col-span-12 lg:col-span-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border">
-
-            <h3 className="text-lg font-semibold">Branch List</h3>
-            <p className="text-sm text-slate-500 mb-4">All branches registered under your company.</p>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full table-auto">
-                <thead>
-                  <tr className="text-sm text-slate-500 border-b">
-                    <th className="py-3 text-left">#</th>
-                    <th className="py-3 text-left">Name</th>
-                    <th className="py-3 text-left">Code</th>
-                    <th className="py-3 text-left">City</th>
-                    <th className="py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={5} className="py-6 text-center">Loading...</td></tr>
-                  ) : branches.length === 0 ? (
-                    <tr><td colSpan={5} className="py-6 text-center text-slate-500">No branches found</td></tr>
-                  ) : (
-                    branches.map((b, idx) => (
-                      <tr key={b.id} className="hover:bg-slate-50">
-                        <td className="py-3">{idx + 1}</td>
-                        <td className="py-3">{b.name}</td>
-                        <td className="py-3">{b.code}</td>
-                        <td className="py-3">{b.city || "-"}</td>
-                        <td className="py-3">
-                          <div className="flex gap-2">
-                            {hasPermission("branch.edit") && (
-                            <button
-                              onClick={() => startEdit(b)}
-                              className="text-sm px-3 py-1 rounded-full border hover:bg-slate-100"
-                            >
-                              Edit
-                            </button>
-                            )}
-
-                            {hasPermission("branch.delete") && (
-                            <button
-                              onClick={() => handleDelete(b.id)}
-                              className="text-sm px-3 py-1 rounded-full border text-red-600 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                            )}
-                          </div>
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-xl font-bold text-gray-800">Branch Directory</h3>
+              <p className="text-sm text-gray-500 mt-1">Complete overview of your organization's branch information</p>
+            </div>
+            <div className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Branch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Location</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 mx-auto"></div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-
-              </table>
+                    ) : branches.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                          No branches registered
+                        </td>
+                      </tr>
+                    ) : (
+                      branches.map((b, idx) => (
+                        <tr key={b.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 text-center">{idx + 1}</td>
+                          <td className="px-4 py-4">
+                            <div className="font-semibold">{b.name}</div>
+                            <div className="text-sm text-gray-600">{b.address}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                              {b.code || 'No code'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="text-sm">{b.city}</div>
+                            <div className="text-xs text-gray-500">{b.state}, {b.country}</div>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <div className="flex justify-center space-x-1">
+                              {hasPermission("branch.edit") && (
+                                <button onClick={() => startEdit(b)} className="px-2 py-1 text-xs border rounded hover:bg-gray-50">
+                                  Edit
+                                </button>
+                              )}
+                              {hasPermission("branch.delete") && (
+                                <button onClick={() => handleDelete(b.id)} className="px-2 py-1 text-xs border border-red-300 text-red-700 rounded hover:bg-red-50">
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -80,33 +80,37 @@ export default function Dashboard() {
   };
 
   const StatCard = ({ title, value, icon, color, link, trend }) => (
-    <div className={`group bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border-l-4 ${color} transform hover:-translate-y-1`}>
+    <div className="group bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">{title}</p>
-          <div className="flex items-baseline mt-2">
-            <p className="text-3xl font-bold text-gray-900">
+          <p className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">{title}</p>
+          <div className="flex items-baseline">
+            <p className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
               {loading ? (
-                <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                <div className="animate-pulse bg-gray-200/50 h-8 w-16 rounded-lg"></div>
               ) : (
                 typeof value === 'number' && value > 999 ? value.toLocaleString() : value
               )}
             </p>
             {trend && (
-              <span className={`ml-2 text-sm font-medium ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`ml-3 px-2 py-1 text-xs font-semibold rounded-full ${
+                trend > 0 
+                  ? 'bg-green-100/80 text-green-700' 
+                  : 'bg-red-100/80 text-red-700'
+              }`}>
                 {trend > 0 ? '↗' : '↘'} {Math.abs(trend)}%
               </span>
             )}
           </div>
         </div>
-        <div className={`text-4xl opacity-80 group-hover:scale-110 transition-transform duration-300 ${color.replace('border-l-', 'text-')}`}>
+        <div className={`p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
           {icon}
         </div>
       </div>
       {link && (
-        <Link to={link} className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 mt-4 group-hover:translate-x-1 transition-transform duration-300">
+        <Link to={link} className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700 mt-4 group-hover:translate-x-1 transition-all duration-300">
           View Details 
-          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </Link>
@@ -115,14 +119,14 @@ export default function Dashboard() {
   );
 
   const QuickActionCard = ({ title, description, link, icon, color }) => (
-    <Link to={link} className={`group block bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border-l-4 ${color} transform hover:-translate-y-1`}>
+    <Link to={link} className="group block bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80">
       <div className="flex items-center">
-        <div className={`text-3xl mr-4 group-hover:scale-110 transition-transform duration-300 ${color.replace('border-l-', 'text-')}`}>
+        <div className={`p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg mr-4 group-hover:scale-110 transition-transform duration-300`}>
           {icon}
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{title}</h3>
-          <p className="text-sm text-gray-600 mt-1">{description}</p>
+          <h3 className="text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors mb-1">{title}</h3>
+          <p className="text-sm text-gray-600">{description}</p>
         </div>
         <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -133,21 +137,33 @@ export default function Dashboard() {
 
   const AlertCard = ({ type, message, count }) => {
     const alertStyles = {
-      warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-      danger: 'bg-red-50 border-red-200 text-red-800',
-      info: 'bg-blue-50 border-blue-200 text-blue-800'
+      warning: 'bg-yellow-50/80 backdrop-blur-sm border-yellow-200/50 text-yellow-800',
+      danger: 'bg-red-50/80 backdrop-blur-sm border-red-200/50 text-red-800',
+      info: 'bg-blue-50/80 backdrop-blur-sm border-blue-200/50 text-blue-800'
     };
     
     return (
-      <div className={`rounded-lg border p-4 ${alertStyles[type]}`}>
+      <div className={`rounded-2xl border p-4 shadow-lg ${alertStyles[type]}`}>
         <div className="flex items-center">
-          <div className="text-xl mr-3">
-            {type === 'warning' && '⚠️'}
-            {type === 'danger' && '🚨'}
-            {type === 'info' && 'ℹ️'}
+          <div className="mr-3">
+            {type === 'warning' && (
+              <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            )}
+            {type === 'danger' && (
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {type === 'info' && (
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
           </div>
           <div>
-            <p className="font-medium">{message}</p>
+            <p className="font-semibold">{message}</p>
             {count && <p className="text-sm opacity-75">{count} items require attention</p>}
           </div>
         </div>
@@ -156,22 +172,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
       {/* Header Section */}
-      <div className="bg-white shadow-lg border-b">
-        <div className="px-6 py-6">
+      <div className="bg-white/70 backdrop-blur-xl shadow-lg border-b border-gray-200/50">
+        <div className="px-8 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent mb-2">Dashboard</h1>
-              <p className="text-gray-600 text-lg">Welcome to {companyName} Inventory Management System</p>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">Dashboard</h1>
+              <p className="text-gray-600 text-lg font-medium">Welcome to {companyName} Inventory Management System</p>
             </div>
             {/* Low Stock Alert */}
             {stats.lowStockItems > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4">
+              <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-2xl p-4 shadow-lg">
                 <div className="flex items-center">
-                  <div className="text-xl mr-3">⚠️</div>
+                  <svg className="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
                   <div>
-                    <p className="font-medium">Low Stock Alert</p>
+                    <p className="font-semibold">Low Stock Alert</p>
                     <p className="text-sm opacity-75">{stats.lowStockItems} items require attention</p>
                   </div>
                 </div>
@@ -181,40 +199,40 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-6 py-8">
+      <div className="px-8 py-8">
         {/* Primary Metrics */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Key Metrics</h2>
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-6">Key Metrics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
               title="Total Items"
               value={stats.totalItems}
-              icon="📦"
-              color="border-l-blue-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+              color="from-blue-500 to-blue-600"
               link="/app/items"
               trend={5.2}
             />
             <StatCard
               title="Stock Value"
               value={`₹${stats.totalStock.toLocaleString()}`}
-              icon="💰"
-              color="border-l-green-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" /></svg>}
+              color="from-green-500 to-green-600"
               link="/app/stocks"
               trend={2.1}
             />
             <StatCard
               title="Low Stock Items"
               value={stats.lowStockItems}
-              icon="⚠️"
-              color="border-l-red-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>}
+              color="from-red-500 to-red-600"
               link="/app/stocks"
               trend={-1.5}
             />
             <StatCard
               title="Active Vendors"
               value={stats.totalVendors}
-              icon="🏢"
-              color="border-l-purple-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+              color="from-purple-500 to-purple-600"
               link="/app/vendor"
               trend={3.8}
             />
@@ -222,100 +240,102 @@ export default function Dashboard() {
         </div>
 
         {/* Secondary Metrics */}
-        <div className="mb-8">
+        <div className="mb-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard
               title="Total Customers"
               value={stats.totalCustomers}
-              icon="👥"
-              color="border-l-indigo-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+              color="from-indigo-500 to-indigo-600"
               link="/app/customers"
             />
             <StatCard
               title="Pending Requests"
               value={stats.pendingOrders}
-              icon="📋"
-              color="border-l-yellow-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+              color="from-yellow-500 to-yellow-600"
               link="/app/purchase-management"
             />
             <StatCard
               title="Active Locations"
               value={stats.activeLocations}
-              icon="📍"
-              color="border-l-teal-500"
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+              color="from-teal-500 to-teal-600"
               link="/app/inventory/locations"
             />
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-6">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <QuickActionCard
               title="Add New Item"
               description="Create a new inventory item"
               link="/app/items"
-              icon="➕"
-              color="border-l-blue-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>}
+              color="from-blue-500 to-blue-600"
             />
             <QuickActionCard
               title="Create Purchase Order"
               description="Generate new purchase order"
               link="/app/purchase-management"
-              icon="🛒"
-              color="border-l-green-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 13v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-4m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" /></svg>}
+              color="from-green-500 to-green-600"
             />
             <QuickActionCard
               title="Goods Receipt"
               description="Process incoming goods"
               link="/app/grn"
-              icon="📥"
-              color="border-l-orange-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>}
+              color="from-orange-500 to-orange-600"
             />
             <QuickActionCard
               title="Stock Overview"
               description="Review current stock levels"
               link="/app/stocks"
-              icon="📊"
-              color="border-l-purple-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+              color="from-purple-500 to-purple-600"
             />
             <QuickActionCard
               title="Generate Invoice"
               description="Create customer invoice"
               link="/app/billing"
-              icon="🧾"
-              color="border-l-red-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              color="from-red-500 to-red-600"
             />
             <QuickActionCard
               title="Vendor Payments"
               description="Manage supplier payments"
               link="/app/supplier-ledger"
-              icon="💳"
-              color="border-l-indigo-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>}
+              color="from-indigo-500 to-indigo-600"
             />
             <QuickActionCard
               title="Audit Log"
               description="View system activity logs"
               link="/app/audit-log"
-              icon="📋"
-              color="border-l-gray-500"
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              color="from-gray-500 to-gray-600"
             />
           </div>
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
-            <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg p-8 border border-gray-200/50">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Recent Activity</h2>
+            <button className="px-4 py-2 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 font-semibold text-sm rounded-xl transition-colors duration-200">
               View All
             </button>
           </div>
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📈</div>
-            <p className="text-gray-500 text-lg mb-2">No recent activity</p>
-            <p className="text-sm text-gray-400">Recent transactions and activities will appear here</p>
+          <div className="text-center py-16">
+            <svg className="w-16 h-16 mx-auto mb-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <p className="text-gray-600 text-lg mb-2 font-medium">No recent activity</p>
+            <p className="text-sm text-gray-500">Recent transactions and activities will appear here</p>
           </div>
         </div>
       </div>

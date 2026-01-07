@@ -13,69 +13,91 @@ export default function Sidebar({ companyDetails }) {
   };
 
   const renderMenuItem = (item) => {
+    const isActive = location.pathname === item.path;
+    
     if (item.submenu) {
+      const isSubmenuActive = item.submenu.some(subItem => 
+        subItem.path === location.pathname || 
+        (subItem.submenu && subItem.submenu.some(nestedItem => nestedItem.path === location.pathname))
+      );
+      
       return (
-        <div key={item.name}>
+        <div key={item.name} className="mb-1">
           <button
             onClick={() => toggleMenu(item.name)}
-            className="w-full text-left px-4 py-2 rounded-lg hover:bg-cyan-600 transition flex items-center gap-3"
+            className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 group ${
+              isSubmenuActive 
+                ? 'bg-white/80 backdrop-blur-sm shadow-md border border-gray-200/50 text-gray-800' 
+                : 'text-gray-600 hover:bg-white/60 hover:backdrop-blur-sm hover:shadow-sm'
+            }`}
           >
-            {item.icon}
-            <span>{item.name}</span>
-            <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus[item.name] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className={`p-1.5 rounded-lg transition-colors duration-200 ${
+              isSubmenuActive 
+                ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white' 
+                : 'bg-gray-200/50 text-gray-500 group-hover:bg-gray-300/50'
+            }`}>
+              {item.icon}
+            </div>
+            <span className="font-medium text-sm">{item.name}</span>
+            <svg className={`w-4 h-4 ml-auto transition-transform duration-200 ${
+              openMenus[item.name] ? 'rotate-180' : ''
+            } ${isSubmenuActive ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {openMenus[item.name] && (
-            <ul className="ml-8 mt-2 space-y-1">
+            <div className="ml-6 mt-2 space-y-1 border-l-2 border-gray-200/50 pl-4">
               {item.submenu.map((subItem) => (
-                <li key={subItem.name}>
+                <div key={subItem.name}>
                   {subItem.submenu ? (
                     <div>
                       <button
                         onClick={() => toggleMenu(subItem.name)}
-                        className="w-full text-left px-3 py-2 text-sm rounded hover:bg-cyan-600 transition flex items-center gap-2"
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-white/50 transition-all duration-200 flex items-center gap-2 text-gray-600"
                       >
-                        <span className="w-1 h-1 bg-white rounded-full"></span>
-                        <span>{subItem.name}</span>
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                        <span className="font-medium">{subItem.name}</span>
                       </button>
                       {openMenus[subItem.name] && (
-                        <ul className="ml-6 mt-1 space-y-1">
+                        <div className="ml-4 mt-1 space-y-1">
                           {subItem.submenu.map((nestedItem) => (
-                            <li key={nestedItem.path}>
-                              <Link
-                                to={nestedItem.path}
-                                className={`flex items-center gap-2 px-3 py-1 text-sm rounded transition ${
-                                  location.pathname === nestedItem.path
-                                    ? "bg-white text-cyan-700 font-semibold"
-                                    : "hover:bg-cyan-600"
-                                }`}
-                              >
-                                <span className="w-1 h-1 bg-current rounded-full"></span>
-                                <span>{nestedItem.name}</span>
-                              </Link>
-                            </li>
+                            <Link
+                              key={nestedItem.path}
+                              to={nestedItem.path}
+                              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                                location.pathname === nestedItem.path
+                                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md font-medium"
+                                  : "text-gray-600 hover:bg-white/50"
+                              }`}
+                            >
+                              <span className={`w-1 h-1 rounded-full ${
+                                location.pathname === nestedItem.path ? 'bg-white' : 'bg-gray-400'
+                              }`}></span>
+                              <span>{nestedItem.name}</span>
+                            </Link>
                           ))}
-                        </ul>
+                        </div>
                       )}
                     </div>
                   ) : (
                     <Link
                       to={subItem.path}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm rounded transition ${
+                      className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                         location.pathname === subItem.path
-                          ? "bg-white text-cyan-700 font-semibold"
-                          : "hover:bg-cyan-600"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md font-medium"
+                          : "text-gray-600 hover:bg-white/50"
                       }`}
                     >
-                      <span className="w-1 h-1 bg-white rounded-full"></span>
-                      <span>{subItem.name}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        location.pathname === subItem.path ? 'bg-white' : 'bg-gray-400'
+                      }`}></span>
+                      <span className="font-medium">{subItem.name}</span>
                     </Link>
                   )}
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       );
@@ -84,14 +106,20 @@ export default function Sidebar({ companyDetails }) {
         <Link
           key={item.name}
           to={item.path}
-          className={`flex items-center gap-3 px-4 py-2 rounded-lg transition ${
-            location.pathname === item.path
-              ? "bg-white text-cyan-700 font-semibold"
-              : "hover:bg-cyan-600"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group mb-1 ${
+            isActive
+              ? "bg-white/80 backdrop-blur-sm shadow-md border border-gray-200/50 text-gray-800"
+              : "text-gray-600 hover:bg-white/60 hover:backdrop-blur-sm hover:shadow-sm"
           }`}
         >
-          {item.icon}
-          <span>{item.name}</span>
+          <div className={`p-1.5 rounded-lg transition-colors duration-200 ${
+            isActive 
+              ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white' 
+              : 'bg-gray-200/50 text-gray-500 group-hover:bg-gray-300/50'
+          }`}>
+            {item.icon}
+          </div>
+          <span className="font-medium text-sm">{item.name}</span>
         </Link>
       );
     }
@@ -208,18 +236,31 @@ export default function Sidebar({ companyDetails }) {
   ];
 
   return (
-    <div className="w-64 bg-cyan-700 text-white min-h-screen p-5 overflow-y-auto">
-      <h2 className="text-2xl font-bold mb-8">
-        {companyDetails?.name || 'NUTRYAH IMS'}
-      </h2>
+    <div className="w-72 bg-gradient-to-b from-slate-50/95 to-gray-100/95 backdrop-blur-xl border-r border-gray-200/50 min-h-screen p-6 overflow-y-auto shadow-xl">
+      {/* Company Header */}
+      <div className="mb-8 pb-6 border-b border-gray-200/50">
+        <div className="flex items-center space-x-3 mb-2">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+              {companyDetails?.name || 'NUTRYAH IMS'}
+            </h2>
+            <p className="text-xs text-gray-500 font-medium">Inventory Management</p>
+          </div>
+        </div>
+      </div>
 
-      <ul className="space-y-3">
+      <nav className="space-y-2">
         {menu.map((item) => (
-          <li key={item.name}>
+          <div key={item.name}>
             {renderMenuItem(item)}
-          </li>
+          </div>
         ))}
-      </ul>
+      </nav>
     </div>
   );
 }

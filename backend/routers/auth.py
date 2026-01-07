@@ -112,7 +112,8 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
                 "tenant_id": user.id,
                 "email": user.admin_email,
                 "org": user.organization_name,
-                "role": "admin"
+                "role": "admin",
+                "full_name": user.organization_name  # Use org name as display name for admin
             })
 
             # Refresh token rotation
@@ -149,12 +150,18 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
                 for permission in role.permissions:
                     permissions.append(permission.name)
             
+            # Get role names
+            role_names = [role.name for role in tenant_user.roles]
+            primary_role = role_names[0] if role_names else "user"
+            
             access_token = create_access_token({
                 "sub": str(tenant_user.id),
                 "email": tenant_user.email,
                 "tenant_db": "arun",
                 "user_type": "tenant_user",
-                "permissions": list(set(permissions))  # Remove duplicates
+                "permissions": list(set(permissions)),  # Remove duplicates
+                "full_name": tenant_user.full_name,
+                "role": primary_role
             })
             tenant_db.close()
             log_audit(f"TENANT USER LOGIN SUCCESS → {req.email}")
@@ -283,9 +290,32 @@ def get_profile(current_user = Depends(get_current_user)):
         if current_user.get("org"):
             profile["organization"] = current_user.get("org")
         
-        # Add tenant info for tenant users
+        # Add tenant info and fetch full name for tenant users
         if current_user.get("tenant_db"):
             profile["tenant_db"] = current_user.get("tenant_db")
+            
+            # Fetch full name from tenant database
+            try:
+                from database import get_tenant_db
+                from models.tenant_models import User
+                
+                tenant_db_gen = get_tenant_db("arun")
+                tenant_db = next(tenant_db_gen)
+                
+                user_id = int(current_user.get("sub"))
+                db_user = tenant_db.query(User).filter(User.id == user_id).first()
+                
+                if db_user:
+                    profile["full_name"] = db_user.full_name
+                    # Get role names from user roles
+                    role_names = [role.name for role in db_user.roles]
+                    if role_names:
+                        profile["role_names"] = role_names
+                        profile["role"] = role_names[0] if len(role_names) == 1 else "Multiple Roles"
+                
+                tenant_db.close()
+            except Exception as e:
+                log_error(e, location="Profile fetch user details")
         
         return profile
         
