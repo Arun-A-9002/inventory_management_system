@@ -294,6 +294,13 @@ export default function Dashboard() {
               icon="💳"
               color="border-l-indigo-500"
             />
+            <QuickActionCard
+              title="Audit Log"
+              description="View system activity logs"
+              link="/app/audit-log"
+              icon="📋"
+              color="border-l-gray-500"
+            />
           </div>
         </div>
 

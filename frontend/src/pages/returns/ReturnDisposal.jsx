@@ -234,9 +234,11 @@ export default function ReturnDisposal() {
 
   const fetchBatchesForItem = async (itemName) => {
     try {
-      // If we have a selected location, get batches from that location only
-      if (returnForm.location) {
-        const res = await api.get(`/stock-overview/by-location/${encodeURIComponent(returnForm.location)}`);
+      // For internal transfers, use from_location to get batches
+      const locationToUse = returnForm.return_type === 'INTERNAL' ? returnForm.from_location : returnForm.location;
+      
+      if (locationToUse) {
+        const res = await api.get(`/stock-overview/by-location/${encodeURIComponent(locationToUse)}`);
         const stockData = res.data || [];
         const item = stockData.find(stock => stock.item_name === itemName);
         
@@ -267,9 +269,9 @@ export default function ReturnDisposal() {
           }
         }));
         
-        if (returnForm.location) {
+        if (locationToUse) {
           return enhancedBatches.filter(batch => 
-            batch.location === returnForm.location && batch.qty > 0
+            batch.location === locationToUse && batch.qty > 0
           );
         }
         return enhancedBatches.filter(batch => batch.qty > 0);
@@ -612,32 +614,48 @@ export default function ReturnDisposal() {
       
       try {
         setLoading(true);
-        const res = await api.post('/returns/', {
-          return_type: 'FROM_CUSTOMER',
-          customer_id: returnForm.customer_id,
-          invoice_id: selectedInvoiceDetails.id,
-          reason: returnForm.reason,
-          items: returnForm.items
-        });
         
-        // Update the original invoice payment status
-        const refundAmount = calculateRefundAmount();
-        await api.put(`/billing/process-refund/${selectedInvoiceDetails.id}`, {
-          refund_amount: parseFloat(refundAmount),
-          reason: returnForm.reason
-        });
+        if (editMode && selectedReturn) {
+          // Update existing return
+          const res = await api.put(`/returns/${selectedReturn.header.id}`, {
+            return_type: 'FROM_CUSTOMER',
+            customer_id: returnForm.customer_id,
+            invoice_id: selectedInvoiceDetails.id,
+            reason: returnForm.reason,
+            items: returnForm.items
+          });
+          alert(`Customer return updated successfully: ${res.data.return_number}`);
+        } else {
+          // Create new return
+          const res = await api.post('/returns/', {
+            return_type: 'FROM_CUSTOMER',
+            customer_id: returnForm.customer_id,
+            invoice_id: selectedInvoiceDetails.id,
+            reason: returnForm.reason,
+            items: returnForm.items
+          });
+          
+          // Update the original invoice payment status
+          const refundAmount = calculateRefundAmount();
+          await api.put(`/billing/process-refund/${selectedInvoiceDetails.id}`, {
+            refund_amount: parseFloat(refundAmount),
+            reason: returnForm.reason
+          });
+          
+          alert(`Customer return created successfully: ${res.data.return_number}`);
+        }
         
-        alert(`Customer return created successfully: ${res.data.return_number}`);
         setShowModal(false);
         fetchReturns();
       } catch (err) {
-        console.error('Failed to create customer return:', err);
-        alert('Failed to create customer return: ' + (err.response?.data?.detail || err.message));
+        console.error('Failed to process customer return:', err);
+        alert('Failed to process customer return: ' + (err.response?.data?.detail || err.message));
       } finally {
         setLoading(false);
       }
       return;
     }
+    
     // Handle Internal transfers differently
     if (returnForm.return_type === 'INTERNAL') {
       if (!returnForm.from_location || !returnForm.to_location) {
@@ -654,32 +672,9 @@ export default function ReturnDisposal() {
       try {
         setLoading(true);
         
-        for (const item of returnForm.items) {
-          console.log('Sending internal transfer:', {
-            item_name: item.item_name,
-            batch_no: item.batch_no,
-            quantity: item.quantity,
-            from_location: returnForm.from_location,
-            to_location: returnForm.to_location,
-            reason: item.reason || returnForm.reason
-          });
-          
-          console.log('API URL:', '/stocks/internal-transfer');
-          await api.post('/stocks/internal-transfer', {
-            item_name: item.item_name,
-            batch_no: item.batch_no,
-            quantity: item.quantity,
-            from_location: returnForm.from_location,
-            to_location: returnForm.to_location,
-            reason: item.reason || returnForm.reason
-          });
-        }
-        
-        alert('Internal transfer completed successfully');
-        
-        // Also create a return record for tracking
-        try {
-          await api.post('/returns/', {
+        if (editMode && selectedReturn) {
+          // Update existing return
+          await api.put(`/returns/${selectedReturn.header.id}`, {
             return_type: 'INTERNAL',
             location: returnForm.from_location,
             to_location: returnForm.to_location,
@@ -687,8 +682,45 @@ export default function ReturnDisposal() {
             reason: returnForm.reason,
             items: returnForm.items
           });
-        } catch (err) {
-          console.log('Note: Transfer completed but return record creation failed');
+          alert('Internal transfer updated successfully');
+        } else {
+          // Create new transfer
+          for (const item of returnForm.items) {
+            console.log('Sending internal transfer:', {
+              item_name: item.item_name,
+              batch_no: item.batch_no,
+              quantity: item.quantity,
+              from_location: returnForm.from_location,
+              to_location: returnForm.to_location,
+              reason: item.reason || returnForm.reason
+            });
+            
+            console.log('API URL:', '/stocks/internal-transfer');
+            await api.post('/stocks/internal-transfer', {
+              item_name: item.item_name,
+              batch_no: item.batch_no,
+              quantity: item.quantity,
+              from_location: returnForm.from_location,
+              to_location: returnForm.to_location,
+              reason: item.reason || returnForm.reason
+            });
+          }
+          
+          alert('Internal transfer completed successfully');
+          
+          // Also create a return record for tracking
+          try {
+            await api.post('/returns/', {
+              return_type: 'INTERNAL',
+              location: returnForm.from_location,
+              to_location: returnForm.to_location,
+              supplier: returnForm.supplier || '',
+              reason: returnForm.reason,
+              items: returnForm.items
+            });
+          } catch (err) {
+            console.log('Note: Transfer completed but return record creation failed');
+          }
         }
         
         setShowModal(false);
@@ -736,20 +768,36 @@ export default function ReturnDisposal() {
 
     try {
       setLoading(true);
-      const res = await api.post('/returns/', {
-        ...returnForm,
-        items: returnForm.items.map(item => ({
-          ...item,
-          rate: item.rate || 0,
-          amount: calculateItemAmount(item, item.quantity)
-        }))
-      });
-      alert(`Return created successfully: ${res.data.return_number}`);
+      
+      if (editMode && selectedReturn) {
+        // Update existing return
+        const res = await api.put(`/returns/${selectedReturn.header.id}`, {
+          ...returnForm,
+          items: returnForm.items.map(item => ({
+            ...item,
+            rate: item.rate || 0,
+            amount: calculateItemAmount(item, item.quantity)
+          }))
+        });
+        alert(`Return updated successfully: ${res.data.return_number}`);
+      } else {
+        // Create new return
+        const res = await api.post('/returns/', {
+          ...returnForm,
+          items: returnForm.items.map(item => ({
+            ...item,
+            rate: item.rate || 0,
+            amount: calculateItemAmount(item, item.quantity)
+          }))
+        });
+        alert(`Return created successfully: ${res.data.return_number}`);
+      }
+      
       setShowModal(false);
       fetchReturns();
     } catch (err) {
-      console.error('Failed to create return:', err);
-      alert('Failed to create return: ' + (err.response?.data?.detail || err.message));
+      console.error('Failed to process return:', err);
+      alert('Failed to process return: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
     }
@@ -989,14 +1037,17 @@ export default function ReturnDisposal() {
                   <label className="block text-sm font-medium mb-2">Return type</label>
                   <select
                     value={returnForm.return_type}
-                    onChange={(e) => setReturnForm({...returnForm, return_type: e.target.value})}
+                    onChange={(e) => {
+                      console.log('Return type changed to:', e.target.value);
+                      setReturnForm({...returnForm, return_type: e.target.value});
+                    }}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
-                    {/*<option value="TO VENDOR">To Vendor</option>
-                    {/* <option value="FROM CUSTOMER">From Customer</option> 
-                    <option value="TO_CUSTOMER">To Customer</option>*/}
+                    <option value="TO_VENDOR">To Vendor</option>
+                    <option value="FROM_CUSTOMER">From Customer</option>
+                    <option value="TO_CUSTOMER">To Customer</option>
                     <option value="INTERNAL">Internal</option>
-                    {/*<option value="EXTERNAL">External</option>*/}
+                    <option value="EXTERNAL">External</option>
                   </select>
                 </div>
                 {returnForm.return_type === 'INTERNAL' ? (
@@ -1013,14 +1064,18 @@ export default function ReturnDisposal() {
                         if (selectedLocation) {
                           const locationItems = await fetchItemsForLocation(selectedLocation);
                           setItems(locationItems);
+                          // Clear existing items when location changes
+                          setReturnForm({...returnForm, from_location: selectedLocation, items: []});
+                          setItemBatches({});
                         } else {
                           setItems([]);
+                          setReturnForm({...returnForm, from_location: selectedLocation, items: []});
                         }
                       }}
                       className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select from location</option>
-                      {locations.map(location => (
+                      {locations.filter(loc => loc.location_type === 'internal').map(location => (
                         <option key={location.id} value={location.name}>
                           {location.name} ({location.code})
                         </option>
@@ -1064,16 +1119,20 @@ export default function ReturnDisposal() {
                   <label className="block text-sm font-medium mb-2">To Location</label>
                   <select
                     value={returnForm.to_location || ''}
-                    onChange={(e) => setReturnForm({...returnForm, to_location: e.target.value})}
+                    onChange={(e) => {
+                      console.log('To location changed to:', e.target.value);
+                      setReturnForm({...returnForm, to_location: e.target.value});
+                    }}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select to location</option>
-                    {locations.map(location => (
+                    {locations.filter(loc => loc.location_type === 'internal' && loc.name !== returnForm.from_location).map(location => (
                       <option key={location.id} value={location.name}>
                         {location.name} ({location.code})
                       </option>
                     ))}
                   </select>
+                  <div className="text-xs text-gray-500 mt-1">Debug: locations.length = {locations.length}, return_type = {returnForm.return_type}</div>
                 </div>
               )}
 

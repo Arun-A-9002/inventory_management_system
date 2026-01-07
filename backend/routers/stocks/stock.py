@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from database import get_tenant_db
-from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue, Item, GRNItem, Batch, Department
+from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue, Item, GRNItem, Batch, Department, AuditLog
 from schemas.tenant_schemas import *
 from utils.permissions import require_stock_ledger_view, require_stock_ledger_dispense, require_stock_ledger_available_qty
 from datetime import datetime, date, timedelta
 from typing import List
+import json
 
 router = APIRouter(prefix="/stocks", tags=["Stock Management"])
 DEFAULT_DB = "arun"
@@ -634,7 +635,7 @@ def debug_batches(db: Session = Depends(get_db)):
     
     return debug_info
 @router.post("/dispense")
-def dispense_expired_stock(data: dict, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_dispense())):
+def dispense_expired_stock(data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_dispense())):
     """Dispense expired stock"""
     item_name = data.get('item_name')
     batch_no = data.get('batch_no')
@@ -795,3 +796,98 @@ def add_batch_stock(data: dict, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": f"Added {quantity} units back to stock", "updated_qty": batch.qty}
+
+# Add audit log endpoint
+@router.get("/audit-logs/{item_name}")
+def get_stock_audit_logs(item_name: str, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
+    """Get audit logs for a specific item"""
+    # Get stock record
+    stock = db.query(Stock).filter(Stock.item_name == item_name).first()
+    if not stock:
+        return []
+    
+    # Get audit logs for this stock item
+    audit_logs = db.query(AuditLog).filter(
+        AuditLog.table_name == "stock_ledger",
+        AuditLog.record_id == stock.id
+    ).order_by(AuditLog.timestamp.desc()).all()
+    
+    result = []
+    for log in audit_logs:
+        result.append({
+            "id": log.id,
+            "user_name": log.user_name,
+            "action": log.action,
+            "timestamp": log.timestamp.strftime("%d/%m/%Y %H:%M:%S"),
+            "description": log.description,
+            "new_values": json.loads(log.new_values) if log.new_values else None,
+            "ip_address": log.ip_address
+        })
+    
+    return result
+
+# Update dispense endpoint with audit logging
+@router.post("/dispense-with-audit")
+def dispense_with_audit(data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_dispense())):
+    """Dispense expired stock with audit logging"""
+    from models.tenant_models import DisposalTransaction, ItemConditionEnum, DisposalMethodEnum
+    
+    item_name = data.get('item_name')
+    batch_no = data.get('batch_no')
+    reason = data.get('reason', 'Expired item disposal')
+    
+    # Find stock record
+    stock = db.query(Stock).filter(Stock.item_name == item_name).first()
+    if not stock:
+        raise HTTPException(404, "Stock record not found")
+    
+    # Create disposal record
+    disposal = DisposalTransaction(
+        transaction_no=f"DISP-{int(datetime.utcnow().timestamp())}",
+        item_name=item_name,
+        batch_no=batch_no,
+        qty=0,
+        condition=ItemConditionEnum.EXPIRED,
+        disposal_method=DisposalMethodEnum.INCINERATION,
+        reason=reason,
+        transaction_date=date.today()
+    )
+    
+    # Create ledger entry
+    ledger = StockLedger(
+        stock_id=stock.id,
+        batch_no=batch_no,
+        txn_type="DISPOSAL",
+        qty_out=0,
+        balance=stock.available_qty,
+        ref_no=disposal.transaction_no,
+        remarks=f"Expired batch disposal: {reason}"
+    )
+    
+    # Create audit log
+    user_name = current_user.get('full_name') or current_user.get('email') or 'System'
+    audit_log = AuditLog(
+        user_id=current_user.get('id'),
+        user_name=user_name,
+        action="DISPENSE",
+        table_name="stock_ledger",
+        record_id=stock.id,
+        new_values=json.dumps({
+            "item_name": item_name,
+            "batch_no": batch_no,
+            "action": "DISPENSE",
+            "reason": reason,
+            "disposal_method": "INCINERATION"
+        }),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get('user-agent'),
+        module="STOCK_MANAGEMENT",
+        description=f"Dispensed {item_name} (batch {batch_no}) - {reason}"
+    )
+    
+    db.add(disposal)
+    db.add(ledger)
+    db.add(audit_log)
+    db.commit()
+    
+    return {"message": f"Expired batch {batch_no} marked for disposal"}

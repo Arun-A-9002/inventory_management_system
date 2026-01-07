@@ -1,11 +1,50 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+import json
 from database import get_tenant_db
-from models.tenant_models import ReturnHeader, ReturnItem, ReturnTypeEnum, ItemConditionEnum
+from models.tenant_models import ReturnHeader, ReturnItem, ReturnTypeEnum, ItemConditionEnum, AuditLog
 from datetime import datetime, date
 from typing import List
 
 router = APIRouter(prefix="/returns", tags=["Returns & Disposal"])
+
+# Helper function for audit logging
+def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
+    user_id = None
+    user_name = 'System'
+    
+    if current_user:
+        user_id = current_user.get('id') or current_user.get('sub')
+        user_name = current_user.get('full_name') or current_user.get('email') or current_user.get('name', 'System')
+        
+        if user_id and isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    
+    # Extract IP and User Agent from request
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent')
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_name=user_name,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        module="RETURN_DISPOSAL",
+        description=description
+    )
+    db.add(audit_log)
+    db.commit()
 
 @router.get("/")
 def list_returns(db: Session = Depends(get_tenant_db)):
@@ -44,7 +83,7 @@ def list_returns(db: Session = Depends(get_tenant_db)):
     return result
 
 @router.post("/")
-def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
+def create_return(return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     """Create new return"""
     from models.tenant_models import Customer
     
@@ -107,6 +146,24 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db)):
         db.add(return_item)
     
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="CREATE",
+        table_name="return_headers",
+        record_id=return_header.id,
+        new_values={
+            "return_no": return_no,
+            "return_type": return_header.return_type,
+            "customer_name": customer_name,
+            "reference_no": return_header.reference_no,
+            "reason": return_header.reason
+        },
+        description=f"Created return {return_no} for customer {customer_name or 'N/A'}",
+        request=request
+    )
     
     return {
         "message": "Return created successfully",
@@ -191,7 +248,7 @@ def update_return_staff(return_id: int, staff_data: dict, db: Session = Depends(
     }
 
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db)):
+def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     """Update return status and adjust inventory if approved"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview, Billing
     
@@ -267,10 +324,23 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
     
     db.commit()
     
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="STATUS_UPDATE",
+        table_name="return_headers",
+        record_id=return_id,
+        old_values={"status": old_status},
+        new_values={"status": status},
+        description=f"Updated return {return_header.return_no} status from {old_status} to {status}",
+        request=request
+    )
+    
     return {"message": "Return status updated successfully"}
 
 @router.put("/{return_id}/items/{item_id}")
-def update_return_item(return_id: int, item_id: int, item_data: dict, db: Session = Depends(get_tenant_db)):
+def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     """Update return item - ONLY updates invoice data, no stock changes"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockLedger, Stock
     from sqlalchemy import text
@@ -295,10 +365,25 @@ def update_return_item(return_id: int, item_id: int, item_data: dict, db: Sessio
     
     db.commit()
     
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_ITEM",
+        table_name="return_items",
+        record_id=return_item.id,
+        new_values={
+            "qty": return_item.qty,
+            "status": item_data.get('status', 'updated')
+        },
+        description=f"Updated return item for return {return_id}",
+        request=request
+    )
+    
     return {"message": "Return item updated - invoice only, no stock changes"}
 
 @router.post("/{return_id}/process-return")
-def process_item_return(return_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
+def process_item_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
     """Process item return - add stock back and update returned quantity"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
     from sqlalchemy import text
@@ -356,6 +441,23 @@ def process_item_return(return_id: int, return_data: dict, db: Session = Depends
         )
     
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="PROCESS_RETURN",
+        table_name="return_items",
+        record_id=return_item.id,
+        new_values={
+            "item_name": item_name,
+            "batch_no": batch_no,
+            "returned_qty": new_returned_qty,
+            "batch_qty_updated": batch.qty
+        },
+        description=f"Processed return of {quantity} units of {item_name} (batch {batch_no}) back to stock",
+        request=request
+    )
     
     return {
         "message": f"Successfully returned {quantity} units of {item_name} (batch {batch_no}) to stock",

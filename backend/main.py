@@ -64,8 +64,8 @@ from routers.consumption.issue import router as consumption_router
 #----------------------------------------------------------
 #  RETURN & DISPOSAL
 #----------------------------------------------------------
-from routers.returns.return_disposal import router as return_router
-from routers.returns.returns import router as returns_router
+from routers.returns.return_disposal import router as return_disposal_router
+# from routers.returns.returns import router as returns_router  # Commented out to avoid conflicts
 
 #----------------------------------------------------------
 #  CUSTOMERS
@@ -84,6 +84,9 @@ from routers.billingSystem.billing import router as billing_router
 
 # External Transfer
 from routers.external_transfer.external_transfer import router as external_transfer_router
+
+# Audit Logs
+from routers.audit_log import router as audit_log_router
 
 # ----------------------------------------------------------
 # LOGGER
@@ -147,9 +150,9 @@ app.include_router(location_router)
 # Consumption & Issue
 app.include_router(consumption_router)
 
-# Return & Disposal
-app.include_router(return_router)
-app.include_router(returns_router)
+# Return & Disposal (using only the main return_disposal router)
+app.include_router(return_disposal_router)
+# app.include_router(returns_router)  # Commented out to avoid conflicts
 
 # Customer Management
 app.include_router(customer_router)
@@ -162,6 +165,9 @@ app.include_router(billing_router)
 
 # External Transfer
 app.include_router(external_transfer_router)
+
+# Audit Logs
+app.include_router(audit_log_router)
 
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING

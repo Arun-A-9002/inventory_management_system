@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-export default function Sidebar() {
+export default function Sidebar({ companyDetails }) {
   const location = useLocation();
   const [openMenus, setOpenMenus] = useState({});
 
@@ -189,6 +189,12 @@ export default function Sidebar() {
       ],
     },
 
+    { 
+      name: "Audit Log", 
+      path: "/app/audit-log",
+      icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+    },
+
     // //billing system
     // { 
     //   name: "Billing System", 
@@ -203,7 +209,9 @@ export default function Sidebar() {
 
   return (
     <div className="w-64 bg-cyan-700 text-white min-h-screen p-5 overflow-y-auto">
-      <h2 className="text-2xl font-bold mb-8">NUTRYAH IMS</h2>
+      <h2 className="text-2xl font-bold mb-8">
+        {companyDetails?.name || 'NUTRYAH IMS'}
+      </h2>
 
       <ul className="space-y-3">
         {menu.map((item) => (

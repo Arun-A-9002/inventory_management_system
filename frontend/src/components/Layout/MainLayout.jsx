@@ -6,6 +6,7 @@ import api from "../../api";
 
 export default function MainLayout() {
   const [pendingCount, setPendingCount] = useState(0);
+  const [companyDetails, setCompanyDetails] = useState(null);
   const location = useLocation();
 
   const fetchPendingCount = async () => {
@@ -22,8 +23,20 @@ export default function MainLayout() {
     }
   };
 
+  const fetchCompanyDetails = async () => {
+    try {
+      const response = await api.get('/organization/company');
+      if (response.data && response.data.length > 0) {
+        setCompanyDetails(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching company details:', error);
+    }
+  };
+
   useEffect(() => {
     fetchPendingCount();
+    fetchCompanyDetails();
   }, [location.pathname]);
 
   const handleRefresh = async () => {
@@ -36,7 +49,7 @@ export default function MainLayout() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar />
+      <Sidebar companyDetails={companyDetails} />
       <div className="flex flex-col flex-1 h-full">
         <HeaderFooter 
           type="header" 

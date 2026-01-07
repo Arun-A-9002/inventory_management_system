@@ -1,18 +1,63 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import date, datetime
+import json
 from database import get_tenant_db
 from models.tenant_models import (
     ReturnHeader, ReturnItem, Customer,
     DisposalTransaction, SalvageValuation,
-    ReturnTypeEnum, ItemConditionEnum, DisposalMethodEnum
+    ReturnTypeEnum, ItemConditionEnum, DisposalMethodEnum, AuditLog
 )
 from utils.email import send_email
-from utils.permissions import require_return_disposal_view, require_return_disposal_create, require_return_disposal_edit, require_return_disposal_delete, require_return_disposal_status_approve
+from utils.permissions import (
+    require_return_disposal_view, 
+    require_return_disposal_create, 
+    require_return_disposal_edit, 
+    require_return_disposal_delete, 
+    require_return_disposal_status_approve
+)
 from typing import List, Optional
 
 router = APIRouter(prefix="/returns", tags=["Return & Disposal"])
+
+# Helper function for audit logging
+def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
+    user_id = None
+    user_name = 'System'
+    
+    if current_user:
+        user_id = current_user.get('id') or current_user.get('sub')
+        user_name = current_user.get('full_name') or current_user.get('email') or current_user.get('name', 'System')
+        
+        if user_id and isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    
+    # Extract IP and User Agent from request
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent')
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_name=user_name,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        module="RETURN_DISPOSAL",
+        description=description
+    )
+    db.add(audit_log)
+    db.commit()
 
 @router.get("/")
 def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
@@ -26,7 +71,8 @@ def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depe
             "id": return_item.id,
             "return_no": return_item.return_no,
             "return_type": return_item.return_type,
-            "location": return_item.location,  # Ensure location is included
+            "location": return_item.location,  # From location
+            "to_location": return_item.department,  # To location for internal transfers
             "reason": return_item.reason,
             "return_date": return_item.return_date,
             "status": return_item.status,
@@ -42,7 +88,7 @@ def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depe
 
 # ---------------- CREATE RETURN ----------------
 @router.post("/")
-def create_return(return_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def create_return(return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create new return"""
     # Generate return number
     return_no = f"RTN{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -59,7 +105,8 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db), curre
         return_no=return_no,
         return_type=return_type_value,
         vendor=return_data.get('supplier'),
-        location=return_data.get('location'),
+        location=return_data.get('location'),  # From location
+        department=return_data.get('to_location'),  # To location for internal transfers
         reason=return_data.get('reason'),
         return_date=date.today(),
         status="DRAFT"
@@ -131,6 +178,24 @@ def create_return(return_data: dict, db: Session = Depends(get_tenant_db), curre
     
     db.commit()
     
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="CREATE",
+        table_name="return_headers",
+        record_id=return_header.id,
+        new_values={
+            "return_no": return_no,
+            "return_type": return_type_value,
+            "location": location_value,
+            "vendor": return_header.vendor,
+            "reason": return_header.reason
+        },
+        description=f"Created return {return_no} of type {return_type_value}",
+        request=request
+    )
+    
     return {
         "message": "Return created successfully",
         "return_number": return_no,
@@ -148,7 +213,21 @@ def get_return_details(return_id: int, db: Session = Depends(get_tenant_db), cur
     return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
     
     return {
-        "header": return_header,
+        "header": {
+            "id": return_header.id,
+            "return_no": return_header.return_no,
+            "return_type": return_header.return_type,
+            "vendor": return_header.vendor,
+            "location": return_header.location,
+            "to_location": return_header.department,
+            "reason": return_header.reason,
+            "return_date": return_header.return_date,
+            "status": return_header.status,
+            "customer_id": return_header.customer_id,
+            "customer_name": return_header.customer_name,
+            "customer_phone": return_header.customer_phone,
+            "customer_email": return_header.customer_email
+        },
         "items": return_items
     }
 
@@ -209,9 +288,113 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db), curre
     
     return enhanced_items
 
+# ---------------- UPDATE RETURN ----------------
+@router.put("/{return_id}")
+def update_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+    """Update existing return"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        raise HTTPException(404, "Return not found")
+    
+    # Store old values for audit
+    old_values = {
+        "return_type": return_header.return_type,
+        "vendor": return_header.vendor,
+        "department": return_header.department,
+        "location": return_header.location,
+        "reference_no": return_header.reference_no,
+        "reason": return_header.reason,
+        "status": return_header.status,
+        "customer_id": return_header.customer_id,
+        "customer_name": return_header.customer_name,
+        "customer_phone": return_header.customer_phone,
+        "customer_email": return_header.customer_email
+    }
+    
+    # Update return header fields
+    return_header.return_type = return_data.get('return_type', return_header.return_type)
+    return_header.vendor = return_data.get('supplier', return_header.vendor)
+    return_header.department = return_data.get('to_location', return_header.department)  # Handle to_location
+    return_header.location = return_data.get('location', return_header.location)
+    return_header.reference_no = return_data.get('reference_no', return_header.reference_no)
+    return_header.reason = return_data.get('reason', return_header.reason)
+    
+    # Handle customer info for customer-related returns
+    if return_data.get('customer_id'):
+        customer = db.query(Customer).filter(Customer.id == return_data.get('customer_id')).first()
+        if customer:
+            return_header.customer_id = customer.id
+            if customer.customer_type == 'organization':
+                return_header.customer_name = customer.org_name
+                return_header.customer_phone = customer.org_mobile
+            else:
+                return_header.customer_name = customer.name
+                return_header.customer_phone = customer.mobile
+            return_header.customer_email = customer.email
+            
+            # For TO_CUSTOMER returns, also update vendor field
+            if return_data.get('return_type') == 'TO_CUSTOMER':
+                return_header.vendor = f"Customer: {return_header.customer_name}"
+    
+    # Delete existing return items
+    existing_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
+    for item in existing_items:
+        db.delete(item)
+    
+    # Add new return items
+    for item_data in return_data.get('items', []):
+        if item_data.get('item_name') and item_data.get('quantity'):
+            return_item = ReturnItem(
+                return_id=return_header.id,
+                item_name=item_data.get('item_name'),
+                batch_no=item_data.get('batch_no'),
+                qty=float(item_data.get('quantity', 0)),
+                rate=float(item_data.get('rate', 0)),
+                uom=item_data.get('uom', 'PCS'),
+                condition=item_data.get('condition', 'GOOD'),
+                remarks=item_data.get('reason', '')
+            )
+            db.add(return_item)
+    
+    db.commit()
+    
+    # Store new values for audit
+    new_values = {
+        "return_type": return_header.return_type,
+        "vendor": return_header.vendor,
+        "department": return_header.department,
+        "location": return_header.location,
+        "reference_no": return_header.reference_no,
+        "reason": return_header.reason,
+        "status": return_header.status,
+        "customer_id": return_header.customer_id,
+        "customer_name": return_header.customer_name,
+        "customer_phone": return_header.customer_phone,
+        "customer_email": return_header.customer_email
+    }
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="UPDATE",
+        table_name="return_headers",
+        record_id=return_id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated return {return_header.return_no}",
+        request=request
+    )
+    
+    return {
+        "message": "Return updated successfully",
+        "return_number": return_header.return_no,
+        "id": return_header.id
+    }
+
 # ---------------- UPDATE RETURN STATUS ----------------
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_status_approve())):
+def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_status_approve())):
     """Update return status and handle stock adjustments"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -340,11 +523,234 @@ def update_return_status(return_id: int, status: str, db: Session = Depends(get_
     db.commit()
     print(f"DEBUG: Changes committed")
     
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="STATUS_UPDATE",
+        table_name="return_headers",
+        record_id=return_id,
+        old_values={"status": old_status},
+        new_values={"status": status},
+        description=f"Updated return {return_header.return_no} status from {old_status} to {status}",
+        request=request
+    )
+    
     return {"message": "Return status updated successfully"}
+
+# ---------------- UPDATE RETURN ITEM ----------------
+@router.put("/{return_id}/items/{item_id}")
+def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+    """Update specific return item"""
+    return_item = db.query(ReturnItem).filter(
+        ReturnItem.return_id == return_id,
+        ReturnItem.id == item_id
+    ).first()
+    
+    if not return_item:
+        raise HTTPException(404, "Return item not found")
+    
+    # Store old values for audit
+    old_values = {
+        "item_name": return_item.item_name,
+        "batch_no": return_item.batch_no,
+        "qty": float(return_item.qty),
+        "returned_qty": float(return_item.returned_qty) if return_item.returned_qty else 0,
+        "rate": float(return_item.rate) if return_item.rate else 0,
+        "uom": return_item.uom,
+        "condition": return_item.condition,
+        "remarks": return_item.remarks
+    }
+    
+    # Update return item
+    return_item.item_name = item_data.get('item_name', return_item.item_name)
+    return_item.batch_no = item_data.get('batch_no', return_item.batch_no)
+    return_item.qty = float(item_data.get('qty', return_item.qty))
+    if 'returned_qty' in item_data:
+        return_item.returned_qty = float(item_data.get('returned_qty', 0))
+    if 'rate' in item_data:
+        return_item.rate = float(item_data.get('rate', 0))
+    return_item.uom = item_data.get('uom', return_item.uom)
+    return_item.condition = item_data.get('condition', return_item.condition)
+    return_item.remarks = item_data.get('remarks', return_item.remarks)
+    
+    db.commit()
+    
+    # Store new values for audit
+    new_values = {
+        "item_name": return_item.item_name,
+        "batch_no": return_item.batch_no,
+        "qty": float(return_item.qty),
+        "returned_qty": float(return_item.returned_qty) if return_item.returned_qty else 0,
+        "rate": float(return_item.rate) if return_item.rate else 0,
+        "uom": return_item.uom,
+        "condition": return_item.condition,
+        "remarks": return_item.remarks
+    }
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_ITEM",
+        table_name="return_items",
+        record_id=return_item.id,
+        old_values=old_values,
+        new_values=new_values,
+        description=f"Updated return item {return_item.item_name} in return {return_id}",
+        request=request
+    )
+    
+    return {"message": "Return item updated successfully"}
+
+# ---------------- ADD RETURN ITEM ----------------
+@router.post("/{return_id}/items")
+def add_return_item(return_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+    """Add new item to existing return"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        raise HTTPException(404, "Return not found")
+    
+    # Only allow adding items if status is DRAFT
+    if return_header.status != "DRAFT":
+        raise HTTPException(400, "Can only add items to returns with DRAFT status")
+    
+    # Create new return item
+    return_item = ReturnItem(
+        return_id=return_id,
+        item_name=item_data.get('item_name'),
+        batch_no=item_data.get('batch_no'),
+        qty=float(item_data.get('quantity', 0)),
+        rate=float(item_data.get('rate', 0)),
+        uom=item_data.get('uom', 'PCS'),
+        condition=item_data.get('condition', 'GOOD'),
+        remarks=item_data.get('reason', '')
+    )
+    
+    db.add(return_item)
+    db.commit()
+    db.refresh(return_item)
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="ADD_ITEM",
+        table_name="return_items",
+        record_id=return_item.id,
+        new_values={
+            "return_id": return_id,
+            "item_name": return_item.item_name,
+            "batch_no": return_item.batch_no,
+            "qty": float(return_item.qty),
+            "rate": float(return_item.rate) if return_item.rate else 0,
+            "uom": return_item.uom,
+            "condition": return_item.condition,
+            "remarks": return_item.remarks
+        },
+        description=f"Added item {return_item.item_name} to return {return_id}",
+        request=request
+    )
+    
+    return {
+        "message": "Return item added successfully",
+        "item_id": return_item.id
+    }
+
+# ---------------- DELETE RETURN ITEM ----------------
+@router.delete("/{return_id}/items/{item_id}")
+def delete_return_item(return_id: int, item_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_delete())):
+    """Delete specific return item"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        raise HTTPException(404, "Return not found")
+    
+    # Only allow deleting items if status is DRAFT
+    if return_header.status != "DRAFT":
+        raise HTTPException(400, "Can only delete items from returns with DRAFT status")
+    
+    return_item = db.query(ReturnItem).filter(
+        ReturnItem.return_id == return_id,
+        ReturnItem.id == item_id
+    ).first()
+    
+    if not return_item:
+        raise HTTPException(404, "Return item not found")
+    
+    # Store values for audit
+    old_values = {
+        "item_name": return_item.item_name,
+        "batch_no": return_item.batch_no,
+        "qty": float(return_item.qty),
+        "rate": float(return_item.rate) if return_item.rate else 0,
+        "uom": return_item.uom,
+        "condition": return_item.condition,
+        "remarks": return_item.remarks
+    }
+    
+    db.delete(return_item)
+    db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="DELETE_ITEM",
+        table_name="return_items",
+        record_id=item_id,
+        old_values=old_values,
+        description=f"Deleted item {old_values['item_name']} from return {return_id}",
+        request=request
+    )
+    
+    return {"message": "Return item deleted successfully"}
+
+# ---------------- DELETE RETURN ----------------
+@router.delete("/{return_id}")
+def delete_return(return_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_delete())):
+    """Delete return (only if status is DRAFT)"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        raise HTTPException(404, "Return not found")
+    
+    # Only allow deletion if status is DRAFT
+    if return_header.status != "DRAFT":
+        raise HTTPException(400, "Can only delete returns with DRAFT status")
+    
+    # Store values for audit
+    old_values = {
+        "return_no": return_header.return_no,
+        "return_type": return_header.return_type,
+        "vendor": return_header.vendor,
+        "location": return_header.location,
+        "reason": return_header.reason,
+        "status": return_header.status
+    }
+    
+    # Delete return items first
+    db.query(ReturnItem).filter(ReturnItem.return_id == return_id).delete()
+    
+    # Delete return header
+    db.delete(return_header)
+    db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="DELETE",
+        table_name="return_headers",
+        record_id=return_id,
+        old_values=old_values,
+        description=f"Deleted return {return_header.return_no}",
+        request=request
+    )
+    
+    return {"message": "Return deleted successfully"}
 
 # ---------------- DISPOSAL ----------------
 @router.post("/disposal")
-def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def process_disposal(disposal_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Process item disposal"""
     transaction_no = f"DSP{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -362,6 +768,25 @@ def process_disposal(disposal_data: dict, db: Session = Depends(get_tenant_db), 
     db.add(disposal)
     db.commit()
     
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="DISPOSAL",
+        table_name="disposal_transactions",
+        record_id=disposal.id,
+        new_values={
+            "transaction_no": transaction_no,
+            "item_name": disposal.item_name,
+            "batch_no": disposal.batch_no,
+            "qty": disposal.qty,
+            "disposal_method": disposal.disposal_method,
+            "reason": disposal.reason
+        },
+        description=f"Processed disposal {transaction_no} for {disposal.item_name}",
+        request=request
+    )
+    
     return {
         "message": "Disposal processed successfully",
         "transaction_no": transaction_no
@@ -376,7 +801,7 @@ def list_disposals(db: Session = Depends(get_tenant_db), current_user: dict = De
 
 # ---------------- SALVAGE VALUATION ----------------
 @router.post("/salvage")
-def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def create_salvage_valuation(salvage_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create salvage valuation"""
     salvage_no = f"SAL{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -401,6 +826,25 @@ def create_salvage_valuation(salvage_data: dict, db: Session = Depends(get_tenan
     
     db.add(salvage)
     db.commit()
+    
+    # Audit log
+    log_audit(
+        db=db,
+        current_user=current_user,
+        action="CREATE_SALVAGE",
+        table_name="salvage_valuations",
+        record_id=salvage.id,
+        new_values={
+            "salvage_no": salvage_no,
+            "item_name": salvage.item_name,
+            "original_cost": original_cost,
+            "scrap_value": scrap_value,
+            "financial_loss": financial_loss,
+            "depreciation_method": salvage.depreciation_method
+        },
+        description=f"Created salvage valuation {salvage_no} for {salvage.item_name}",
+        request=request
+    )
     
     return {
         "message": "Salvage valuation created successfully",
@@ -543,3 +987,32 @@ def generate_invoice_html(return_header, return_items, customer):
     
     db.close()  # Close database connection
     return html_content
+
+# ---------------- TEST ENDPOINT ----------------
+@router.get("/test-update/{return_id}")
+def test_return_update(return_id: int, db: Session = Depends(get_tenant_db)):
+    """Test endpoint to verify return update functionality"""
+    return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
+    if not return_header:
+        return {"error": "Return not found"}
+    
+    return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
+    
+    return {
+        "return_id": return_id,
+        "return_no": return_header.return_no,
+        "return_type": return_header.return_type,
+        "location": return_header.location,
+        "to_location": return_header.department,
+        "vendor": return_header.vendor,
+        "status": return_header.status,
+        "items_count": len(return_items),
+        "items": [{
+            "id": item.id,
+            "item_name": item.item_name,
+            "batch_no": item.batch_no,
+            "qty": float(item.qty),
+            "rate": float(item.rate) if item.rate else 0
+        } for item in return_items],
+        "message": "Return found and can be updated using PUT /returns/{return_id}"
+    }

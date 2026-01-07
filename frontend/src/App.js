@@ -52,6 +52,9 @@ import InvoiceCreation from "./pages/BillingSystem/InvoiceCreation";
 //external transfer
 import ExternalTransfer from "./pages/external-transfer/ExternalTransfer";
 import DamagedReturns from "./pages/external-transfer/DamagedReturns";
+
+//audit log
+import AuditLog from "./pages/AuditLog";
 function App() {
   return (
     <BrowserRouter>
@@ -116,6 +119,9 @@ function App() {
           {/* Billing System */}
           <Route path="billing" element={<Billing />} />
           <Route path="billing/create" element={<InvoiceCreation />} />
+          
+          {/* Audit Log */}
+          <Route path="audit-log" element={<AuditLog />} />
             
         </Route>
 

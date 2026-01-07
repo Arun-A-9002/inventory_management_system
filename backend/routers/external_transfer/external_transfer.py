@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List
 from datetime import datetime, timedelta
+import json
 
 from database import get_tenant_db
-from models.tenant_models import ExternalTransfer, ExternalTransferItem, ExternalTransferStatus
+from models.tenant_models import ExternalTransfer, ExternalTransferItem, ExternalTransferStatus, AuditLog
 from schemas.tenant_schemas import (
     ExternalTransferCreate,
     ExternalTransferUpdate,
@@ -25,7 +26,7 @@ def generate_transfer_no():
     return f"ET{timestamp}"
 
 @router.post("/", response_model=ExternalTransferResponse)
-def create_external_transfer(transfer_data: ExternalTransferCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
+def create_external_transfer(transfer_data: ExternalTransferCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
     try:
         print(f"Creating transfer with data: {transfer_data}")
         
@@ -54,6 +55,28 @@ def create_external_transfer(transfer_data: ExternalTransferCreate, db: Session 
             )
             db.add(item)
             print(f"Added item: {item_data.item_name}")
+        
+        # Create audit log
+        user_name = current_user.get('full_name') or current_user.get('email') or 'System'
+        audit_log = AuditLog(
+            user_id=current_user.get('id'),
+            user_name=user_name,
+            action="CREATE",
+            table_name="external_transfers",
+            record_id=transfer.id,
+            new_values=json.dumps({
+                "transfer_no": transfer.transfer_no,
+                "location": transfer.location,
+                "staff_name": transfer.staff_name,
+                "staff_id": transfer.staff_id,
+                "items_count": len(transfer_data.items)
+            }),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get('user-agent'),
+            module="EXTERNAL_TRANSFER",
+            description=f"Created external transfer {transfer.transfer_no} for {transfer.staff_name}"
+        )
+        db.add(audit_log)
         
         db.commit()
         db.refresh(transfer)
@@ -123,7 +146,7 @@ def get_external_transfers(db: Session = Depends(get_tenant_db), current_user: d
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{transfer_id}/send")
-def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def send_transfer(transfer_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
     try:
         transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
         if not transfer:
@@ -131,6 +154,9 @@ def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
         
         if transfer.status != ExternalTransferStatus.DRAFT:
             raise HTTPException(status_code=400, detail="Can only send draft transfers")
+        
+        # Store old status for audit
+        old_status = transfer.status
         
         # Reduce stock for each item
         for item in transfer.items:
@@ -238,6 +264,23 @@ def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
         transfer.status = ExternalTransferStatus.SENT
         transfer.sent_at = datetime.now()
         
+        # Create audit log
+        user_name = current_user.get('full_name') or current_user.get('email') or 'System'
+        audit_log = AuditLog(
+            user_id=current_user.get('id'),
+            user_name=user_name,
+            action="SEND",
+            table_name="external_transfers",
+            record_id=transfer.id,
+            old_values=json.dumps({"status": old_status.value}),
+            new_values=json.dumps({"status": transfer.status.value, "sent_at": transfer.sent_at.isoformat()}),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get('user-agent'),
+            module="EXTERNAL_TRANSFER",
+            description=f"Sent external transfer {transfer.transfer_no} to {transfer.staff_name}"
+        )
+        db.add(audit_log)
+        
         db.commit()
         print(f"COMMITTED: Transfer {transfer.transfer_no} sent successfully")
         db.refresh(transfer)
@@ -247,13 +290,9 @@ def send_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{transfer_id}/return")
-def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_return())):
+def return_transfer(transfer_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_return())):
     try:
         print(f"DEBUG: Raw return_data received: {return_data}")
-        print(f"DEBUG: return_staff_name: {return_data.get('return_staff_name')}")
-        print(f"DEBUG: return_staff_phone: {return_data.get('return_staff_phone')}")
-        print(f"DEBUG: return_staff_email: {return_data.get('return_staff_email')}")
-        print(f"DEBUG: staff_change_reason: {return_data.get('staff_change_reason')}")
         
         transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
         if not transfer:
@@ -261,6 +300,9 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
         
         if transfer.status != ExternalTransferStatus.SENT:
             raise HTTPException(status_code=400, detail="Can only return sent transfers")
+        
+        # Store old status for audit
+        old_status = transfer.status
         
         # Update transfer with contact info, deadline, and return staff details
         if hasattr(return_data, 'staff_phone') and return_data.staff_phone:
@@ -274,16 +316,12 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
         staff_details = return_data.get('return_staff_details', {})
         if staff_details.get('staff_name'):
             transfer.return_staff_name = staff_details['staff_name']
-            print(f"DEBUG: Storing return_staff_name: {staff_details['staff_name']}")
         if staff_details.get('staff_phone'):
             transfer.return_staff_phone = staff_details['staff_phone']
-            print(f"DEBUG: Storing return_staff_phone: {staff_details['staff_phone']}")
         if staff_details.get('staff_email'):
             transfer.return_staff_email = staff_details['staff_email']
-            print(f"DEBUG: Storing return_staff_email: {staff_details['staff_email']}")
         if staff_details.get('change_reason'):
             transfer.staff_change_reason = staff_details['change_reason']
-            print(f"DEBUG: Storing staff_change_reason: {staff_details['change_reason']}")
         
         # Update return quantities for each item
         for return_item_data in return_data.get('items', []):
@@ -329,7 +367,6 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
                     return_staff_info = staff_details.get('staff_name') or transfer.staff_name
                     return_staff_phone = staff_details.get('staff_phone')
                     return_staff_email = staff_details.get('staff_email')
-                    print(f"DEBUG: Logging transaction with return_staff_name: {return_staff_info}")
                     db.execute(text("""
                         INSERT INTO external_transfer_transactions 
                         (transfer_id, item_id, transaction_type, quantity, transaction_date, remarks, return_staff_name, return_staff_phone, return_staff_email)
@@ -366,12 +403,10 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
             # Add good items back to stock
             if return_item_data.get('returned_quantity', 0) > 0:
                 print(f"Processing return for {item.item_name}, batch {item.batch_no}, quantity {return_item_data.get('returned_quantity', 0)}")
-                print(f"Transfer location: {transfer.location}")
                 
-                # Find the batch record in the GRN system - must match exact location and batch
+                # Find the batch record in the GRN system
                 from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
                 
-                # First try exact match with transfer location
                 batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
                     GRNItem.item_name == item.item_name,
                     Batch.batch_no == item.batch_no,
@@ -379,42 +414,17 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
                     GRN.store == transfer.location
                 ).first()
                 
-                print(f"Exact location match: {batch_record.id if batch_record else 'None'}")
-                
-                # If not found, try case-insensitive match
-                if not batch_record:
-                    batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
-                        GRNItem.item_name == item.item_name,
-                        Batch.batch_no == item.batch_no,
-                        GRN.status == GRNStatus.approved,
-                        func.lower(GRN.store) == func.lower(transfer.location)
-                    ).first()
-                    print(f"Case-insensitive match: {batch_record.id if batch_record else 'None'}")
-                
-                # If still not found, try fuzzy match but prefer same location
                 if not batch_record:
                     batch_record = db.query(Batch).join(GRNItem).join(GRN).filter(
                         GRNItem.item_name == item.item_name,
                         Batch.batch_no == item.batch_no,
                         GRN.status == GRNStatus.approved
                     ).first()
-                    print(f"Any location match: {batch_record.id if batch_record else 'None'}")
-                    
-                    if batch_record:
-                        actual_grn = db.query(GRN).join(GRNItem).join(Batch).filter(
-                            Batch.id == batch_record.id
-                        ).first()
-                        print(f"WARNING: Returning to different location. Transfer: {transfer.location}, Actual: {actual_grn.store if actual_grn else 'Unknown'}")
                 
                 if batch_record:
                     old_qty = batch_record.qty
                     batch_record.qty = batch_record.qty + return_item_data.get('returned_quantity', 0)
                     print(f"RETURN SUCCESS: Added {return_item_data.get('returned_quantity', 0)} back to batch {batch_record.batch_no} for {item.item_name}: {old_qty} -> {batch_record.qty}")
-                    
-                    # Verify the change
-                    db.flush()
-                    updated_batch = db.query(Batch).filter(Batch.id == batch_record.id).first()
-                    print(f"VERIFICATION: Batch {updated_batch.batch_no} now has quantity {updated_batch.qty}")
                     
                     # Create stock ledger entry for return
                     try:
@@ -429,30 +439,8 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
                             "ref_no": transfer.transfer_no,
                             "remarks": f"Return from {transfer.staff_name}"
                         })
-                        print(f"Created ledger entry for return")
                     except Exception as ledger_error:
                         print(f"Warning: Could not create return ledger entry: {ledger_error}")
-                else:
-                    print(f"ERROR: Could not find batch record to return {item.item_name} to")
-            
-            # Track damaged items without adding to stock
-            if return_item_data.get('damaged_quantity', 0) > 0:
-                print(f"Processing damaged return for {item.item_name}, batch {item.batch_no}, quantity {return_item_data.get('damaged_quantity', 0)}")
-                print(f"DAMAGE TRACKING: {return_item_data.get('damaged_quantity', 0)} units of {item.item_name} marked as damaged - NOT added to stock")
-                
-                # Create stock ledger entry for damaged return tracking only
-                try:
-                    db.execute(text("""
-                        INSERT INTO stock_ledger (stock_id, batch_no, txn_type, qty_in, balance, ref_no, remarks, created_at)
-                        VALUES (0, :batch_no, 'DAMAGE_TRACK', 0, 0, :ref_no, :remarks, NOW())
-                    """), {
-                        "batch_no": item.batch_no,
-                        "ref_no": transfer.transfer_no,
-                        "remarks": f"DAMAGE TRACKING ONLY - {return_item_data.get('damaged_quantity', 0)} units from {transfer.staff_name}: {return_item_data.get('damage_reason')}"
-                    })
-                    print(f"Created damage tracking ledger entry - NO STOCK ADDED")
-                except Exception as ledger_error:
-                    print(f"Warning: Could not create damage tracking ledger entry: {ledger_error}")
         
         # Check if all items are fully returned
         all_returned = all(
@@ -464,28 +452,29 @@ def return_transfer(transfer_id: int, return_data: dict, db: Session = Depends(g
             transfer.status = ExternalTransferStatus.RETURNED
             transfer.returned_at = datetime.now()
         
+        # Create audit log
+        user_name = current_user.get('full_name') or current_user.get('email') or 'System'
+        audit_log = AuditLog(
+            user_id=current_user.get('id'),
+            user_name=user_name,
+            action="RETURN",
+            table_name="external_transfers",
+            record_id=transfer.id,
+            old_values=json.dumps({"status": old_status.value}),
+            new_values=json.dumps({
+                "status": transfer.status.value,
+                "return_staff_name": transfer.return_staff_name,
+                "returned_at": transfer.returned_at.isoformat() if transfer.returned_at else None
+            }),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get('user-agent'),
+            module="EXTERNAL_TRANSFER",
+            description=f"Processed return for transfer {transfer.transfer_no} by {transfer.return_staff_name or transfer.staff_name}"
+        )
+        db.add(audit_log)
+        
         db.commit()
         print(f"COMMITTED: Return processed for transfer {transfer.transfer_no}")
-        
-        # Verify return staff details were stored
-        db.refresh(transfer)
-        print(f"VERIFICATION: Original staff: {transfer.staff_name}")
-        print(f"VERIFICATION: Return staff name: {transfer.return_staff_name}")
-        print(f"VERIFICATION: Return staff phone: {transfer.return_staff_phone}")
-        print(f"VERIFICATION: Return staff email: {transfer.return_staff_email}")
-        print(f"VERIFICATION: Staff change reason: {transfer.staff_change_reason}")
-        
-        # Final verification - check if batch quantities were actually updated
-        for item in transfer.items:
-            if item.returned_quantity > 0:
-                from models.tenant_models import Batch, GRNItem, GRN, GRNStatus
-                final_batch = db.query(Batch).join(GRNItem).join(GRN).filter(
-                    GRNItem.item_name == item.item_name,
-                    Batch.batch_no == item.batch_no,
-                    GRN.status == GRNStatus.approved
-                ).first()
-                if final_batch:
-                    print(f"FINAL CHECK: {item.item_name} batch {item.batch_no} final quantity: {final_batch.qty}")
         
         db.refresh(transfer)
         return transfer
@@ -1093,3 +1082,28 @@ def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_tenant
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add audit log endpoint for external transfers
+@router.get("/{transfer_id}/audit-logs")
+def get_external_transfer_audit_logs(transfer_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_view())):
+    """Get audit logs for a specific external transfer"""
+    # Get audit logs for this external transfer
+    audit_logs = db.query(AuditLog).filter(
+        AuditLog.table_name == "external_transfers",
+        AuditLog.record_id == transfer_id
+    ).order_by(AuditLog.timestamp.desc()).all()
+    
+    result = []
+    for log in audit_logs:
+        result.append({
+            "id": log.id,
+            "user_name": log.user_name,
+            "action": log.action,
+            "timestamp": log.timestamp.strftime("%d/%m/%Y %H:%M:%S"),
+            "description": log.description,
+            "new_values": json.loads(log.new_values) if log.new_values else None,
+            "old_values": json.loads(log.old_values) if log.old_values else None,
+            "ip_address": log.ip_address
+        })
+    
+    return result
