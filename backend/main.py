@@ -158,7 +158,7 @@ app.include_router(return_disposal_router)
 app.include_router(customer_router)
 
 # Suppliers
-app.include_router(payments_router)
+app.include_router(payments_router, prefix="/payments")
 
 #billing system
 app.include_router(billing_router)

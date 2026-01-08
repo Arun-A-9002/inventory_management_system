@@ -321,11 +321,14 @@ export default function SupplierLedger() {
   const [payments, setPayments] = useState({});
   const [totalAdvance, setTotalAdvance] = useState(0);
   const [usedAdvances, setUsedAdvances] = useState({});
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [showAuditLogs, setShowAuditLogs] = useState(false);
 
   useEffect(() => {
     if (hasPermission("vendor_ledger.view")) {
       fetchGRNList();
       fetchVendors();
+      fetchAuditLogs();
     }
   }, []);
 
@@ -366,6 +369,15 @@ export default function SupplierLedger() {
       setVendors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      const res = await api.get('/payments/audit-logs');
+      setAuditLogs(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch audit logs:', err);
     }
   };
 
@@ -416,13 +428,41 @@ export default function SupplierLedger() {
     setViewModal({ isOpen: true, grn });
   };
 
-  const handlePrintGRN = (grn) => {
+  const handlePrintGRN = async (grn) => {
     if (!hasPermission("vendor_ledger.print")) {
       alert("Permission denied");
       return;
     }
-    setPrintModal({ isOpen: true, grn });
+    try {
+      const res = await api.get(`/payments/ledger/print/${grn.grn_number}`);
+      
+      if (res.data.error) {
+        alert(`Error: ${res.data.error}`);
+        return;
+      }
+      
+      // Get HTML content from backend
+      const htmlContent = res.data.html_content;
+      
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      };
+    } catch (err) {
+      console.error('Failed to print:', err);
+      alert('Failed to print vendor ledger');
+    }
   };
+
+
 
   const handleInvoiceGRN = async (grn) => {
     if (!hasPermission("vendor_ledger.invoice_view")) {
@@ -462,6 +502,7 @@ export default function SupplierLedger() {
         setTimeout(() => fetchPaymentsForGRNs(updatedGrnList), 100);
         
         setPaymentModal({ isOpen: false, grn: null });
+        fetchAuditLogs(); // Refresh audit logs after payment
       } else {
         throw new Error('Payment API call failed with status: ' + response.status);
       }
@@ -509,23 +550,32 @@ export default function SupplierLedger() {
             <h1 className="text-2xl font-semibold mb-2">Vendor Ledger</h1>
             <p className="text-gray-600">Track vendor transactions and outstanding amounts</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
-              <select
-                value={selectedVendor}
-                onChange={(e) => setSelectedVendor(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowAuditLogs(!showAuditLogs)}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
               >
-                <option value="">All Vendors</option>
-                {vendors.map(vendor => (
-                  <option key={vendor.id} value={vendor.email}>
-                    {vendor.vendor_name} ({vendor.email})
-                  </option>
-                ))}
-              </select>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {showAuditLogs ? 'Hide' : 'Show'} Payment History
+              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
+                <select
+                  value={selectedVendor}
+                  onChange={(e) => setSelectedVendor(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Vendors</option>
+                  {vendors.map(vendor => (
+                    <option key={vendor.id} value={vendor.email}>
+                      {vendor.vendor_name} ({vendor.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -646,21 +696,10 @@ export default function SupplierLedger() {
                         <button 
                           onClick={() => handlePrintGRN(grn)}
                           className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Print Invoice"
+                          title="Print Ledger"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                          </svg>
-                        </button>
-                        )}
-                        {hasPermission("vendor_ledger.invoice_view") && (
-                        <button 
-                          onClick={() => handleInvoiceGRN(grn)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Generate Invoice"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         </button>
                         )}
@@ -674,6 +713,68 @@ export default function SupplierLedger() {
           </table>
         </div>
       </div>
+
+      {/* Audit Logs Section */}
+      {showAuditLogs && (
+        <div className="bg-white rounded-lg shadow-sm border mt-6">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-800">Payment History & Audit Logs</h2>
+            <p className="text-sm text-gray-600">Recent payment transactions and system activities</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-4 font-medium text-gray-700">Timestamp</th>
+                  <th className="text-left p-4 font-medium text-gray-700">User</th>
+                  <th className="text-left p-4 font-medium text-gray-700">Action</th>
+                  <th className="text-left p-4 font-medium text-gray-700">Module</th>
+                  <th className="text-left p-4 font-medium text-gray-700">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-8 text-gray-500">
+                      No payment history found
+                    </td>
+                  </tr>
+                ) : (
+                  auditLogs
+                    .filter(log => !selectedVendor || log.description?.includes(selectedVendor))
+                    .map((log) => (
+                    <tr key={log.id} className="border-t hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="text-sm">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-medium text-sm">{log.user_name || 'System'}</div>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          log.action === 'FULL_PAYMENT' ? 'bg-green-100 text-green-800' : 
+                          log.action === 'PARTIAL_PAYMENT' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {log.action.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-gray-600">{log.module}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-gray-800">{log.description}</div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {paymentModal.isOpen && (
@@ -794,55 +895,7 @@ export default function SupplierLedger() {
         </div>
       )}
 
-      {/* Print Modal */}
-      {printModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Print Invoice</h2>
-              <button 
-                onClick={() => setPrintModal({ isOpen: false, grn: null })}
-                className="text-gray-500 hover:text-gray-700 text-xl"
-              >
-                ×
-              </button>
-            </div>
-            
-            {printModal.grn && (
-              <div className="print-content">
-                <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
-                  <h1 className="text-2xl font-bold">VENDOR INVOICE</h1>
-                  <p className="text-gray-600">Invoice #{printModal.grn.invoice_number || printModal.grn.grn_number}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <h3 className="font-semibold mb-2">Vendor Details</h3>
-                    <p className="font-medium">{printModal.grn.vendor_name}</p>
-                    <p className="text-gray-600">Vendor Address</p>
-                  </div>
-                  <div className="text-right">
-                    <h3 className="font-semibold mb-2">Invoice Details</h3>
-                    <p>Date: {new Date(printModal.grn.grn_date).toLocaleDateString()}</p>
-                    <p>Amount: ₹{printModal.grn.total_amount.toFixed(2)}</p>
-                  </div>
-                </div>
-                
-                <div className="text-center mt-8">
-                  {hasPermission("vendor_ledger.print") && (
-                  <button 
-                    onClick={() => window.print()}
-                    className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-                  >
-                    Print
-                  </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Invoice Modal */}
       {invoiceModal.isOpen && (
