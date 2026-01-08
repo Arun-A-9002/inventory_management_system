@@ -10,8 +10,8 @@ class PDFHeaderFormat:
     def __init__(self, db: Session):
         self.db = db
         self.styles = getSampleStyleSheet()
-        self.logo_width = 35 * mm  # Print-friendly width (30-45mm range)
-        self.logo_max_height = 15 * mm  # Print-friendly max height (10-18mm range)
+        self.logo_width = 72 * mm  # Increased logo section width
+        self.logo_max_height = 25 * mm  # Increased max height for larger logo section
         
     def create_header(self, canvas, doc, company_id: int = None):
         """
@@ -217,11 +217,11 @@ class PDFHeaderFormat:
         placeholder_height = 50
         placeholder_y = y - placeholder_height + 15
         canvas.rect(left_x, placeholder_y, 
-                   35 * mm, placeholder_height, fill=1, stroke=1)
+                   72 * mm, placeholder_height, fill=1, stroke=1)
         canvas.setFillColor(colors.black)
         canvas.setFont("Helvetica", 12)
         text_width = canvas.stringWidth("LOGO", "Helvetica", 12)
-        canvas.drawString(left_x + (35 * mm - text_width) / 2, 
+        canvas.drawString(left_x + (72 * mm - text_width) / 2, 
                          placeholder_y + 20, "LOGO")
                 
     def _split_text(self, text, max_length):

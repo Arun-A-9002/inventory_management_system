@@ -98,9 +98,9 @@ def print_audit_logs(
     
     logs = query.order_by(AuditLog.timestamp.desc()).all()
     
-    # Create PDF with exact margins
+    # Create PDF with exact margins to align with header
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=105, bottomMargin=40, leftMargin=40, rightMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=110, bottomMargin=40, leftMargin=40, rightMargin=40)
     
     # Initialize header format
     header_format = PDFHeaderFormat(db)
@@ -144,7 +144,11 @@ def print_audit_logs(
         # Header styling
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Center align headers
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # Center align timestamp column
+        ('ALIGN', (1, 1), (2, -1), 'CENTER'),  # Center align user and action columns
+        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Center align module column
+        ('ALIGN', (4, 1), (4, -1), 'LEFT'),    # Left align description column
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 8),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
