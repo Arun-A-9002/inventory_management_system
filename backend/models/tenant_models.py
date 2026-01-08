@@ -1,6 +1,6 @@
 # ------------------ Department Model ------------------
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float,Date,Enum,DECIMAL
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,Table, ForeignKey,Text,Float,Date,Enum,DECIMAL,LargeBinary
 import enum
 from datetime import date
 from sqlalchemy.sql import func
@@ -99,7 +99,7 @@ class Company(TenantBase):
     email = Column(String(191), nullable=True)
     phone = Column(String(100), nullable=True)
 
-    logo = Column(String(500), nullable=True)
+    logo = Column(LargeBinary, nullable=True)
 
     is_active = Column(Boolean, default=True)
 

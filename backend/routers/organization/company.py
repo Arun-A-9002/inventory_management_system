@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Form
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import os
 import uuid
 import json
 from pathlib import Path
+import base64
+from typing import Optional
 
 from database import get_tenant_db
 from models.tenant_models import Company, AuditLog
@@ -59,10 +62,22 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 
 
 # --------------------------
-# CREATE COMPANY
+# CREATE COMPANY WITH LOGO
 # --------------------------
 @router.post("/", response_model=CompanyResponse)
-def create_company(data: CompanyCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_create())):
+async def create_company(
+    name: str = Form(...),
+    code: str = Form(...),
+    gst_number: str = Form(...),
+    address: str = Form(...),
+    contact_person: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    logo: Optional[UploadFile] = File(None),
+    request: Request = None,
+    db: Session = Depends(get_tenant_db),
+    current_user: dict = Depends(require_company_create())
+):
     log_api("CREATE COMPANY")
 
     try:
@@ -70,8 +85,27 @@ def create_company(data: CompanyCreate, request: Request, db: Session = Depends(
         existing_company = db.query(Company).first()
         if existing_company:
             raise HTTPException(400, "Only one company is allowed per organization")
+        
+        # Handle logo upload
+        logo_data = None
+        if logo and logo.filename:
+            # Validate file type
+            if not logo.content_type.startswith('image/'):
+                raise HTTPException(400, "Only image files are allowed")
             
-        company = Company(**data.dict())
+            # Read file content as binary - don't decode
+            logo_data = await logo.read()
+            
+        company = Company(
+            name=name,
+            code=code,
+            gst_number=gst_number,
+            address=address,
+            contact_person=contact_person,
+            email=email,
+            phone=phone,
+            logo=logo_data
+        )
         db.add(company)
         db.commit()
         db.refresh(company)
@@ -88,7 +122,7 @@ def create_company(data: CompanyCreate, request: Request, db: Session = Depends(
                 "address": company.address,
                 "phone": company.phone,
                 "email": company.email,
-                "logo": company.logo
+                "logo": "Binary data" if company.logo else None
             },
             description=f"Created company {company.name}",
             request=request
@@ -101,7 +135,7 @@ def create_company(data: CompanyCreate, request: Request, db: Session = Depends(
         raise
     except Exception as e:
         log_error(e, "create_company")
-        raise HTTPException(500, "Failed to create company")
+        raise HTTPException(500, f"Failed to create company: {str(e)}")
 
 
 # --------------------------
@@ -124,10 +158,23 @@ def get_company(company_id: int, db: Session = Depends(get_tenant_db), current_u
 
 
 # --------------------------
-# UPDATE COMPANY
+# UPDATE COMPANY WITH LOGO
 # --------------------------
 @router.put("/{company_id}", response_model=CompanyResponse)
-def update_company(company_id: int, data: CompanyUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_edit())):
+async def update_company(
+    company_id: int,
+    name: Optional[str] = Form(None),
+    code: Optional[str] = Form(None),
+    gst_number: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    contact_person: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    logo: Optional[UploadFile] = File(None),
+    request: Request = None,
+    db: Session = Depends(get_tenant_db),
+    current_user: dict = Depends(require_company_edit())
+):
     log_api("UPDATE COMPANY")
 
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -140,11 +187,34 @@ def update_company(company_id: int, data: CompanyUpdate, request: Request, db: S
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": company.logo
+        "logo": "Binary data" if company.logo else None
     }
 
-    for key, value in data.dict(exclude_unset=True).items():
-        setattr(company, key, value)
+    # Update fields if provided
+    if name is not None:
+        company.name = name
+    if code is not None:
+        company.code = code
+    if gst_number is not None:
+        company.gst_number = gst_number
+    if address is not None:
+        company.address = address
+    if contact_person is not None:
+        company.contact_person = contact_person
+    if email is not None:
+        company.email = email
+    if phone is not None:
+        company.phone = phone
+    
+    # Handle logo upload
+    if logo and logo.filename:
+        # Validate file type
+        if not logo.content_type.startswith('image/'):
+            raise HTTPException(400, "Only image files are allowed")
+        
+        # Read file content as binary
+        logo_data = await logo.read()
+        company.logo = logo_data
 
     db.commit()
     db.refresh(company)
@@ -155,7 +225,7 @@ def update_company(company_id: int, data: CompanyUpdate, request: Request, db: S
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": company.logo
+        "logo": "Binary data" if company.logo else None
     }
     
     # Audit log
@@ -192,7 +262,7 @@ def delete_company(company_id: int, request: Request, db: Session = Depends(get_
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": company.logo
+        "logo": "Binary data" if company.logo else None
     }
 
     db.delete(company)
@@ -215,26 +285,42 @@ def delete_company(company_id: int, request: Request, db: Session = Depends(get_
 
 
 # --------------------------
-# UPLOAD LOGO
+# GET COMPANY LOGO
 # --------------------------
-@router.post("/upload-logo")
-async def upload_logo(file: UploadFile = File(...)):
-    # Validate file type
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(400, "Only image files are allowed")
+@router.get("/{company_id}/logo")
+def get_company_logo(company_id: int, db: Session = Depends(get_tenant_db)):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company or not company.logo:
+        raise HTTPException(404, "Logo not found")
     
-    # Generate unique filename
-    file_extension = file.filename.split('.')[-1]
-    unique_filename = f"{uuid.uuid4()}.{file_extension}"
-    file_path = UPLOAD_DIR / unique_filename
+    return Response(content=company.logo, media_type="image/png")
+
+
+# --------------------------
+# GET FIRST COMPANY LOGO (for reports)
+# --------------------------
+@router.get("/logo")
+def get_first_company_logo(db: Session = Depends(get_tenant_db)):
+    company = db.query(Company).first()
+    if not company or not company.logo:
+        raise HTTPException(404, "Logo not found")
     
-    try:
-        # Save file
-        with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-        
-        return {"filename": unique_filename, "url": f"/uploads/{unique_filename}"}
+    return Response(content=company.logo, media_type="image/png")
+
+
+# --------------------------
+# DEBUG: CHECK COMPANY LOGO STATUS
+# --------------------------
+@router.get("/logo-status")
+def check_logo_status(db: Session = Depends(get_tenant_db)):
+    company = db.query(Company).first()
+    if not company:
+        return {"status": "no_company", "message": "No company found"}
     
-    except Exception as e:
-        raise HTTPException(500, f"Failed to upload file: {str(e)}")
+    return {
+        "status": "found",
+        "company_name": company.name,
+        "has_logo": company.logo is not None,
+        "logo_size": len(company.logo) if company.logo else 0,
+        "logo_type": type(company.logo).__name__ if company.logo else None
+    }

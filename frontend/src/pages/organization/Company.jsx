@@ -15,7 +15,8 @@ export default function Company() {
     contact_person: "",
     email: "",
     phone: "",
-    logo: ""
+    logo: "",
+    logoFile: null
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -54,7 +55,23 @@ export default function Company() {
     }
 
     try {
-      await api.post("/company/", form);
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('code', form.code);
+      formData.append('gst_number', form.gst_number);
+      formData.append('address', form.address);
+      formData.append('contact_person', form.contact_person);
+      formData.append('email', form.email);
+      formData.append('phone', form.phone);
+      
+      if (form.logoFile) {
+        formData.append('logo', form.logoFile);
+      }
+      
+      await api.post("/company/", formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
       setForm({
         name: "",
         code: "",
@@ -63,7 +80,8 @@ export default function Company() {
         contact_person: "",
         email: "",
         phone: "",
-        logo: ""
+        logo: "",
+        logoFile: null
       });
       loadCompanies();
     } catch (err) {
@@ -107,21 +125,12 @@ export default function Company() {
     const file = event.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      setUploading(true);
-      const response = await api.post('/company/upload-logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setForm({ ...form, logo: response.data.url });
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload logo');
-    } finally {
-      setUploading(false);
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
     }
+
+    setForm({ ...form, logoFile: file, logo: URL.createObjectURL(file) });
   };
 
   if (!hasPermission("company.view")) {
@@ -166,10 +175,10 @@ export default function Company() {
                           disabled={companies.length > 0 || uploading}
                           className="w-full rounded-lg border px-4 py-2"
                         />
-                        {uploading && <p className="text-sm text-blue-600 mt-1">Uploading...</p>}
+                        {uploading && <p className="text-sm text-blue-600 mt-1">Processing...</p>}
                         {form.logo && (
                           <div className="mt-2">
-                            <img src={`http://localhost:8000${form.logo}`} alt="Logo" className="h-16 w-16 object-cover rounded" />
+                            <img src={form.logo} alt="Logo" className="h-16 w-16 object-cover rounded" />
                           </div>
                         )}
                       </div>
@@ -294,7 +303,7 @@ export default function Company() {
                           </td>
                           <td className="px-4 py-4 text-center">
                             {c.logo ? (
-                              <img src={`http://localhost:8000${c.logo}`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
+                              <img src={`http://localhost:8000/company/${c.id}/logo`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
                             ) : (
                               <div className="h-8 w-8 bg-gray-100 rounded mx-auto"></div>
                             )}

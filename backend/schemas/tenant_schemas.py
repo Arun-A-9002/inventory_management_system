@@ -110,7 +110,7 @@ class CompanyBase(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    logo: Optional[str] = None
+    logo: Optional[bytes] = None
 
 
 class CompanyCreate(CompanyBase):
@@ -125,12 +125,19 @@ class CompanyUpdate(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    logo: Optional[str] = None
+    logo: Optional[bytes] = None
     is_active: Optional[bool] = None
 
 
-class CompanyResponse(CompanyBase):
+class CompanyResponse(BaseModel):
     id: int
+    name: str
+    code: Optional[str] = None
+    gst_number: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     is_active: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]

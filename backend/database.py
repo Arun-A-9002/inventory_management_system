@@ -314,6 +314,14 @@ def ensure_missing_columns(engine):
             except Exception as e:
                 print(f"Error creating audit_logs table: {e}")
             
+            # Ensure logo column is LONGBLOB in companies table
+            try:
+                conn.execute(text("ALTER TABLE companies MODIFY COLUMN logo LONGBLOB"))
+                print("Updated logo column to LONGBLOB in companies table")
+            except Exception as e:
+                if "Unknown column" not in str(e) and "doesn't exist" not in str(e):
+                    print(f"Error updating logo column: {e}")
+            
             conn.commit()
                 
     except Exception as e:

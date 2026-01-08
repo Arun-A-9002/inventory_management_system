@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import json
 from database import get_tenant_db
 from datetime import date
 import uuid
 import os
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 from models.tenant_models import (
     PurchaseRequest, PurchaseRequestItem,
@@ -239,6 +246,107 @@ def get_po_print_data(po_number: str, db: Session = Depends(get_db), current_use
         }
     }
     return po_data
+
+@router.get("/po/{po_number}/pdf")
+def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_order_print())):
+    """Generate PDF for Purchase Order with company header"""
+    from utils.pdf_header_format import PDFHeaderFormat
+    
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    
+    # Get vendor details
+    from models.tenant_models import Vendor
+    vendor = db.query(Vendor).filter(Vendor.email == po.vendor).first()
+    
+    # Calculate totals
+    filtered_items = [item for item in po.items if item.item_name != "Items from PR"]
+    subtotal = sum((item.quantity or 0) * (item.rate or 0) for item in filtered_items)
+    total_tax = sum((item.quantity or 0) * (item.rate or 0) * ((item.tax or 0) / 100) for item in filtered_items)
+    total_discount = sum((item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100) for item in filtered_items)
+    grand_total = subtotal + total_tax - total_discount
+    
+    # Create PDF
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=105, bottomMargin=40, leftMargin=40, rightMargin=40)
+    
+    header_format = PDFHeaderFormat(db)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Title
+    title_style = styles['Title']
+    title_style.alignment = 1
+    title_style.fontSize = 14
+    title_style.spaceAfter = 5
+    title = Paragraph("<b>PURCHASE ORDER</b>", title_style)
+    story.append(title)
+    story.append(Spacer(1, 8))
+    
+    # PO Info
+    info_style = styles['Normal']
+    info_style.alignment = 1
+    info_style.fontSize = 9
+    po_info = Paragraph(f"PO Number: {po.po_number} | Date: {po.po_date.strftime('%Y-%m-%d') if po.po_date else 'N/A'}", info_style)
+    story.append(po_info)
+    story.append(Spacer(1, 15))
+    
+    # Vendor Info
+    vendor_info = f"Vendor: {vendor.vendor_name if vendor else 'Unknown'} | Email: {po.vendor}"
+    vendor_para = Paragraph(vendor_info, info_style)
+    story.append(vendor_para)
+    story.append(Spacer(1, 15))
+    
+    # Items Table
+    table_data = [['Item', 'Qty', 'Rate', 'Tax%', 'Discount%', 'Amount']]
+    
+    for item in filtered_items:
+        amount = (item.quantity or 0) * (item.rate or 0)
+        table_data.append([
+            item.item_name[:25],
+            str(item.quantity or 0),
+            f"Rs.{item.rate or 0:.2f}",
+            f"{item.tax or 0}%",
+            f"{item.discount or 0}%",
+            f"Rs.{amount:.2f}"
+        ])
+    
+    # Add totals
+    table_data.extend([
+        ['', '', '', '', 'Subtotal:', f"Rs.{subtotal:.2f}"],
+        ['', '', '', '', 'Tax:', f"Rs.{total_tax:.2f}"],
+        ['', '', '', '', 'Discount:', f"Rs.{total_discount:.2f}"],
+        ['', '', '', '', 'Total:', f"Rs.{grand_total:.2f}"]
+    ])
+    
+    table = Table(table_data, colWidths=[2.5*inch, 0.7*inch, 1*inch, 0.8*inch, 1*inch, 1*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, -4), (-1, -1), colors.lightgrey),
+    ]))
+    
+    story.append(table)
+    
+    def add_header(canvas, doc):
+        header_format.create_header(canvas, doc)
+    
+    doc.build(story, onFirstPage=add_header, onLaterPages=add_header)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=purchase_order_{po_number}.pdf"}
+    )
 
 @router.get("/po")
 def list_purchase_orders(db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_order_view())):

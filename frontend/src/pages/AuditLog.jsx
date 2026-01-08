@@ -63,38 +63,32 @@ export default function AuditLog() {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const handlePrint = () => {
-    const printContent = `
-      <div style="text-align: center; margin-bottom: 30px;">
-        ${companyInfo?.logo ? `<img src="${companyInfo.logo}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;">` : ''}
-        <h1 style="font-size: 24px; margin: 10px 0;">${companyInfo?.name || 'NUTRYAH'}</h1>
-        ${companyInfo?.address ? `<p>${companyInfo.address}</p>` : ''}
-        ${companyInfo?.phone ? `<p>Phone: ${companyInfo.phone}</p>` : ''}
-        ${companyInfo?.email ? `<p>Email: ${companyInfo.email}</p>` : ''}
-        <hr style="margin: 20px 0;">
-        <h2 style="font-size: 20px; margin: 20px 0;">Audit Log Report</h2>
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
-      </div>
-      ${document.querySelector('.audit-table').outerHTML}
-    `;
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Audit Log Report</title>
-          <style>
-            body { margin: 20px; font-family: Arial, sans-serif; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
-            th { background-color: #f5f5f5; }
-          </style>
-        </head>
-        <body>${printContent}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+  const handlePrint = async () => {
+    try {
+      const params = new URLSearchParams({
+        ...(filters.module && { module: filters.module }),
+        ...(filters.action && { action: filters.action }),
+        ...(filters.user_name && { user_name: filters.user_name })
+      });
+
+      const response = await api.get(`/audit-logs/print?${params}`, {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit_log_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF report');
+    }
   };
 
   const formatTimestamp = (timestamp) => {
