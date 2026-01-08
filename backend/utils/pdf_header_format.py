@@ -10,8 +10,8 @@ class PDFHeaderFormat:
     def __init__(self, db: Session):
         self.db = db
         self.styles = getSampleStyleSheet()
-        self.logo_width = 72 * mm  # 72mm as specified
-        self.logo_height = None  # Will be calculated to maintain aspect ratio
+        self.logo_width = 35 * mm  # Print-friendly width (30-45mm range)
+        self.logo_max_height = 15 * mm  # Print-friendly max height (10-18mm range)
         
     def create_header(self, canvas, doc, company_id: int = None):
         """
@@ -36,7 +36,7 @@ class PDFHeaderFormat:
         right_margin = page_width - 40
         
         # Logo section (left side) - always show placeholder if no logo
-        self._draw_logo(canvas, company_data.get('logo'), left_margin, header_y)
+        self._draw_logo(canvas, company_data.get('logo_path'), left_margin, header_y)
             
         # Company details section (right side)
         self._draw_company_details(canvas, company_data, right_margin, header_y)
@@ -66,9 +66,9 @@ class PDFHeaderFormat:
                 print("No company found in database")
                 return None
                 
-            print(f"Found company: {company.name}, has logo: {company.logo is not None}")
-            if company.logo:
-                print(f"Logo size: {len(company.logo)} bytes")
+            print(f"Found company: {company.name}, has logo: {company.logo_path is not None}")
+            if company.logo_path:
+                print(f"Logo path: {company.logo_path}")
                 
             return {
                 'name': company.name,
@@ -78,7 +78,7 @@ class PDFHeaderFormat:
                 'contact_person': company.contact_person,
                 'email': company.email,
                 'phone': company.phone,
-                'logo': company.logo if company.logo else None
+                'logo_path': company.logo_path if company.logo_path else None
             }
         except Exception as e:
             print(f"Error fetching company data: {e}")
@@ -136,64 +136,104 @@ class PDFHeaderFormat:
                 canvas.drawString(right_x - line_width, details_y, line)
                 details_y -= line_height
                 
-    def _draw_logo(self, canvas, logo_data, left_x, y):
+    def _draw_logo(self, canvas, logo_path, left_x, y):
         """Draw logo on the left side with 72mm width"""
         try:
-            # Handle logo data from database (bytes or memoryview)
-            if logo_data:
-                # Convert memoryview to bytes if needed
-                if isinstance(logo_data, memoryview):
-                    logo_data = logo_data.tobytes()
-                elif not isinstance(logo_data, bytes):
-                    print(f"Unexpected logo data type: {type(logo_data)}")
-                    raise ValueError("Invalid logo data type")
+            # Handle logo file path
+            if logo_path:
+                from pathlib import Path
+                import os
                 
-                if len(logo_data) > 0:
-                    # Create PIL Image to get dimensions
-                    img = Image.open(io.BytesIO(logo_data))
-                original_width, original_height = img.size
+                # Try multiple possible paths for the logo
+                possible_paths = []
                 
-                # Calculate height maintaining aspect ratio
-                aspect_ratio = original_height / original_width
-                logo_height = self.logo_width * aspect_ratio
+                # Get just the filename from the path
+                filename = Path(logo_path).name
                 
-                # Position logo on left side, aligned with company name level
-                logo_y = y - logo_height + 15  # Align with company name level
+                # Try different locations
+                possible_paths.extend([
+                    Path('uploads') / filename,  # Current directory uploads
+                    Path('backend/uploads') / filename,  # From root
+                    Path(logo_path),  # Exact path as stored
+                    Path('uploads') / logo_path,  # uploads + full path
+                ])
                 
-                # Draw logo
-                canvas.drawInlineImage(
-                    io.BytesIO(logo_data),
-                    left_x, logo_y,
-                    width=self.logo_width,
-                    height=logo_height
-                )
-                return  # Successfully drew logo, exit
+                print(f"DEBUG: Logo path from DB: {logo_path}")
+                print(f"DEBUG: Current working directory: {os.getcwd()}")
+                print(f"DEBUG: Trying paths: {[str(p.absolute()) for p in possible_paths]}")
                 
+                logo_file_path = None
+                for path in possible_paths:
+                    if path.exists():
+                        logo_file_path = path
+                        print(f"DEBUG: Found logo at: {logo_file_path.absolute()}")
+                        break
+                
+                if logo_file_path and logo_file_path.exists():
+                    # Read logo file
+                    with open(logo_file_path, 'rb') as f:
+                        logo_data = f.read()
+                    
+                    if len(logo_data) > 0:
+                        # Create PIL Image to get dimensions
+                        img = Image.open(io.BytesIO(logo_data))
+                        original_width, original_height = img.size
+                        
+                        # Calculate height maintaining aspect ratio but within limits
+                        aspect_ratio = original_height / original_width
+                        logo_height = self.logo_width * aspect_ratio
+                        
+                        # Ensure height doesn't exceed maximum
+                        if logo_height > self.logo_max_height:
+                            logo_height = self.logo_max_height
+                            logo_width = logo_height / aspect_ratio
+                        else:
+                            logo_width = self.logo_width
+                        
+                        # Position logo on left side, aligned with company name level
+                        logo_y = y - logo_height + 10  # Better alignment
+                        
+                        # Draw logo
+                        canvas.drawInlineImage(
+                            img,
+                            left_x, logo_y,
+                            width=logo_width,
+                            height=logo_height
+                        )
+                        print(f"DEBUG: Logo drawn successfully at {left_x}, {logo_y}")
+                        return  # Successfully drew logo, exit
+                else:
+                    print(f"DEBUG: Logo file not found in any of the attempted paths")
+                    
         except Exception as e:
-            print(f"Error drawing logo: {e}")
-            print(f"Logo data type: {type(logo_data)}, length: {len(logo_data) if logo_data else 0}")
-            if logo_data:
-                print(f"First 20 bytes: {logo_data[:20] if len(logo_data) >= 20 else logo_data}")
+            print(f"ERROR: Error drawing logo: {e}")
+            import traceback
+            traceback.print_exc()
             
-        # Fallback: always draw placeholder on left side
+        # Fallback: draw placeholder on left side
+        print(f"DEBUG: Drawing placeholder logo")
         canvas.setStrokeColor(colors.black)
         canvas.setFillColor(colors.lightgrey)
         placeholder_height = 50
         placeholder_y = y - placeholder_height + 15
         canvas.rect(left_x, placeholder_y, 
-                   self.logo_width, placeholder_height, fill=1, stroke=1)
+                   35 * mm, placeholder_height, fill=1, stroke=1)
         canvas.setFillColor(colors.black)
         canvas.setFont("Helvetica", 12)
-        canvas.drawCentredString(left_x + self.logo_width/2, placeholder_y + 25, "LOGO")
-            
-    def _split_text(self, text, max_chars):
-        """Split text into lines of maximum characters"""
+        text_width = canvas.stringWidth("LOGO", "Helvetica", 12)
+        canvas.drawString(left_x + (35 * mm - text_width) / 2, 
+                         placeholder_y + 20, "LOGO")
+                
+    def _split_text(self, text, max_length):
+        """Split text into lines of maximum length"""
+        if not text:
+            return []
         words = text.split()
         lines = []
         current_line = ""
         
         for word in words:
-            if len(current_line + " " + word) <= max_chars:
+            if len(current_line + " " + word) <= max_length:
                 current_line += " " + word if current_line else word
             else:
                 if current_line:
@@ -204,12 +244,3 @@ class PDFHeaderFormat:
             lines.append(current_line)
             
         return lines
-        
-    def get_header_height(self):
-        """Return the height occupied by header"""
-        return 95  # Points from top of page
-
-# Usage example:
-# from utils.pdf_header_format import PDFHeaderFormat
-# header_format = PDFHeaderFormat(db)
-# header_format.create_header(canvas, doc, company_id=1)

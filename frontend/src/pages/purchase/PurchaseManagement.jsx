@@ -457,29 +457,116 @@ export default function PurchaseManagement() {
   const [printData, setPrintData] = useState(null);
   const [loadingPrint, setLoadingPrint] = useState(false);
 
-  const openPrintModal = async (po) => {
+  const directPrint = async (po) => {
     if (!hasPermission("purchase_order.print")) {
       showToast("You don't have permission to print purchase orders", 'error');
       return;
     }
     
     try {
-      setLoadingPrint(true);
-      const res = await api.get(`/purchase/po/${po.po_number}/print`);
-      setPrintData(res.data);
-      setShowPrintModal(true);
-    } catch (err) {
-      showToast('Failed to load PO details', 'error');
-    } finally {
-      setLoadingPrint(false);
+      // Directly call PDF endpoint and open for printing
+      const response = await api.get(`/purchase/po/${po.po_number}/pdf`, {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and open in new window for direct printing
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open PDF in new window and trigger print
+      const printWindow = window.open(url, '_blank', 'width=800,height=600');
+      
+      // Wait for PDF to load then trigger print
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        };
+      }
+      
+      // Clean up URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 2000);
+      
+      showToast('PDF opened for printing with company header', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showToast('Error generating PDF for print', 'error');
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const directDownload = async (po) => {
+    if (!hasPermission("purchase_order.download")) {
+      showToast("You don't have permission to download purchase orders", 'error');
+      return;
+    }
+    
+    try {
+      // Call PDF endpoint for download
+      const response = await api.get(`/purchase/po/${po.po_number}/pdf`, {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `purchase_order_${po.po_number}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast('Purchase Order PDF downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      showToast('Error downloading PDF', 'error');
+    }
   };
 
-  const handleDownload = () => {
+  const handlePrint = async () => {
+    if (!printData) return;
+    
+    try {
+      // Directly call PDF endpoint and open for printing
+      const response = await api.get(`/purchase/po/${printData.po_number}/pdf`, {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and open in new window for direct printing
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open PDF in new window and trigger print
+      const printWindow = window.open(url, '_blank', 'width=800,height=600');
+      
+      // Wait for PDF to load then trigger print
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        };
+      }
+      
+      // Clean up URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 2000);
+      
+      // Close the modal
+      setShowPrintModal(false);
+      showToast('PDF opened for printing with company header', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showToast('Error generating PDF for print', 'error');
+    }
+  };
+
+  const handleDownload = async () => {
     if (!hasPermission("purchase_order.download")) {
       showToast("You don't have permission to download purchase orders", 'error');
       return;
@@ -487,17 +574,28 @@ export default function PurchaseManagement() {
     
     if (!printData) return;
     
-    const content = generatePOContent(printData);
-    const blob = new Blob([content], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `PO_${printData.po_number}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('PO downloaded successfully', 'success');
+    try {
+      // Call PDF endpoint for download
+      const response = await api.get(`/purchase/po/${printData.po_number}/pdf`, {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `purchase_order_${printData.po_number}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast('Purchase Order PDF downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      showToast('Error downloading PDF', 'error');
+    }
   };
 
   const generatePOContent = (data) => {
@@ -1179,8 +1277,7 @@ export default function PurchaseManagement() {
                               <div className="flex gap-2">
                                 {hasPermission("purchase_order.print") && (
                                   <button 
-                                    onClick={() => openPrintModal(po)}
-                                    disabled={loadingPrint}
+                                    onClick={() => directPrint(po)}
                                     className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200 transition-colors"
                                   >
                                     Print
@@ -1188,8 +1285,7 @@ export default function PurchaseManagement() {
                                 )}
                                 {hasPermission("purchase_order.download") && (
                                   <button 
-                                    onClick={() => openPrintModal(po)}
-                                    disabled={loadingPrint}
+                                    onClick={() => directDownload(po)}
                                     className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm hover:bg-green-200 transition-colors"
                                   >
                                     Download

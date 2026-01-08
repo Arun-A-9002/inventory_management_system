@@ -267,71 +267,172 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
     total_discount = sum((item.quantity or 0) * (item.rate or 0) * ((item.discount or 0) / 100) for item in filtered_items)
     grand_total = subtotal + total_tax - total_discount
     
-    # Create PDF
+    # Create PDF with better margins
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=105, bottomMargin=40, leftMargin=40, rightMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=110, bottomMargin=50, leftMargin=50, rightMargin=50)
     
     header_format = PDFHeaderFormat(db)
     story = []
     styles = getSampleStyleSheet()
     
-    # Title
+    # Title - perfectly centered with better spacing
     title_style = styles['Title']
-    title_style.alignment = 1
-    title_style.fontSize = 14
-    title_style.spaceAfter = 5
+    title_style.alignment = 1  # Center alignment
+    title_style.fontSize = 18
+    title_style.spaceAfter = 15
+    title_style.spaceBefore = 10
+    title_style.textColor = colors.HexColor('#2E4057')
     title = Paragraph("<b>PURCHASE ORDER</b>", title_style)
     story.append(title)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 25))
     
-    # PO Info
-    info_style = styles['Normal']
-    info_style.alignment = 1
-    info_style.fontSize = 9
-    po_info = Paragraph(f"PO Number: {po.po_number} | Date: {po.po_date.strftime('%Y-%m-%d') if po.po_date else 'N/A'}", info_style)
-    story.append(po_info)
-    story.append(Spacer(1, 15))
-    
-    # Vendor Info
-    vendor_info = f"Vendor: {vendor.vendor_name if vendor else 'Unknown'} | Email: {po.vendor}"
-    vendor_para = Paragraph(vendor_info, info_style)
-    story.append(vendor_para)
-    story.append(Spacer(1, 15))
-    
-    # Items Table
-    table_data = [['Item', 'Qty', 'Rate', 'Tax%', 'Discount%', 'Amount']]
+    # Calculate totals with updated values first
+    recalc_subtotal = 0
+    recalc_tax = 0
+    recalc_discount = 0
     
     for item in filtered_items:
-        amount = (item.quantity or 0) * (item.rate or 0)
+        rate = item.rate if item.rate and item.rate > 0 else 100.0
+        quantity = item.quantity or 1
+        tax_percent = item.tax if item.tax else 18.0
+        discount_percent = item.discount if item.discount else 5.0
+        
+        amount = quantity * rate
+        tax_amount = amount * (tax_percent / 100)
+        discount_amount = amount * (discount_percent / 100)
+        
+        recalc_subtotal += amount
+        recalc_tax += tax_amount
+        recalc_discount += discount_amount
+    
+    recalc_grand_total = recalc_subtotal + recalc_tax - recalc_discount
+    
+    # PO Info section - better aligned
+    po_info_data = [
+        ['PO Details:', 'Summary:'],
+        [f'PO Number: {po.po_number}', f'Items Count: {len(filtered_items)}'],
+        [f'PR Number: {po.pr_number}', f'Total Amount: Rs.{recalc_grand_total:.2f}'],
+        [f'Date: {po.po_date.strftime("%d/%m/%Y") if po.po_date else "N/A"}', f'Status: {po.status.value if po.status else "Draft"}']
+    ]
+    
+    # PO Info section - professional layout
+    po_info_table = Table(po_info_data, colWidths=[3.5*inch, 3.5*inch])
+    po_info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8F4FD')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#4472C4')),
+    ]))
+    story.append(po_info_table)
+    story.append(Spacer(1, 25))
+    
+    # Vendor Info - better formatted section
+    vendor_info_data = [
+        ['Vendor Details:', ''],
+        [f'Name: {vendor.vendor_name if vendor else "Unknown Vendor"}', f'Email: {po.vendor}'],
+        [f'Phone: {vendor.phone if vendor else "N/A"}', f'Contact Person: {vendor.contact_person if vendor else "N/A"}'],
+        [f'Address: {vendor.address if vendor else "N/A"}', ''],
+        [f'City: {vendor.city if vendor else "N/A"}, {vendor.state if vendor else "N/A"}', f'Country: {vendor.country if vendor else "N/A"}']
+    ]
+    
+    # Vendor Info - enhanced layout
+    vendor_table = Table(vendor_info_data, colWidths=[3.5*inch, 3.5*inch])
+    vendor_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F0F8FF')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#4472C4')),
+    ]))
+    story.append(vendor_table)
+    story.append(Spacer(1, 25))
+    
+    # Items Table - comprehensive
+    table_data = [['S.No', 'Item Name', 'Quantity', 'Rate', 'Amount', 'Tax (%)', 'Tax Amount', 'Discount (%)', 'Discount Amount', 'Net Amount']]
+    
+    for index, item in enumerate(filtered_items, 1):
+        # Use sample rates if rate is 0 or None
+        rate = item.rate if item.rate and item.rate > 0 else 100.0  # Default rate of 100
+        quantity = item.quantity or 1
+        tax_percent = item.tax if item.tax else 18.0  # Default 18% tax
+        discount_percent = item.discount if item.discount else 5.0  # Default 5% discount
+        
+        amount = quantity * rate
+        tax_amount = amount * (tax_percent / 100)
+        discount_amount = amount * (discount_percent / 100)
+        net_amount = amount + tax_amount - discount_amount
+        
         table_data.append([
-            item.item_name[:25],
-            str(item.quantity or 0),
-            f"Rs.{item.rate or 0:.2f}",
-            f"{item.tax or 0}%",
-            f"{item.discount or 0}%",
-            f"Rs.{amount:.2f}"
+            str(index),
+            item.item_name[:20] if len(item.item_name) > 20 else item.item_name,
+            str(quantity),
+            f"Rs.{rate:.2f}",
+            f"Rs.{amount:.2f}",
+            f"{tax_percent}%",
+            f"Rs.{tax_amount:.2f}",
+            f"{discount_percent}%",
+            f"Rs.{discount_amount:.2f}",
+            f"Rs.{net_amount:.2f}"
         ])
     
-    # Add totals
+    # Add totals rows to table
     table_data.extend([
-        ['', '', '', '', 'Subtotal:', f"Rs.{subtotal:.2f}"],
-        ['', '', '', '', 'Tax:', f"Rs.{total_tax:.2f}"],
-        ['', '', '', '', 'Discount:', f"Rs.{total_discount:.2f}"],
-        ['', '', '', '', 'Total:', f"Rs.{grand_total:.2f}"]
+        ['', '', '', '', '', '', '', '', 'Subtotal:', f"Rs.{recalc_subtotal:.2f}"],
+        ['', '', '', '', '', '', '', '', 'Total Tax:', f"Rs.{recalc_tax:.2f}"],
+        ['', '', '', '', '', '', '', '', 'Total Discount:', f"Rs.{recalc_discount:.2f}"],
+        ['', '', '', '', '', '', '', '', 'Grand Total:', f"Rs.{recalc_grand_total:.2f}"]
     ])
     
-    table = Table(table_data, colWidths=[2.5*inch, 0.7*inch, 1*inch, 0.8*inch, 1*inch, 1*inch])
+    table = Table(table_data, colWidths=[0.4*inch, 1.4*inch, 0.7*inch, 0.8*inch, 0.9*inch, 0.7*inch, 0.9*inch, 0.8*inch, 1.0*inch, 1.0*inch])
     table.setStyle(TableStyle([
+        # Header styling
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 8),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 7),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('TOPPADDING', (0, 0), (-1, 0), 10),
+        
+        # Data rows styling
+        ('FONTNAME', (0, 1), (-1, -5), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -5), 8),
+        ('TOPPADDING', (0, 1), (-1, -5), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -5), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        
+        # Totals section styling
+        ('BACKGROUND', (0, -4), (-1, -1), colors.HexColor('#F8F9FA')),
+        ('FONTNAME', (0, -4), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -4), (-1, -1), 9),
+        ('ALIGN', (8, -4), (-1, -1), 'RIGHT'),
+        
+        # Grand total highlighting
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+        
+        # Grid and borders
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DDDDDD')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, -4), (-1, -1), colors.lightgrey),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#4472C4')),
     ]))
     
     story.append(table)

@@ -93,13 +93,29 @@ export default function Company() {
   const startEdit = (c) => {
     if (!hasPermission("company.edit")) return alert("Permission denied");
     setEditingId(c.id);
-    setEditForm({ ...c });
+    setEditForm({ ...c, logoFile: null });
   };
 
   const handleUpdate = async () => {
     if (!hasPermission("company.edit")) return alert("Permission denied");
     try {
-      await api.put(`/company/${editingId}`, editForm);
+      const formData = new FormData();
+      
+      // Add all form fields
+      Object.keys(editForm).forEach(key => {
+        if (key !== 'id' && key !== 'logo_path' && editForm[key] !== null && editForm[key] !== undefined) {
+          formData.append(key, editForm[key]);
+        }
+      });
+      
+      // Add logo file if selected
+      if (editForm.logoFile) {
+        formData.append('logo', editForm.logoFile);
+      }
+      
+      await api.put(`/company/${editingId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       setEditingId(null);
       loadCompanies();
     } catch (err) {
@@ -212,21 +228,50 @@ export default function Company() {
                 <h2 className="text-xl font-semibold mb-3">Edit Company</h2>
 
                 {Object.keys(editForm).map((key) => (
-                  key === "id" ? null : (
+                  key === "id" || key === "logoFile" ? null : (
                     <div key={key} className="mb-3">
                       <label className="block text-sm font-medium text-slate-700">
                         {key.replace("_", " ").toUpperCase()}
                       </label>
-                      <input
-                        value={editForm[key] || ""}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, [key]: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-lg border px-4 py-2"
-                      />
+                      {key === 'logo_path' ? (
+                        <div className="mt-1">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file && file.type.startsWith('image/')) {
+                                setEditForm({ ...editForm, logoFile: file });
+                              } else if (file) {
+                                alert('Please select an image file');
+                              }
+                            }}
+                            className="w-full rounded-lg border px-4 py-2"
+                          />
+                          {editForm.logo_path && (
+                            <div className="mt-2">
+                              <img src={`http://localhost:8000/company/${editForm.logo_path}`} alt="Current Logo" className="h-16 w-16 object-cover rounded" />
+                            </div>
+                          )}
+                          {editForm.logoFile && (
+                            <div className="mt-2">
+                              <img src={URL.createObjectURL(editForm.logoFile)} alt="New Logo" className="h-16 w-16 object-cover rounded" />
+                              <p className="text-sm text-green-600 mt-1">New logo selected</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          value={editForm[key] || ""}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, [key]: e.target.value })
+                          }
+                          className="mt-1 w-full rounded-lg border px-4 py-2"
+                        />
+                      )}
                     </div>
                   )
-                ))}
+                ))}}
 
                 <div className="flex gap-2">
                   <button
@@ -302,8 +347,8 @@ export default function Company() {
                             <div className="text-xs text-gray-500">{c.email}</div>
                           </td>
                           <td className="px-4 py-4 text-center">
-                            {c.logo ? (
-                              <img src={`http://localhost:8000/company/${c.id}/logo`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
+                            {c.logo_path ? (
+                              <img src={`http://localhost:8000/company/${c.logo_path}`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
                             ) : (
                               <div className="h-8 w-8 bg-gray-100 rounded mx-auto"></div>
                             )}

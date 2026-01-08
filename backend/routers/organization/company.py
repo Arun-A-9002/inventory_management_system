@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Form
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from sqlalchemy.orm import Session
 import os
 import uuid
@@ -87,14 +87,25 @@ async def create_company(
             raise HTTPException(400, "Only one company is allowed per organization")
         
         # Handle logo upload
-        logo_data = None
+        logo_path = None
         if logo and logo.filename:
             # Validate file type
             if not logo.content_type.startswith('image/'):
                 raise HTTPException(400, "Only image files are allowed")
             
-            # Read file content as binary - don't decode
-            logo_data = await logo.read()
+            # Generate unique filename
+            file_extension = logo.filename.split('.')[-1]
+            unique_filename = f"company_logo_{uuid.uuid4().hex[:8]}.{file_extension}"
+            
+            # Save to uploads directory
+            file_path = UPLOAD_DIR / unique_filename
+            print(f"DEBUG: Saving logo to: {file_path}")
+            with open(file_path, "wb") as buffer:
+                content = await logo.read()
+                buffer.write(content)
+            print(f"DEBUG: Logo saved successfully, size: {len(content)} bytes")
+            
+            logo_path = f"uploads/{unique_filename}"
             
         company = Company(
             name=name,
@@ -104,7 +115,7 @@ async def create_company(
             contact_person=contact_person,
             email=email,
             phone=phone,
-            logo=logo_data
+            logo_path=logo_path
         )
         db.add(company)
         db.commit()
@@ -122,7 +133,7 @@ async def create_company(
                 "address": company.address,
                 "phone": company.phone,
                 "email": company.email,
-                "logo": "Binary data" if company.logo else None
+                "logo_path": company.logo_path
             },
             description=f"Created company {company.name}",
             request=request
@@ -187,7 +198,7 @@ async def update_company(
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": "Binary data" if company.logo else None
+        "logo_path": company.logo_path
     }
 
     # Update fields if provided
@@ -212,9 +223,25 @@ async def update_company(
         if not logo.content_type.startswith('image/'):
             raise HTTPException(400, "Only image files are allowed")
         
-        # Read file content as binary
-        logo_data = await logo.read()
-        company.logo = logo_data
+        # Delete old logo file if exists
+        if company.logo_path:
+            old_file_path = UPLOAD_DIR / company.logo_path.split('/')[-1]
+            if old_file_path.exists():
+                old_file_path.unlink()
+        
+        # Generate unique filename
+        file_extension = logo.filename.split('.')[-1]
+        unique_filename = f"company_logo_{uuid.uuid4().hex[:8]}.{file_extension}"
+        
+        # Save to uploads directory
+        file_path = UPLOAD_DIR / unique_filename
+        print(f"DEBUG: Updating logo to: {file_path}")
+        with open(file_path, "wb") as buffer:
+            content = await logo.read()
+            buffer.write(content)
+        print(f"DEBUG: Logo updated successfully, size: {len(content)} bytes")
+        
+        company.logo_path = f"uploads/{unique_filename}"
 
     db.commit()
     db.refresh(company)
@@ -225,7 +252,7 @@ async def update_company(
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": "Binary data" if company.logo else None
+        "logo_path": company.logo_path
     }
     
     # Audit log
@@ -262,7 +289,7 @@ def delete_company(company_id: int, request: Request, db: Session = Depends(get_
         "address": company.address,
         "phone": company.phone,
         "email": company.email,
-        "logo": "Binary data" if company.logo else None
+        "logo_path": company.logo_path
     }
 
     db.delete(company)
@@ -285,27 +312,38 @@ def delete_company(company_id: int, request: Request, db: Session = Depends(get_
 
 
 # --------------------------
-# GET COMPANY LOGO
+# SERVE LOGO FILES
+# --------------------------
+@router.get("/uploads/{filename}")
+def serve_logo_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(404, "File not found")
+    return FileResponse(file_path)
+
+
+# --------------------------
+# GET COMPANY LOGO PATH
 # --------------------------
 @router.get("/{company_id}/logo")
-def get_company_logo(company_id: int, db: Session = Depends(get_tenant_db)):
+def get_company_logo_path(company_id: int, db: Session = Depends(get_tenant_db)):
     company = db.query(Company).filter(Company.id == company_id).first()
-    if not company or not company.logo:
+    if not company or not company.logo_path:
         raise HTTPException(404, "Logo not found")
     
-    return Response(content=company.logo, media_type="image/png")
+    return {"logo_path": company.logo_path}
 
 
 # --------------------------
-# GET FIRST COMPANY LOGO (for reports)
+# GET FIRST COMPANY LOGO PATH (for reports)
 # --------------------------
 @router.get("/logo")
-def get_first_company_logo(db: Session = Depends(get_tenant_db)):
+def get_first_company_logo_path(db: Session = Depends(get_tenant_db)):
     company = db.query(Company).first()
-    if not company or not company.logo:
+    if not company or not company.logo_path:
         raise HTTPException(404, "Logo not found")
     
-    return Response(content=company.logo, media_type="image/png")
+    return {"logo_path": company.logo_path}
 
 
 # --------------------------
@@ -320,7 +358,6 @@ def check_logo_status(db: Session = Depends(get_tenant_db)):
     return {
         "status": "found",
         "company_name": company.name,
-        "has_logo": company.logo is not None,
-        "logo_size": len(company.logo) if company.logo else 0,
-        "logo_type": type(company.logo).__name__ if company.logo else None
+        "has_logo": company.logo_path is not None,
+        "logo_path": company.logo_path
     }

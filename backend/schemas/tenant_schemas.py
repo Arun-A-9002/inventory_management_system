@@ -110,7 +110,7 @@ class CompanyBase(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    logo: Optional[bytes] = None
+    logo_path: Optional[str] = None
 
 
 class CompanyCreate(CompanyBase):
@@ -125,7 +125,7 @@ class CompanyUpdate(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    logo: Optional[bytes] = None
+    logo_path: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -138,6 +138,7 @@ class CompanyResponse(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    logo_path: Optional[str] = None
     is_active: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]

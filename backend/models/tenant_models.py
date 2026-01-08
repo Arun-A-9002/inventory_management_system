@@ -99,7 +99,7 @@ class Company(TenantBase):
     email = Column(String(191), nullable=True)
     phone = Column(String(100), nullable=True)
 
-    logo = Column(LargeBinary, nullable=True)
+    logo_path = Column(String(255), nullable=True)
 
     is_active = Column(Boolean, default=True)
 
