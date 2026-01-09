@@ -294,24 +294,33 @@ export default function PurchaseManagement() {
     }
   };
 
-  // Delete PR
-  const deletePR = async (prId) => {
-    if (!hasPermission("purchase_request.delete")) {
-      showToast("You don't have permission to delete purchase requests", 'error');
+  // Toggle PR Status (Active/Inactive)
+  const togglePRStatus = async (pr) => {
+    if (!hasPermission("purchase_request.status")) {
+      showToast("You don't have permission to change purchase request status", 'error');
       return;
     }
     
-    const confirmDelete = window.confirm('Are you sure you want to delete this Purchase Request?');
-    if (!confirmDelete) {
-      return;
-    }
+    const newStatus = pr.status === 'Approved' ? 'Draft' : 'Approved';
+    
+    // Update local state immediately
+    setPrList(prevList => 
+      prevList.map(item => 
+        item.id === pr.id ? { ...item, status: newStatus } : item
+      )
+    );
     
     try {
-      await api.delete(`/purchase/${prId}`);
-      showToast('Purchase Request deleted successfully', 'success');
-      fetchPRList();
+      await api.patch(`/purchase/${pr.id}/status?status=${newStatus}`);
+      showToast(`PR ${newStatus === 'Approved' ? 'activated' : 'deactivated'} successfully`, 'success');
     } catch (err) {
-      showToast('Failed to delete Purchase Request', 'error');
+      // Revert on error
+      setPrList(prevList => 
+        prevList.map(item => 
+          item.id === pr.id ? { ...item, status: pr.status } : item
+        )
+      );
+      showToast('Failed to update PR status', 'error');
       console.error(err);
     }
   };
@@ -1172,34 +1181,43 @@ export default function PurchaseManagement() {
                             </select>
                           </td>
                           <td className="py-3 px-4">
-                            <div className="flex gap-2">
+                            <div className="flex items-center space-x-2">
                               {hasPermission("purchase_request.edit") && (
                                 <button 
                                   onClick={() => editPR(pr)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm"
+                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  title="Edit PR"
                                 >
-                                  Edit
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
                                 </button>
                               )}
-                              {hasPermission("purchase_request.delete") && (
-                                <button 
-                                  onClick={() => deletePR(pr.id)}
-                                  className="text-red-600 hover:text-red-800 text-sm"
+                              {hasPermission("purchase_request.status") && (
+                                <button
+                                  onClick={() => togglePRStatus(pr)}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                    pr.status === 'Approved'
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  }`}
+                                  title={pr.status === 'Approved' ? "Click to Deactivate" : "Click to Activate"}
                                 >
-                                  Delete
+                                  {pr.status === 'Approved' ? 'Deactivate' : 'Activate'}
                                 </button>
                               )}
                               {hasPermission("purchase_request.send_po") && (
                                 <button 
                                   onClick={() => openEmailModal(pr)}
                                   disabled={pr.status !== 'Approved'}
-                                  className={`text-sm px-2 py-1 rounded ${
+                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                                     pr.status === 'Approved' 
-                                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
                                       : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                   }`}
+                                  title={pr.status === 'Approved' ? 'Send Purchase Order' : 'Approve PR first'}
                                 >
-                                  Send Purchase Order
+                                  Send PO
                                 </button>
                               )}
                             </div>
@@ -1246,13 +1264,14 @@ export default function PurchaseManagement() {
                       <th className="text-left py-3 px-4 font-medium text-slate-700">Vendor</th>
                       <th className="text-left py-3 px-4 font-medium text-slate-700">PR Number</th>
                       <th className="text-left py-3 px-4 font-medium text-slate-700">Date</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Status</th>
                       <th className="text-left py-3 px-4 font-medium text-slate-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {poList.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="text-center py-8 text-slate-500">
+                        <td colSpan="7" className="text-center py-8 text-slate-500">
                           No purchase orders found
                         </td>
                       </tr>
@@ -1270,28 +1289,30 @@ export default function PurchaseManagement() {
                           <td className="py-3 px-4">{po.pr_number}</td>
                           <td className="py-3 px-4">{new Date(po.po_date).toLocaleDateString()}</td>
                           <td className="py-3 px-4">
-                            <div className="flex items-center justify-between">
-                              <span className="bg-green-100 text-green-700 text-sm px-3 py-1 rounded">
-                                Purchase Order Sent
-                              </span>
-                              <div className="flex gap-2">
-                                {hasPermission("purchase_order.print") && (
-                                  <button 
-                                    onClick={() => directPrint(po)}
-                                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200 transition-colors"
-                                  >
-                                    Print
-                                  </button>
-                                )}
-                                {hasPermission("purchase_order.download") && (
-                                  <button 
-                                    onClick={() => directDownload(po)}
-                                    className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm hover:bg-green-200 transition-colors"
-                                  >
-                                    Download
-                                  </button>
-                                )}
-                              </div>
+                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
+                              Purchase Order Sent
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-2">
+                              {hasPermission("purchase_order.print") && (
+                                <button 
+                                  onClick={() => directPrint(po)}
+                                  className="px-3 py-1 rounded text-xs font-medium transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                  title="Print Purchase Order"
+                                >
+                                  Print
+                                </button>
+                              )}
+                              {hasPermission("purchase_order.download") && (
+                                <button 
+                                  onClick={() => directDownload(po)}
+                                  className="px-3 py-1 rounded text-xs font-medium transition-colors bg-green-100 text-green-700 hover:bg-green-200"
+                                  title="Download Purchase Order"
+                                >
+                                  Download
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -555,14 +555,19 @@ export default function Vendor() {
                             </button>
                             )}
                             {hasPermission("vendors.delete") && (
-                            <button 
-                              onClick={() => handleDelete(vendor.id)} 
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete Vendor"
+                            <button
+                              onClick={() => {
+                                const newStatus = (vendor.status === "active" || !vendor.status) ? "inactive" : "active";
+                                updateVendorStatus(vendor.id, newStatus === "active" ? "Active" : "Inactive");
+                              }}
+                              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                (vendor.status === "active" || !vendor.status)
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                              }`}
+                              title={(vendor.status === "active" || !vendor.status) ? "Click to Deactivate" : "Click to Activate"}
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
+                              {(vendor.status === "active" || !vendor.status) ? 'Deactivate' : 'Activate'}
                             </button>
                             )}
                           </div>

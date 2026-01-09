@@ -1526,7 +1526,7 @@ export default function ExternalTransfer() {
           </div>
         </div>
       )}
-      )}
+      )
       </>
       )}
     </div>

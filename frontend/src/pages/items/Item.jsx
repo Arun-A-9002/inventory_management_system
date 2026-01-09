@@ -81,6 +81,7 @@ export default function Item() {
       setSubCategories([]);
     } catch (err) {
       console.error("Failed to load master data:", err);
+      showToast("Failed to load master data", 'error');
     }
   };
 
@@ -95,6 +96,7 @@ export default function Item() {
       setSubCategories(res.data || []);
     } catch (err) {
       console.error("Failed to load subcategories:", err);
+      showToast("Failed to load subcategories", 'error');
       setSubCategories([]);
     }
   };
@@ -294,6 +296,7 @@ export default function Item() {
       }
     } else if (availableBatches.length > 0) {
       // Show batch selector if no batch selected
+      showToast('Please select a batch to proceed', 'warning');
       setShowBatchSelector(true);
       return;
     }
@@ -306,7 +309,7 @@ export default function Item() {
         quantity: extraQuantity
       });
       
-      showToast(`Successfully took ${extraQuantity} units`, 'success');
+      showToast(`Successfully took ${extraQuantity} units from ${editingItem.name}`, 'success');
       setShowEditDialog(false);
       setShowBatchSelector(false);
       loadItems(); // Refresh the items list
@@ -326,6 +329,7 @@ export default function Item() {
 
     // Check if batch is selected for return
     if (availableBatches.length > 0 && !selectedBatch) {
+      showToast('Please select a batch to return to', 'warning');
       setShowBatchSelector(true);
       return;
     }
@@ -334,7 +338,7 @@ export default function Item() {
       // Return quantity to stock using the new return endpoint
       await api.post(`/stock-overview/return-stock?item_name=${encodeURIComponent(editingItem.name)}&batch_no=${selectedBatch || 'default'}&quantity=${returnQuantity}`);
       
-      showToast(`Successfully returned ${returnQuantity} units to stock`, 'success');
+      showToast(`Successfully returned ${returnQuantity} units of ${editingItem.name} to stock`, 'success');
       setShowEditDialog(false);
       setShowBatchSelector(false);
       loadItems(); // Refresh the items list
@@ -347,6 +351,7 @@ export default function Item() {
   const handleBatchSelection = (batchNo) => {
     setSelectedBatch(batchNo);
     setShowBatchSelector(false);
+    showToast(`Batch ${batchNo} selected`, 'success');
   };
 
   const handleDeactivate = async (id) => {
@@ -354,14 +359,19 @@ export default function Item() {
       showToast("Permission denied", 'error');
       return;
     }
-    if (!window.confirm("Deactivate this item?")) return;
+    
+    const item = items.find(item => item.id === id);
+    const action = item.is_active ? "deactivate" : "activate";
+    
+    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} this item?`)) return;
+    
     try {
-      await api.delete(`/items/${id}`);
-      showToast("Item deactivated successfully", 'success');
+      await api.put(`/items/${id}`, { ...item, is_active: !item.is_active });
+      showToast(`Item ${action}d successfully`, 'success');
       loadItems();
     } catch (err) {
       console.error(err);
-      showToast("Failed to deactivate item", 'error');
+      showToast(`Failed to ${action} item`, 'error');
     }
   };
 
@@ -407,6 +417,7 @@ const generateBarcode = () => {
     if (container) {
       container.innerHTML = '';
       container.appendChild(canvas);
+      showToast("Barcode generated successfully", 'success');
     }
   }, 100);
 };
@@ -419,6 +430,7 @@ const generateQR = () => {
   }
   const value = `QR-${form.item_code}`;
   setGeneratedQR(value);
+  showToast("QR code generated successfully", 'success');
 };
 
 // Print
@@ -445,6 +457,7 @@ const downloadBarcode = () => {
     link.download = `${form.item_code}-barcode.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
+    showToast("Barcode downloaded successfully", 'success');
   } catch (err) {
     console.error("Download failed:", err);
     showToast("Failed to download barcode", 'error');
@@ -478,6 +491,7 @@ const downloadQR = () => {
       link.download = `${form.item_code}-qrcode.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
+      showToast("QR code downloaded successfully", 'success');
     };
     
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
@@ -616,12 +630,14 @@ const downloadQR = () => {
                         {hasPermission("items.delete") && (
                         <button
                           onClick={() => handleDeactivate(item.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete Item"
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            item.is_active 
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title={item.is_active ? "Click to Deactivate" : "Click to Activate"}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          {item.is_active ? 'Deactivate' : 'Activate'}
                         </button>
                         )}
                       </div>
