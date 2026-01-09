@@ -364,20 +364,28 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
     story.append(vendor_table)
     story.append(Spacer(1, 25))
     
-    # Items Table - comprehensive
+    # Items Table with proper column widths
     table_data = [['S.No', 'Item Name', 'Quantity', 'Rate', 'Amount', 'Tax (%)', 'Tax Amount', 'Discount (%)', 'Discount Amount', 'Net Amount']]
     
+    # Calculate totals
+    recalc_subtotal = 0
+    recalc_tax = 0
+    recalc_discount = 0
+    
     for index, item in enumerate(filtered_items, 1):
-        # Use sample rates if rate is 0 or None
-        rate = item.rate if item.rate and item.rate > 0 else 100.0  # Default rate of 100
+        rate = item.rate if item.rate and item.rate > 0 else 100.0
         quantity = item.quantity or 1
-        tax_percent = item.tax if item.tax else 18.0  # Default 18% tax
-        discount_percent = item.discount if item.discount else 5.0  # Default 5% discount
+        tax_percent = item.tax if item.tax else 18.0
+        discount_percent = item.discount if item.discount else 5.0
         
         amount = quantity * rate
         tax_amount = amount * (tax_percent / 100)
         discount_amount = amount * (discount_percent / 100)
         net_amount = amount + tax_amount - discount_amount
+        
+        recalc_subtotal += amount
+        recalc_tax += tax_amount
+        recalc_discount += discount_amount
         
         table_data.append([
             str(index),
@@ -392,7 +400,9 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
             f"Rs.{net_amount:.2f}"
         ])
     
-    # Add totals rows to table
+    recalc_grand_total = recalc_subtotal + recalc_tax - recalc_discount
+    
+    # Add totals rows
     table_data.extend([
         ['', '', '', '', '', '', '', '', 'Subtotal:', f"Rs.{recalc_subtotal:.2f}"],
         ['', '', '', '', '', '', '', '', 'Total Tax:', f"Rs.{recalc_tax:.2f}"],
@@ -400,7 +410,22 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
         ['', '', '', '', '', '', '', '', 'Grand Total:', f"Rs.{recalc_grand_total:.2f}"]
     ])
     
-    table = Table(table_data, colWidths=[0.4*inch, 1.4*inch, 0.7*inch, 0.8*inch, 0.9*inch, 0.7*inch, 0.9*inch, 0.8*inch, 1.0*inch, 1.0*inch])
+    # Calculate proper column widths
+    page_width = A4[0] - 100  # Account for margins
+    col_widths = [
+        page_width * 0.06,  # S.No
+        page_width * 0.20,  # Item Name
+        page_width * 0.08,  # Quantity
+        page_width * 0.10,  # Rate
+        page_width * 0.10,  # Amount
+        page_width * 0.08,  # Tax %
+        page_width * 0.10,  # Tax Amount
+        page_width * 0.08,  # Discount %
+        page_width * 0.10,  # Discount Amount
+        page_width * 0.10   # Net Amount
+    ]
+    
+    table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
         # Header styling
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),

@@ -55,6 +55,9 @@ import DamagedReturns from "./pages/external-transfer/DamagedReturns";
 
 //audit log
 import AuditLog from "./pages/AuditLog";
+
+//dispensed items
+import DispensedItems from "./pages/DispensedItems";
 function App() {
   return (
     <BrowserRouter>
@@ -122,6 +125,9 @@ function App() {
           
           {/* Audit Log */}
           <Route path="audit-log" element={<AuditLog />} />
+          
+          {/* Dispensed Items */}
+          <Route path="dispensed-items" element={<DispensedItems />} />
             
         </Route>
 

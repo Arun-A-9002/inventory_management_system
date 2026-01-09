@@ -34,7 +34,11 @@ export default function GoodsReceipt() {
       mrp: 0,
       tax: 0,
       batch_no: "",
+      date_type: "expiry",
+      mfg_date: "",
       expiry_date: "",
+      warranty_period: 0,
+      warranty_period_type: "years",
       showPieceCalc: false,
       container: 0,
       package: 0,
@@ -239,7 +243,11 @@ export default function GoodsReceipt() {
       mrp: 0,
       tax: 0,
       batch_no: "",
+      date_type: "expiry",
+      mfg_date: "",
       expiry_date: "",
+      warranty_period: 0,
+      warranty_period_type: "years",
       showPieceCalc: false,
       container: 0,
       package: 0,
@@ -522,13 +530,19 @@ export default function GoodsReceipt() {
       return;
     }
 
-    // Validate that each item has either expiry date or warranty date
-    const itemsWithoutDates = grnItems.filter(item => 
-      item.item_name && (!item.expiry_date && !item.start_date)
-    );
+    // Validate that each item has either expiry date or warranty period
+    const itemsWithoutDates = grnItems.filter(item => {
+      if (!item.item_name) return false;
+      
+      if (item.date_type === 'warranty') {
+        return !item.warranty_period || item.warranty_period <= 0;
+      } else {
+        return !item.expiry_date;
+      }
+    });
     
     if (itemsWithoutDates.length > 0) {
-      showToast("Each item must have either an expiry date or warranty date", 'error');
+      showToast("Each item must have either an expiry date or warranty period", 'error');
       return;
     }
 
@@ -547,10 +561,10 @@ export default function GoodsReceipt() {
           rate: item.price,
           batches: [{
             batch_no: item.batch_no,
-            mfg_date: null,
-            expiry_date: item.expiry_date && item.date_type === 'warranty' 
-              ? `${item.expiry_date}-01` // Convert YYYY-MM to YYYY-MM-01
-              : item.expiry_date || null,
+            mfg_date: item.mfg_date || null,
+            expiry_date: item.date_type === 'expiry' ? item.expiry_date || null : null,
+            warranty_period: item.date_type === 'warranty' ? item.warranty_period || null : null,
+            warranty_period_type: item.date_type === 'warranty' ? item.warranty_period_type || null : null,
             qty: item.po_qty
           }]
         }))
@@ -583,7 +597,11 @@ export default function GoodsReceipt() {
         mrp: 0,
         tax: 0,
         batch_no: "",
-        expiry_date: ""
+        date_type: "expiry",
+        mfg_date: "",
+        expiry_date: "",
+        warranty_period: 0,
+        warranty_period_type: "years"
       }]);
       setEditMode({ isEditing: false, grnId: null });
       
@@ -1050,39 +1068,50 @@ export default function GoodsReceipt() {
                                 <option value="warranty">Warranty Date</option>
                               </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            
+                            {item.date_type === 'warranty' ? (
                               <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                  {item.date_type === 'warranty' ? 'Manufacturing Date' : 'Manufacturing Date'}
-                                </label>
-                                <input
-                                  type="date"
-                                  value={item.start_date || ''}
-                                  onChange={(e) => updateItem(idx, 'start_date', e.target.value)}
-                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">
-                                  {item.date_type === 'warranty' ? 'Warranty (MM/YYYY)' : 'Expiry Date'}
-                                </label>
-                                {item.date_type === 'warranty' ? (
+                                <label className="block text-xs font-medium text-slate-600 mb-1">Warranty Period *</label>
+                                <div className="flex gap-1">
                                   <input
-                                    type="month"
-                                    value={item.expiry_date}
-                                    onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                                    type="number"
+                                    placeholder="Period"
+                                    value={item.warranty_period || ''}
+                                    onChange={(e) => updateItem(idx, 'warranty_period', parseInt(e.target.value) || 0)}
+                                    className="w-2/3 rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                  <select
+                                    value={item.warranty_period_type || 'years'}
+                                    onChange={(e) => updateItem(idx, 'warranty_period_type', e.target.value)}
+                                    className="w-1/3 rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  >
+                                    <option value="months">Months</option>
+                                    <option value="years">Years</option>
+                                  </select>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Manufacturing Date</label>
+                                  <input
+                                    type="date"
+                                    value={item.mfg_date || ''}
+                                    onChange={(e) => updateItem(idx, 'mfg_date', e.target.value)}
                                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                   />
-                                ) : (
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">Expiry Date</label>
                                   <input
                                     type="date"
                                     value={item.expiry_date}
                                     onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
                                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                   />
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1155,7 +1184,11 @@ export default function GoodsReceipt() {
                           mrp: 0,
                           tax: 0,
                           batch_no: "",
-                          expiry_date: ""
+                          date_type: "expiry",
+                          mfg_date: "",
+                          expiry_date: "",
+                          warranty_period: 0,
+                          warranty_period_type: "years"
                         }]);
                       }}
                       className="w-full bg-slate-500 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"

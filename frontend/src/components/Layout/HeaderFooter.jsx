@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import api from "../../api";
 
-export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
+export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onToggleDispensedSidebar }) {
   const [userInfo, setUserInfo] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -145,6 +145,17 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0 }) {
               </div>
             </div>
           </div>
+
+          {/* Dispensed Items Button */}
+          <button 
+            onClick={onToggleDispensedSidebar}
+            className="flex items-center px-4 py-2.5 bg-white/70 backdrop-blur-sm text-gray-700 rounded-xl border border-gray-200/50 hover:bg-white/90 hover:shadow-md transition-all duration-200 group"
+          >
+            <svg className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <span className="text-sm font-medium">Dispensed</span>
+          </button>
 
           {/* Sync Button */}
           <button 

@@ -30,10 +30,19 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
             grn = db.query(GRN).filter(GRN.id == grn_item.grn_id).first()
             batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
             for batch in batches:
-                # Check if batch has warranty dates
+                # Check if batch has warranty dates or warranty period
                 warranty_info = None
-                if hasattr(batch, 'warranty_start_date') and hasattr(batch, 'warranty_end_date'):
+                warranty_display = "—"
+                if hasattr(batch, 'warranty_period') and hasattr(batch, 'warranty_period_type'):
+                    if batch.warranty_period and batch.warranty_period_type:
+                        warranty_display = f"{batch.warranty_period} {batch.warranty_period_type}"
+                        warranty_info = {
+                            "period": batch.warranty_period,
+                            "period_type": batch.warranty_period_type
+                        }
+                elif hasattr(batch, 'warranty_start_date') and hasattr(batch, 'warranty_end_date'):
                     if batch.warranty_start_date and batch.warranty_end_date:
+                        warranty_display = f"{batch.warranty_start_date.strftime('%d/%m/%Y')} - {batch.warranty_end_date.strftime('%d/%m/%Y')}"
                         warranty_info = {
                             "start_date": batch.warranty_start_date.strftime("%d/%m/%Y"),
                             "end_date": batch.warranty_end_date.strftime("%d/%m/%Y")
@@ -45,7 +54,8 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
                     "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
                     "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
                     "location": grn.store if grn else "Main Store",
-                    "warranty": warranty_info
+                    "warranty": warranty_info,
+                    "warranty_display": warranty_display
                 }
                 all_batches.append(batch_info)
                 total_qty += batch.qty
@@ -61,8 +71,9 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
         # Determine status
         status = "Good" if total_qty > item.min_stock else "Low Stock"
         
-        # If there are batches, show the first batch info by default
+        # If there are batches, show the first batch warranty info by default
         default_batch = all_batches[0] if all_batches else None
+        default_warranty = default_batch["warranty_display"] if default_batch else "—"
         
         result.append({
             "id": item.id,
@@ -71,7 +82,9 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
             "location": location,
             "available_qty": int(total_qty),
             "min_stock": item.min_stock or 0,
-            "warranty": "—",
+            "warranty": default_warranty,
+            "warranty_period": default_batch["warranty"]["period"] if default_batch and default_batch["warranty"] and "period" in default_batch["warranty"] else None,
+            "warranty_period_type": default_batch["warranty"]["period_type"] if default_batch and default_batch["warranty"] and "period_type" in default_batch["warranty"] else None,
             "batch_no": default_batch["batch_no"] if default_batch else "—",
             "expiry_date": default_batch["expiry_date"] if default_batch and default_batch["expiry_date"] else "—",
             "status": status,

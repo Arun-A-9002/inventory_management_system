@@ -58,8 +58,16 @@ export default function StockManagement() {
     
     if (window.confirm(`Dispense entire batch ${batchNo} (${quantity} units) for ${item.item_name}?`)) {
       try {
-        await api.post(`/stock-overview/dispense/${item.id}?batch_index=${batchIndex}&quantity=${quantity}`);
-        alert('Item dispensed successfully');
+        // Use the new dispensed items endpoint
+        await api.post('/consumption/dispense-batch', {
+          item_name: item.item_name,
+          batch_no: batchNo,
+          quantity: quantity,
+          location: batch.location || item.location,
+          status: isExpired(batch.expiry_date) ? 'Expired' : 'Good'
+        });
+        
+        alert('Item dispensed successfully and recorded in dispensed items');
         loadData();
         setViewModal({ isOpen: false, item: null });
       } catch (error) {
@@ -169,14 +177,24 @@ export default function StockManagement() {
                       
                       // Handle different warranty data formats
                       if (warranty) {
+                        // If warranty is an object with period and period_type
+                        if (warranty.period && warranty.period_type) {
+                          return (
+                            <div className="text-xs">
+                              <div className="text-blue-600 font-semibold">
+                                Warranty: {warranty.period} {warranty.period_type}
+                              </div>
+                            </div>
+                          );
+                        }
                         // If warranty is an object with end_date
-                        if (warranty.end_date) {
+                        else if (warranty.end_date) {
                           return (
                             <div className="text-xs">
                               <div className={`${
-                                new Date(warranty.end_date) <= new Date() 
+                                new Date(warranty.end_date.split('/').reverse().join('-')) <= new Date() 
                                   ? 'text-red-600 font-semibold' 
-                                  : new Date(warranty.end_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                  : new Date(warranty.end_date.split('/').reverse().join('-')) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
                                   ? 'text-orange-600 font-semibold'
                                   : ''
                               }`}>
@@ -191,9 +209,9 @@ export default function StockManagement() {
                           return (
                             <div className="text-xs">
                               <div className={`${
-                                new Date(warranty) <= new Date() 
+                                new Date(warranty.split('/').reverse().join('-')) <= new Date() 
                                   ? 'text-red-600 font-semibold' 
-                                  : new Date(warranty) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                  : new Date(warranty.split('/').reverse().join('-')) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
                                   ? 'text-orange-600 font-semibold'
                                   : ''
                               }`}>
@@ -204,9 +222,29 @@ export default function StockManagement() {
                         }
                       }
                       
-                      // Check if item has warranty_period and calculate warranty end date
-                      if (s.warranty_period && s.warranty_period > 0) {
-                        // Assume warranty starts from today or creation date
+                      // Check if item has warranty_period and warranty_period_type
+                      if ((s.warranty_period && s.warranty_period > 0) || (selectedBatch?.warranty_display)) {
+                        if (selectedBatch?.warranty_display && selectedBatch.warranty_display !== '—') {
+                          return (
+                            <div className="text-xs">
+                              <div className="text-blue-600 font-semibold">
+                                Warranty: {selectedBatch.warranty_display}
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        if (s.warranty_period && s.warranty_period_type) {
+                          return (
+                            <div className="text-xs">
+                              <div className="text-blue-600 font-semibold">
+                                Warranty: {s.warranty_period} {s.warranty_period_type}
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        // Fallback: Assume warranty starts from today or creation date
                         const warrantyEndDate = new Date();
                         warrantyEndDate.setMonth(warrantyEndDate.getMonth() + s.warranty_period);
                         const warrantyEndStr = warrantyEndDate.toLocaleDateString();

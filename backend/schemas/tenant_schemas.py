@@ -647,6 +647,8 @@ class BatchCreate(BaseModel):
     batch_no: str
     mfg_date: Optional[date]
     expiry_date: Optional[date]
+    warranty_period: Optional[int] = None  # Warranty period value
+    warranty_period_type: Optional[str] = None  # months or years
     qty: float
 
 # -------- GRN ITEM --------

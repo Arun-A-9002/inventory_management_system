@@ -4,6 +4,7 @@ from sqlalchemy import text, func
 from typing import List
 from datetime import datetime, timedelta
 import json
+import io
 
 from database import get_tenant_db
 from models.tenant_models import ExternalTransfer, ExternalTransferItem, ExternalTransferStatus, AuditLog
@@ -18,6 +19,8 @@ from utils.permissions import (
     require_external_transfer_print, require_external_transfer_download, 
     require_external_transfer_return, require_damaged_returns_view
 )
+from utils.universal_pdf_generator import UniversalPDFGenerator
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/external-transfers", tags=["External Transfers"])
 
@@ -1079,6 +1082,292 @@ def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_tenant
             })
         
         return transactions
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{transfer_id}/print-pdf")
+def print_external_transfer_pdf(transfer_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_print())):
+    """Generate PDF for external transfer with company header"""
+    try:
+        # Get transfer details
+        transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
+        if not transfer:
+            raise HTTPException(status_code=404, detail="Transfer not found")
+        
+        # Get transaction history
+        from sqlalchemy import text
+        transactions_result = db.execute(
+            text("""
+            SELECT 
+                ett.transaction_type,
+                ett.quantity,
+                ett.transaction_date,
+                ett.remarks,
+                eti.item_name,
+                eti.batch_no,
+                CASE 
+                    WHEN ett.return_staff_name IS NOT NULL AND ett.return_staff_name != '' 
+                    THEN ett.return_staff_name
+                    ELSE et.staff_name
+                END as returned_by
+            FROM external_transfer_transactions ett
+            JOIN external_transfer_items eti ON ett.item_id = eti.id
+            JOIN external_transfers et ON ett.transfer_id = et.id
+            WHERE ett.transfer_id = :transfer_id
+            ORDER BY ett.transaction_date ASC
+            """),
+            {"transfer_id": transfer_id}
+        ).fetchall()
+        
+        # Prepare data for items table only (no transaction history)
+        headers = ['Item Name', 'Batch No', 'Original Qty', 'Returned Qty', 'Damaged Qty', 'Balance', 'Status']
+        data = []
+        
+        for item in transfer.items:
+            total_returned = (item.returned_quantity or 0) + (item.damaged_quantity or 0)
+            balance = item.quantity - total_returned
+            status = 'Completed' if balance <= 0 else 'Pending'
+            
+            data.append([
+                item.item_name,
+                item.batch_no or '-',
+                str(item.quantity),
+                str(item.returned_quantity or 0),
+                str(item.damaged_quantity or 0),
+                str(balance),
+                status
+            ])
+        
+        # Generate PDF using universal generator
+        pdf_generator = UniversalPDFGenerator(db)
+        title = f"EXTERNAL TRANSFER REPORT - {transfer.transfer_no}"
+        
+        # Add transfer details after title
+        transfer_details = [
+            f"Staff: {transfer.staff_name} (ID: {transfer.staff_id})",
+            f"Staff Location: {transfer.staff_location}",
+            f"Transfer Location: {transfer.location}", 
+            f"Status: {transfer.status}",
+            f"Created: {transfer.created_at.strftime('%d/%m/%Y %H:%M')}"
+        ]
+        
+        if transfer.sent_at:
+            transfer_details.append(f"Sent: {transfer.sent_at.strftime('%d/%m/%Y %H:%M')}")
+        if transfer.returned_at:
+            transfer_details.append(f"Returned: {transfer.returned_at.strftime('%d/%m/%Y %H:%M')}")
+        if transfer.staff_phone:
+            transfer_details.append(f"Phone: {transfer.staff_phone}")
+        if transfer.staff_email:
+            transfer_details.append(f"Email: {transfer.staff_email}")
+        
+        # Create custom PDF with transfer details
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        from datetime import datetime
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=A4, 
+            topMargin=120,  # Increased top margin
+            bottomMargin=40, 
+            leftMargin=40, 
+            rightMargin=40
+        )
+        
+        story = []
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title_style = styles['Title']
+        title_style.alignment = 1
+        title_style.fontSize = 14
+        title_style.spaceAfter = 10
+        title_para = Paragraph(f"<b>{title}</b>", title_style)
+        story.append(title_para)
+        story.append(Spacer(1, 15))
+        
+        # Create side-by-side layout for staff and transfer details
+        page_width = A4[0] - 80  # Account for margins
+        left_width = page_width * 0.48
+        right_width = page_width * 0.48
+        gap_width = page_width * 0.04
+        
+        # Staff Details (Left Side)
+        staff_data = [
+            ['STAFF DETAILS'],
+            ['Staff Name:', transfer.staff_name],
+            ['Staff ID:', transfer.staff_id],
+            ['Staff Location:', transfer.staff_location],
+            ['Phone:', transfer.staff_phone or 'N/A'],
+            ['Email:', transfer.staff_email or 'N/A']
+        ]
+        
+        # Transfer Details (Right Side)
+        transfer_data = [
+            ['TRANSFER DETAILS'],
+            ['Transfer No:', transfer.transfer_no],
+            ['Status:', transfer.status],
+            ['Transfer Location:', transfer.location],
+            ['Created:', transfer.created_at.strftime('%d/%m/%Y %H:%M')]
+        ]
+        
+        if transfer.sent_at:
+            transfer_data.append(['Sent:', transfer.sent_at.strftime('%d/%m/%Y %H:%M')])
+        if transfer.returned_at:
+            transfer_data.append(['Returned:', transfer.returned_at.strftime('%d/%m/%Y %H:%M')])
+        
+        # Create side-by-side table
+        combined_data = []
+        max_rows = max(len(staff_data), len(transfer_data))
+        
+        for i in range(max_rows):
+            left_cell = staff_data[i] if i < len(staff_data) else ['', '']
+            right_cell = transfer_data[i] if i < len(transfer_data) else ['', '']
+            
+            # Ensure each cell has 2 elements
+            if len(left_cell) == 1:
+                left_cell.append('')
+            if len(right_cell) == 1:
+                right_cell.append('')
+                
+            combined_data.append([left_cell[0], left_cell[1], '', right_cell[0], right_cell[1]])
+        
+        details_table = Table(combined_data, colWidths=[80, left_width-80, gap_width, 80, right_width-80])
+        details_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),  # Left header
+            ('FONTNAME', (3, 0), (4, 0), 'Helvetica-Bold'),  # Right header
+            ('FONTSIZE', (0, 0), (1, 0), 11),
+            ('FONTSIZE', (3, 0), (4, 0), 11),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Left labels
+            ('FONTNAME', (3, 1), (3, -1), 'Helvetica-Bold'),  # Right labels
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('SPAN', (0, 0), (1, 0)),  # Span left header
+            ('SPAN', (3, 0), (4, 0)),  # Span right header
+        ]))
+        
+        story.append(details_table)
+        story.append(Spacer(1, 20))
+        
+        # Create table with proper column widths
+        table_data = [headers] + data
+        
+        # Calculate proper column widths based on content
+        page_width = A4[0] - 80  # Account for margins
+        col_widths = [
+            page_width * 0.25,  # Item Name - 25%
+            page_width * 0.15,  # Batch No - 15%
+            page_width * 0.12,  # Original Qty - 12%
+            page_width * 0.12,  # Returned Qty - 12%
+            page_width * 0.12,  # Damaged Qty - 12%
+            page_width * 0.12,  # Balance - 12%
+            page_width * 0.12   # Status - 12%
+        ]
+        
+        table = Table(table_data, colWidths=col_widths)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        story.append(table)
+        
+        # Add transaction history as separate table if exists
+        if transactions_result:
+            story.append(Spacer(1, 20))
+            
+            # Transaction history title
+            txn_title_style = styles['Heading2']
+            txn_title_style.fontSize = 12
+            txn_title_style.alignment = 0
+            txn_title = Paragraph("<b>TRANSACTION HISTORY</b>", txn_title_style)
+            story.append(txn_title)
+            story.append(Spacer(1, 10))
+            
+            # Transaction history table
+            txn_headers = ['Date & Time', 'Item', 'Batch', 'Type', 'Qty', 'Returned By', 'Remarks']
+            txn_data = [txn_headers]
+            
+            for txn in transactions_result:
+                txn_data.append([
+                    txn[2].strftime('%d/%m/%Y %H:%M'),
+                    txn[4][:20],
+                    txn[5],
+                    txn[0],
+                    str(txn[1]),
+                    txn[6][:15],
+                    (txn[3] or '')[:25]
+                ])
+            
+            # Transaction table with different column widths
+            txn_col_widths = [
+                page_width * 0.18,  # Date & Time
+                page_width * 0.20,  # Item
+                page_width * 0.12,  # Batch
+                page_width * 0.10,  # Type
+                page_width * 0.08,  # Qty
+                page_width * 0.15,  # Returned By
+                page_width * 0.17   # Remarks
+            ]
+            
+            txn_table = Table(txn_data, colWidths=txn_col_widths)
+            txn_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('TOPPADDING', (0, 0), (-1, 0), 6),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('TOPPADDING', (0, 1), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            
+            story.append(txn_table)
+        
+        # Build PDF with header
+        def add_header(canvas, doc):
+            pdf_generator.header_format.create_header(canvas, doc)
+        
+        doc.build(story, onFirstPage=add_header, onLaterPages=add_header)
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            io.BytesIO(buffer.read()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={transfer.transfer_no}_transfer_report.pdf"}
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from datetime import date
+from datetime import date, timedelta
 import uuid
 import json
+from dateutil.relativedelta import relativedelta
 
 from database import get_tenant_db
 from models.tenant_models import GRN, GRNItem, Batch, QCInspection, GRNStatus, Item, Stock, StockLedger, StockOverview, VendorPayment, AuditLog
@@ -56,7 +57,42 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
     db.add(audit_log)
     db.commit()
 
-# Helper function to update stock from GRN
+# Helper function to calculate warranty end date
+def calculate_warranty_end_date(start_date: date, warranty_period: int, warranty_period_type: str) -> date:
+    """Calculate warranty end date based on start date and warranty period"""
+    if warranty_period_type == "months":
+        return start_date + relativedelta(months=warranty_period)
+    elif warranty_period_type == "years":
+        return start_date + relativedelta(years=warranty_period)
+    else:
+        # Default to years if type is not specified
+        return start_date + relativedelta(years=warranty_period)
+
+# Helper function to update warranty dates on approval
+def update_warranty_dates_on_approval(grn_id: int, db: Session, approval_date: date):
+    """Update warranty start and end dates when GRN is approved"""
+    try:
+        grn_items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
+        
+        for item in grn_items:
+            batches = db.query(Batch).filter(Batch.grn_item_id == item.id).all()
+            
+            for batch in batches:
+                # Only update warranty dates if warranty period is specified
+                if batch.warranty_period and batch.warranty_period_type:
+                    batch.warranty_start_date = approval_date
+                    batch.warranty_end_date = calculate_warranty_end_date(
+                        approval_date, 
+                        batch.warranty_period, 
+                        batch.warranty_period_type
+                    )
+                    print(f"Updated warranty for batch {batch.batch_no}: {batch.warranty_start_date} to {batch.warranty_end_date}")
+        
+        db.commit()
+        
+    except Exception as e:
+        print(f"Error updating warranty dates: {e}")
+        db.rollback()
 def _update_stock_from_grn(grn_id: int, db: Session):
     print(f"Starting stock update for GRN ID: {grn_id}")
     try:
@@ -82,10 +118,18 @@ def _update_stock_from_grn(grn_id: int, db: Session):
                         StockOverview.batch_no == batch.batch_no
                     ).first()
                     
+                    # Calculate warranty display string
+                    warranty_str = "—"
+                    if batch.warranty_period and batch.warranty_period_type:
+                        warranty_str = f"{batch.warranty_period} {batch.warranty_period_type}"
+                    elif batch.warranty_start_date and batch.warranty_end_date:
+                        warranty_str = f"{batch.warranty_start_date.strftime('%d/%m/%Y')} - {batch.warranty_end_date.strftime('%d/%m/%Y')}"
+                    
                     if existing_stock:
                         # Update existing stock - add quantity
                         old_qty = existing_stock.available_qty
                         existing_stock.available_qty += int(batch.qty)
+                        existing_stock.warranty = warranty_str  # Update warranty info
                         if existing_stock.available_qty >= existing_stock.min_stock:
                             existing_stock.status = "Good"
                         else:
@@ -101,6 +145,7 @@ def _update_stock_from_grn(grn_id: int, db: Session):
                             min_stock=100,
                             batch_no=batch.batch_no,
                             expiry_date=expiry_str,
+                            warranty=warranty_str,  # Add warranty info
                             status="Good" if int(batch.qty) >= 100 else "Low Stock"
                         )
                         db.add(new_stock)
@@ -152,29 +197,17 @@ def create_grn(data: GRNCreate, request: Request, db: Session = Depends(get_tena
         db.refresh(grn_item)
 
         for b in item.batches:
-            # Check if this is warranty or expiry date type
-            date_type = getattr(b, 'date_type', 'expiry')
-            
-            if date_type == 'warranty':
-                batch = Batch(
-                    grn_item_id=grn_item.id,
-                    batch_no=b.batch_no,
-                    mfg_date=None,
-                    expiry_date=None,
-                    warranty_start_date=getattr(b, 'start_date', None),
-                    warranty_end_date=b.expiry_date,
-                    qty=b.qty
-                )
-            else:
-                batch = Batch(
-                    grn_item_id=grn_item.id,
-                    batch_no=b.batch_no,
-                    mfg_date=getattr(b, 'start_date', None),
-                    expiry_date=b.expiry_date,
-                    warranty_start_date=None,
-                    warranty_end_date=None,
-                    qty=b.qty
-                )
+            batch = Batch(
+                grn_item_id=grn_item.id,
+                batch_no=b.batch_no,
+                mfg_date=getattr(b, 'mfg_date', None),
+                expiry_date=getattr(b, 'expiry_date', None),
+                warranty_start_date=None,
+                warranty_end_date=None,
+                warranty_period=getattr(b, 'warranty_period', None),
+                warranty_period_type=getattr(b, 'warranty_period_type', None),
+                qty=b.qty
+            )
             db.add(batch)
 
     # If GRN is created with approved status, update stock immediately
@@ -266,6 +299,10 @@ def get_grn_details(grn_id: int, db: Session = Depends(get_tenant_session), curr
                 "batch_no": batch.batch_no,
                 "mfg_date": batch.mfg_date,
                 "expiry_date": batch.expiry_date,
+                "warranty_start_date": batch.warranty_start_date,
+                "warranty_end_date": batch.warranty_end_date,
+                "warranty_period": batch.warranty_period,
+                "warranty_period_type": batch.warranty_period_type,
                 "qty": batch.qty,
                 "location": grn.store
             } for batch in batches]
@@ -437,6 +474,10 @@ def approve_grn(grn_id: int, request: Request, db: Session = Depends(get_tenant_
     # Update GRN status
     grn.status = GRNStatus.approved
     
+    # Update warranty dates based on approval date
+    approval_date = date.today()
+    update_warranty_dates_on_approval(grn_id, db, approval_date)
+    
     # Update stock using helper function
     _update_stock_from_grn(grn_id, db)
     
@@ -525,6 +566,8 @@ def update_grn(grn_id: int, data: GRNCreate, request: Request, db: Session = Dep
                     expiry_date=None,
                     warranty_start_date=getattr(b, 'start_date', None),
                     warranty_end_date=b.expiry_date,
+                    warranty_period=getattr(b, 'warranty_period', None),
+                    warranty_period_type=getattr(b, 'warranty_period_type', None),
                     qty=b.qty
                 )
             else:
@@ -535,6 +578,8 @@ def update_grn(grn_id: int, data: GRNCreate, request: Request, db: Session = Dep
                     expiry_date=b.expiry_date,
                     warranty_start_date=None,
                     warranty_end_date=None,
+                    warranty_period=getattr(b, 'warranty_period', None),
+                    warranty_period_type=getattr(b, 'warranty_period_type', None),
                     qty=b.qty
                 )
             db.add(batch)
@@ -686,6 +731,74 @@ def create_test_grn_with_batches(db: Session = Depends(get_tenant_session)):
         "grn_number": grn.grn_number,
         "batches_created": len(batches_data)
     }
+@router.post("/test-warranty-storage")
+def test_warranty_storage(db: Session = Depends(get_tenant_session)):
+    """Test endpoint to verify warranty period type storage"""
+    from datetime import date
+    import uuid
+    
+    # Create a test GRN with warranty period type
+    grn = GRN(
+        grn_number=f"GRN-WARRANTY-TEST-{uuid.uuid4().hex[:8]}",
+        grn_date=date.today(),
+        po_number="PO-WARRANTY-TEST",
+        vendor_name="Test Warranty Vendor",
+        store="Main Store",
+        invoice_number="INV-WARRANTY-TEST",
+        invoice_date=date.today(),
+        total_amount=500.00,
+        status=GRNStatus.approved
+    )
+    db.add(grn)
+    db.commit()
+    db.refresh(grn)
+    
+    # Create GRN Item
+    grn_item = GRNItem(
+        grn_id=grn.id,
+        item_name="Test Warranty Item",
+        po_qty=100,
+        received_qty=100,
+        uom="PCS",
+        rate=5.0
+    )
+    db.add(grn_item)
+    db.commit()
+    db.refresh(grn_item)
+    
+    # Create batch with warranty period type
+    batch = Batch(
+        grn_item_id=grn_item.id,
+        batch_no="WARRANTY-BATCH-001",
+        mfg_date=date.today(),
+        expiry_date=None,
+        warranty_start_date=None,
+        warranty_end_date=None,
+        warranty_period=24,  # 24 months
+        warranty_period_type="months",  # This should be stored
+        qty=100
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+    
+    # Update stock
+    _update_stock_from_grn(grn.id, db)
+    
+    # Verify the data was stored correctly
+    stored_batch = db.query(Batch).filter(Batch.id == batch.id).first()
+    
+    return {
+        "message": "Warranty storage test completed",
+        "grn_number": grn.grn_number,
+        "batch_data": {
+            "batch_no": stored_batch.batch_no,
+            "warranty_period": stored_batch.warranty_period,
+            "warranty_period_type": stored_batch.warranty_period_type,
+            "stored_correctly": stored_batch.warranty_period_type == "months"
+        }
+    }
+
 @router.delete("/{grn_id}")
 def delete_grn(grn_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_delete())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()

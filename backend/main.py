@@ -60,6 +60,7 @@ from routers.inventory.location import router as location_router
 # CONSUMPTION & ISSUE
 #----------------------------------------------------------
 from routers.consumption.issue import router as consumption_router
+from routers.consumption.dispensed import router as dispensed_router
 
 #----------------------------------------------------------
 #  RETURN & DISPOSAL
@@ -149,6 +150,7 @@ app.include_router(location_router)
 
 # Consumption & Issue
 app.include_router(consumption_router)
+app.include_router(dispensed_router)
 
 # Return & Disposal (using only the main return_disposal router)
 app.include_router(return_disposal_router)

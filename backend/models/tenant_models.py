@@ -690,6 +690,8 @@ class Batch(TenantBase):
     expiry_date = Column(Date, nullable=True)
     warranty_start_date = Column(Date, nullable=True)
     warranty_end_date = Column(Date, nullable=True)
+    warranty_period = Column(Integer, nullable=True)  # Warranty period value
+    warranty_period_type = Column(String(20), nullable=True)  # months or years
     qty = Column(Float)
 
     item = relationship("GRNItem", back_populates="batches")

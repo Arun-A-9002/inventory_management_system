@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import HeaderFooter from "./HeaderFooter";
+import DispensedItemsSidebar from "../DispensedItemsSidebar";
 import { Outlet, useLocation } from "react-router-dom";
 import api from "../../api";
 
 export default function MainLayout() {
   const [pendingCount, setPendingCount] = useState(0);
   const [companyDetails, setCompanyDetails] = useState(null);
+  const [isDispensedSidebarOpen, setIsDispensedSidebarOpen] = useState(false);
   const location = useLocation();
 
   const fetchPendingCount = async () => {
@@ -63,12 +65,19 @@ export default function MainLayout() {
           type="header" 
           onRefresh={handleRefresh}
           pendingCount={pendingCount}
+          onToggleDispensedSidebar={() => setIsDispensedSidebarOpen(true)}
         />
         <main className="flex-1 p-6 overflow-auto">
           <Outlet />
         </main>
         <HeaderFooter type="footer" />
       </div>
+      
+      {/* Dispensed Items Sidebar */}
+      <DispensedItemsSidebar 
+        isOpen={isDispensedSidebarOpen}
+        onClose={() => setIsDispensedSidebarOpen(false)}
+      />
     </div>
   );
 }

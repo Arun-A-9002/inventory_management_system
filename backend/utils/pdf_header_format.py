@@ -175,8 +175,25 @@ class PDFHeaderFormat:
                         logo_data = f.read()
                     
                     if len(logo_data) > 0:
-                        # Create PIL Image to get dimensions
+                        # Create PIL Image to get dimensions and process background
                         img = Image.open(io.BytesIO(logo_data))
+                        
+                        # Convert to RGBA if not already
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        
+                        # Remove green background if present
+                        data = img.getdata()
+                        new_data = []
+                        for item in data:
+                            # Check if pixel is greenish (adjust tolerance as needed)
+                            if item[1] > item[0] + 30 and item[1] > item[2] + 30:  # Green dominant
+                                # Make it transparent
+                                new_data.append((255, 255, 255, 0))
+                            else:
+                                new_data.append(item)
+                        
+                        img.putdata(new_data)
                         original_width, original_height = img.size
                         
                         # Calculate height maintaining aspect ratio but within limits

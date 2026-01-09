@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
-import jsPDF from 'jspdf';
 import { hasPermission } from '../../utils/permissions';
 
 export default function ExternalTransfer() {
@@ -428,130 +427,30 @@ export default function ExternalTransfer() {
     }
     
     try {
-      // Fetch transaction history and full transfer details
-      const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
-      const transactions = transactionRes.data || [];
+      // Use the backend PDF endpoint with company header
+      const response = await api.get(`/api/external-transfers/${transfer.id}/print-pdf`, {
+        responseType: 'blob'
+      });
       
-      // Fetch full transfer details including return staff info
-      const fullTransferRes = await api.get(`/api/external-transfers/${transfer.id}`);
-      const fullTransfer = fullTransferRes.data;
+      // Create blob URL and open in new window for printing
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       
-      const printContent = `
-        <html>
-          <head>
-            <title>Transfer History - ${transfer.transfer_no}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .info { margin-bottom: 20px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-              .status { padding: 4px 8px; border-radius: 4px; }
-              .draft { background-color: #f3f4f6; }
-              .sent { background-color: #dbeafe; }
-              .returned { background-color: #dcfce7; }
-              .transaction-table { margin-top: 30px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>External Transfer History</h1>
-              <h2>${transfer.transfer_no}</h2>
-            </div>
-            
-            <div class="info">
-              <p><strong>Staff:</strong> ${transfer.staff_name} (ID: ${transfer.staff_id})</p>
-              <p><strong>Staff Location:</strong> ${transfer.staff_location}</p>
-              <p><strong>Transfer Location:</strong> ${transfer.location}</p>
-              <p><strong>Status:</strong> <span class="status ${transfer.status.toLowerCase()}">${transfer.status}</span></p>
-              <p><strong>Created:</strong> ${new Date(transfer.created_at).toLocaleDateString()}</p>
-              ${transfer.sent_at ? `<p><strong>Sent:</strong> ${new Date(transfer.sent_at).toLocaleDateString()}</p>` : ''}
-              ${transfer.returned_at ? `<p><strong>Returned:</strong> ${new Date(transfer.returned_at).toLocaleDateString()}</p>` : ''}
-              ${transfer.staff_phone ? `<p><strong>Phone:</strong> ${transfer.staff_phone}</p>` : ''}
-              ${transfer.staff_email ? `<p><strong>Email:</strong> ${transfer.staff_email}</p>` : ''}
-            </div>
-            
-            <h3>Item Summary</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Batch</th>
-                  <th>Original Qty</th>
-                  <th>Returned Qty</th>
-                  <th>Damaged Qty</th>
-                  <th>Remaining</th>
-                  <th>Return Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${transfer.items?.map(item => {
-                  const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
-                  const remaining = item.quantity - totalReturned;
-                  const status = remaining <= 0 ? 'Completed' : 'Pending';
-                  return `
-                    <tr>
-                      <td>${item.item_name}</td>
-                      <td>${item.batch_no}</td>
-                      <td>${item.quantity}</td>
-                      <td>${item.returned_quantity || 0}</td>
-                      <td>${item.damaged_quantity || 0}</td>
-                      <td>${remaining}</td>
-                      <td>${item.return_date ? new Date(item.return_date).toLocaleDateString() : '-'}</td>
-                      <td>${status}</td>
-                    </tr>
-                  `;
-                }).join('') || '<tr><td colspan="8">No items found</td></tr>'}
-              </tbody>
-            </table>
-            
-            <div class="transaction-table">
-              <h3>Transaction History</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date & Time</th>
-                    <th>Item</th>
-                    <th>Batch</th>
-                    <th>Type</th>
-                    <th>Quantity</th>
-                    <th>Returned By</th>
-                    <th>Remarks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${transactions.length > 0 ? transactions.map(txn => {
-                    return `
-                    <tr>
-                      <td>${new Date(txn.transaction_date).toLocaleDateString()} ${new Date(txn.transaction_date).toLocaleTimeString()}</td>
-                      <td>${txn.item_name}</td>
-                      <td>${txn.batch_no}</td>
-                      <td>${txn.transaction_type}</td>
-                      <td>${txn.quantity}</td>
-                      <td>${txn.returned_by}</td>
-                      <td>${txn.remarks}</td>
-                    </tr>
-                  `}).join('') : '<tr><td colspan="7">No transactions found</td></tr>'}}}
-                </tbody>
-              </table>
-            </div>
-            
-            <div style="margin-top: 30px; text-align: center; color: #666;">
-              <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-            </div>
-          </body>
-        </html>
-      `;
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
       
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.print();
+      // Clean up the blob URL after a delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+      
     } catch (error) {
-      console.error('Error fetching transaction history:', error);
-      showMessage('Failed to generate print report', 'error');
+      console.error('Error generating PDF:', error);
+      showMessage('Failed to generate PDF report', 'error');
     }
   };
 
@@ -562,220 +461,21 @@ export default function ExternalTransfer() {
     }
     
     try {
-      // Fetch transaction history and return staff details
-      const transactionRes = await api.get(`/api/external-transfers/${transfer.id}/transactions`);
-      const transactions = transactionRes.data || [];
-      
-      // Fetch full transfer details including return staff info
-      const fullTransferRes = await api.get(`/api/external-transfers/${transfer.id}`);
-      const fullTransfer = fullTransferRes.data;
-      
-      const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.width;
-      let yPosition = 20;
-      
-      // Header
-      pdf.setFontSize(18);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('External Transfer History', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 10;
-      
-      pdf.setFontSize(14);
-      pdf.text(transfer.transfer_no, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 20;
-      
-      // Transfer Info
-      pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      pdf.text(`Staff: ${transfer.staff_name} (ID: ${transfer.staff_id})`, 20, yPosition);
-      yPosition += 6;
-      pdf.text(`Staff Location: ${transfer.staff_location}`, 20, yPosition);
-      yPosition += 6;
-      pdf.text(`Transfer Location: ${transfer.location}`, 20, yPosition);
-      yPosition += 6;
-      pdf.text(`Status: ${transfer.status}`, 20, yPosition);
-      yPosition += 6;
-      pdf.text(`Created: ${new Date(transfer.created_at).toLocaleDateString()}`, 20, yPosition);
-      yPosition += 6;
-      
-      if (transfer.sent_at) {
-        pdf.text(`Sent: ${new Date(transfer.sent_at).toLocaleDateString()}`, 20, yPosition);
-        yPosition += 6;
-      }
-      if (transfer.returned_at) {
-        pdf.text(`Returned: ${new Date(transfer.returned_at).toLocaleDateString()}`, 20, yPosition);
-        yPosition += 6;
-      }
-      if (transfer.staff_phone) {
-        pdf.text(`Phone: ${transfer.staff_phone}`, 20, yPosition);
-        yPosition += 6;
-      }
-      if (transfer.staff_email) {
-        pdf.text(`Email: ${transfer.staff_email}`, 20, yPosition);
-        yPosition += 6;
-      }
-      
-      // Return Staff Details (if different staff returned)
-      if (fullTransfer.return_staff_details) {
-        yPosition += 5;
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Return Staff Details:', 20, yPosition);
-        yPosition += 6;
-        pdf.setFont(undefined, 'normal');
-        pdf.text(`Return Staff: ${fullTransfer.return_staff_details.staff_name}`, 20, yPosition);
-        yPosition += 6;
-        pdf.text(`Return Phone: ${fullTransfer.return_staff_details.staff_phone}`, 20, yPosition);
-        yPosition += 6;
-        pdf.text(`Return Email: ${fullTransfer.return_staff_details.staff_email}`, 20, yPosition);
-        yPosition += 6;
-        pdf.text(`Change Reason: ${fullTransfer.return_staff_details.change_reason}`, 20, yPosition);
-        yPosition += 6;
-      }
-      
-      yPosition += 10;
-      
-      // Item Summary Table
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Item Summary', 20, yPosition);
-      yPosition += 10;
-      
-      // Table headers
-      pdf.setFontSize(8);
-      const headers = ['Item', 'Batch', 'Orig Qty', 'Ret Qty', 'Dmg Qty', 'Balance', 'Deadline', 'Status'];
-      const colWidths = [30, 20, 15, 15, 15, 15, 25, 20];
-      let xPosition = 20;
-      
-      headers.forEach((header, index) => {
-        pdf.text(header, xPosition, yPosition);
-        xPosition += colWidths[index];
+      // Use the backend PDF endpoint with company header
+      const response = await api.get(`/api/external-transfers/${transfer.id}/print-pdf`, {
+        responseType: 'blob'
       });
-      yPosition += 8;
       
-      // Table data
-      pdf.setFont(undefined, 'normal');
-      if (transfer.items && transfer.items.length > 0) {
-        transfer.items.forEach(item => {
-          const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
-          const balance = item.quantity - totalReturned;
-          const status = balance <= 0 ? 'Completed' : 'Pending';
-          
-          xPosition = 20;
-          const rowData = [
-            item.item_name.substring(0, 12),
-            item.batch_no,
-            item.quantity.toString(),
-            (item.returned_quantity || 0).toString(),
-            (item.damaged_quantity || 0).toString(),
-            balance.toString(),
-            item.return_date ? new Date(item.return_date).toLocaleDateString() : '-',
-            status
-          ];
-          
-          rowData.forEach((data, index) => {
-            pdf.text(data, xPosition, yPosition);
-            xPosition += colWidths[index];
-          });
-          yPosition += 6;
-          
-          if (yPosition > 250) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-        });
-      } else {
-        pdf.text('No items found', 20, yPosition);
-        yPosition += 6;
-      }
-      
-      yPosition += 10;
-      
-      // Summary Statistics
-      if (transfer.items && transfer.items.length > 0) {
-        const totalItems = transfer.items.length;
-        const completedItems = transfer.items.filter(item => {
-          const totalReturned = (item.returned_quantity || 0) + (item.damaged_quantity || 0);
-          return item.quantity <= totalReturned;
-        }).length;
-        const pendingItems = totalItems - completedItems;
-        
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Summary:', 20, yPosition);
-        yPosition += 6;
-        pdf.setFont(undefined, 'normal');
-        pdf.text(`Total Items: ${totalItems}`, 20, yPosition);
-        yPosition += 6;
-        pdf.text(`Completed: ${completedItems}`, 20, yPosition);
-        yPosition += 6;
-        pdf.text(`Pending: ${pendingItems}`, 20, yPosition);
-        yPosition += 10;
-      }
-      
-      // Transaction History
-      if (yPosition > 200) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-      
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Transaction History', 20, yPosition);
-      yPosition += 10;
-      
-      if (transactions.length > 0) {
-        pdf.setFontSize(8);
-        const txnHeaders = ['Date & Time', 'Item', 'Batch', 'Type', 'Qty', 'Returned By', 'Remarks'];
-        const txnColWidths = [30, 25, 15, 15, 10, 25, 35];
-        
-        xPosition = 20;
-        txnHeaders.forEach((header, index) => {
-          pdf.text(header, xPosition, yPosition);
-          xPosition += txnColWidths[index];
-        });
-        yPosition += 8;
-        
-        pdf.setFont(undefined, 'normal');
-        transactions.forEach(txn => {
-          xPosition = 20;
-          const txnData = [
-            `${new Date(txn.transaction_date).toLocaleDateString()} ${new Date(txn.transaction_date).toLocaleTimeString()}`,
-            txn.item_name.substring(0, 10),
-            txn.batch_no,
-            txn.transaction_type,
-            txn.quantity.toString(),
-            txn.returned_by.substring(0, 12),
-            (txn.remarks || '').substring(0, 18)
-          ];
-          
-          txnData.forEach((data, index) => {
-            pdf.text(data, xPosition, yPosition);
-            xPosition += txnColWidths[index];
-          });
-          yPosition += 6;
-          
-          if (yPosition > 250) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-        });
-      } else {
-        pdf.setFontSize(8);
-        pdf.setFont(undefined, 'normal');
-        pdf.text('No transactions found', 20, yPosition);
-      }
-      
-      // Footer
-      const finalPage = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= finalPage; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(8);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth / 2, 280, { align: 'center' });
-        pdf.text(`Page ${i} of ${finalPage}`, pageWidth - 30, 280);
-      }
-      
-      // Save the PDF
-      pdf.save(`${transfer.transfer_no}_Transfer_History.pdf`);
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${transfer.transfer_no}_Transfer_Report.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
     } catch (error) {
       console.error('Error generating PDF:', error);
