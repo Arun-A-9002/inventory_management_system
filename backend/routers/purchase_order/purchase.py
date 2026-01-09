@@ -985,31 +985,171 @@ def test_api():
         }
     }
 
-# ---------------- SEND EMAIL TO VENDOR ----------------
-@router.post("/send-email")
-def send_email_to_vendor(data: dict, db: Session = Depends(get_db)):
-    """Send email to vendor for approved PR"""
+# ---------------- SEND PROFESSIONAL EMAIL TO VENDOR WITH PDF ----------------
+@router.post("/send-po-email")
+def send_po_email_to_vendor(data: dict, db: Session = Depends(get_db)):
+    """Send professional Purchase Order email with PDF attachment to vendor"""
     try:
-        # Get PR details with items
-        pr = db.query(PurchaseRequest).filter(PurchaseRequest.id == data.get("pr_id")).first()
-        if not pr:
-            raise HTTPException(status_code=404, detail="Purchase Request not found")
+        from utils.email_service import send_po_email_with_pdf
+        from utils.universal_pdf_generator import UniversalPDFGenerator
+        from models.tenant_models import Vendor
         
-        # For now, just return success without actually sending email
-        return {
-            "message": f"Email would be sent to {data.get('vendor_email')}",
-            "items_count": len(pr.items),
-            "status": "success"
-        }
+        # Get PO details
+        po_number = data.get("po_number")
+        vendor_email = data.get("vendor_email")
+        location = data.get("location", "main")
         
+        if not po_number or not vendor_email:
+            raise HTTPException(status_code=400, detail="PO number and vendor email are required")
+        
+        # Get PO from database
+        po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase Order not found")
+        
+        # Get vendor details
+        vendor = db.query(Vendor).filter(Vendor.email == vendor_email).first()
+        vendor_name = vendor.vendor_name if vendor else "Valued Vendor"
+        
+        # Generate PDF using existing endpoint logic
+        pdf_gen = UniversalPDFGenerator(db)
+        
+        # Prepare PO data for PDF
+        filtered_items = [item for item in po.items if item.item_name != "Items from PR"]
+        
+        # Create table data for PDF
+        headers = ['S.No', 'Item Name', 'Qty', 'Rate', 'Amount', 'Tax%', 'Tax Amt', 'Disc%', 'Disc Amt', 'Net Amount']
+        table_data = []
+        
+        subtotal = 0
+        total_tax = 0
+        total_discount = 0
+        
+        for index, item in enumerate(filtered_items, 1):
+            rate = item.rate if item.rate and item.rate > 0 else 100.0
+            quantity = item.quantity or 1
+            tax_percent = item.tax if item.tax else 18.0
+            discount_percent = item.discount if item.discount else 5.0
+            
+            amount = quantity * rate
+            tax_amount = amount * (tax_percent / 100)
+            discount_amount = amount * (discount_percent / 100)
+            net_amount = amount + tax_amount - discount_amount
+            
+            subtotal += amount
+            total_tax += tax_amount
+            total_discount += discount_amount
+            
+            table_data.append([
+                str(index),
+                item.item_name[:20],  # Truncate for PDF
+                str(quantity),
+                f"{rate:.0f}",
+                f"{amount:.0f}",
+                f"{tax_percent:.0f}%",
+                f"{tax_amount:.0f}",
+                f"{discount_percent:.0f}%",
+                f"{discount_amount:.0f}",
+                f"{net_amount:.0f}"
+            ])
+        
+        grand_total = subtotal + total_tax - total_discount
+        
+        # Add totals rows
+        table_data.extend([
+            ['', '', '', '', '', '', '', '', 'Subtotal:', f"{subtotal:.0f}"],
+            ['', '', '', '', '', '', '', '', 'Total Tax:', f"{total_tax:.0f}"],
+            ['', '', '', '', '', '', '', '', 'Total Discount:', f"{total_discount:.0f}"],
+            ['', '', '', '', '', '', '', '', 'Grand Total:', f"{grand_total:.0f}"]
+        ])
+        
+        # Generate PDF
+        pdf_buffer = pdf_gen.create_pdf(
+            title=f"PURCHASE ORDER - {po_number}",
+            data=table_data,
+            headers=headers,
+            filename=f"purchase_order_{po_number}.pdf",
+            column_widths=[0.3, 1.5, 0.4, 0.6, 0.7, 0.4, 0.6, 0.4, 0.6, 0.8]
+        )
+        
+        # Prepare items for email
+        email_items = [{
+            'item_name': item.item_name,
+            'quantity': item.quantity or 1,
+            'priority': 'High'  # Default priority
+        } for item in filtered_items]
+        
+        # Send email with PDF
+        email_sent = send_po_email_with_pdf(
+            vendor_email=vendor_email,
+            vendor_name=vendor_name,
+            po_number=po_number,
+            pr_number=po.pr_number,
+            location=location,
+            items=email_items,
+            pdf_buffer=pdf_buffer
+        )
+        
+        if email_sent:
+            return {
+                "message": f"Professional Purchase Order email sent successfully to {vendor_email}",
+                "po_number": po_number,
+                "vendor_name": vendor_name,
+                "items_count": len(filtered_items),
+                "total_amount": f"{grand_total:.2f}",
+                "status": "success"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send email")
+            
     except Exception as e:
-        print(f"Email error: {str(e)}")
-        return {
-            "message": "Email sending disabled for now",
-            "error": str(e),
-            "status": "disabled"
-        }
+        print(f"PO Email error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send PO email: {str(e)}")
 
+# ---------------- TEST EMAIL ENDPOINT ----------------
+@router.post("/test-email")
+def test_email_functionality(data: dict, db: Session = Depends(get_db)):
+    """Test email functionality with a simple email"""
+    try:
+        from utils.email_service import send_po_email_with_pdf
+        import io
+        
+        # Create a simple test PDF buffer
+        test_pdf = io.BytesIO(b"Test PDF content")
+        
+        # Test email data
+        test_email = data.get("email", "test@example.com")
+        
+        # Send test email
+        email_sent = send_po_email_with_pdf(
+            vendor_email=test_email,
+            vendor_name="Test Vendor",
+            po_number="PO-TEST123",
+            pr_number="PR-TEST123",
+            location="Test Location",
+            items=[{"item_name": "Test Item", "quantity": 1, "priority": "High"}],
+            pdf_buffer=test_pdf
+        )
+        
+        if email_sent:
+            return {
+                "message": f"Test email sent successfully to {test_email}",
+                "status": "success",
+                "email_config": "SMTP configured"
+            }
+        else:
+            return {
+                "message": "Failed to send test email",
+                "status": "failed",
+                "email_config": "Check SMTP settings"
+            }
+            
+    except Exception as e:
+        return {
+            "message": f"Email test failed: {str(e)}",
+            "status": "error",
+            "email_config": "SMTP configuration issue"
+        }
 # ---------------- CREATE SAMPLE DATA ----------------
 @router.post("/create-sample")
 def create_sample_data(db: Session = Depends(get_db)):

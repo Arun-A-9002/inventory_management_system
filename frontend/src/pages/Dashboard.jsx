@@ -172,7 +172,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 overflow-y-scroll-invisible">
       {/* Header Section */}
       <div className="bg-white/70 backdrop-blur-xl shadow-lg border-b border-gray-200/50">
         <div className="px-8 py-8">
@@ -199,7 +199,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-8 py-8">
+      <div className="px-8 py-8 overflow-y-scroll-invisible">
         {/* Primary Metrics */}
         <div className="mb-10">
           <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-6">Key Metrics</h2>

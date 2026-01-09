@@ -34,7 +34,7 @@ export default function DispensedItemsSidebar({ isOpen, onClose }) {
       />
       
       {/* Sidebar */}
-      <div className="relative ml-auto w-96 h-full bg-white shadow-xl overflow-y-auto">
+      <div className="relative ml-auto w-96 h-full bg-white shadow-xl overflow-y-scroll-invisible">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Dispensed Items</h2>
@@ -49,7 +49,7 @@ export default function DispensedItemsSidebar({ isOpen, onClose }) {
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-scroll-invisible">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

@@ -11,9 +11,39 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Invisible Scrollbar Styles */
+.invisible-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.invisible-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Apply invisible scrollbar globally */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* Ensure body and html have invisible scrollbars */
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes slide-in {
@@ -29,4 +59,39 @@ code {
 
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
+}
+
+/* Utility classes for invisible scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+.overflow-y-scroll-invisible {
+  overflow-y: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overflow-y-scroll-invisible::-webkit-scrollbar {
+  display: none;
+}
+
+.overflow-x-scroll-invisible {
+  overflow-x: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overflow-x-scroll-invisible::-webkit-scrollbar {
+  display: none;
+}
+
+.overflow-scroll-invisible {
+  overflow: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overflow-scroll-invisible::-webkit-scrollbar {
+  display: none;
 }

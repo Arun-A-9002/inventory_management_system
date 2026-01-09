@@ -9,6 +9,7 @@ export default function MainLayout() {
   const [pendingCount, setPendingCount] = useState(0);
   const [companyDetails, setCompanyDetails] = useState(null);
   const [isDispensedSidebarOpen, setIsDispensedSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const location = useLocation();
 
   const fetchPendingCount = async () => {
@@ -58,8 +59,8 @@ export default function MainLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar companyDetails={companyDetails} />
+    <div className="flex h-screen bg-gray-100 invisible-scrollbar">
+      <Sidebar companyDetails={companyDetails} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
       <div className="flex flex-col flex-1 h-full">
         <HeaderFooter 
           type="header" 
@@ -67,7 +68,7 @@ export default function MainLayout() {
           pendingCount={pendingCount}
           onToggleDispensedSidebar={() => setIsDispensedSidebarOpen(true)}
         />
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-y-scroll-invisible">
           <Outlet />
         </main>
         <HeaderFooter type="footer" />

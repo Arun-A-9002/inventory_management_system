@@ -73,7 +73,9 @@ class UniversalPDFGenerator:
             # Header styling
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (0, 0), (1, -1), 'LEFT'),  # S.No and Item Name left aligned
+            ('ALIGN', (2, 0), (-1, -1), 'CENTER'),  # Numbers center aligned
+            ('ALIGN', (-4, 1), (-1, -1), 'RIGHT'),  # Last 4 columns right aligned for amounts
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 6),

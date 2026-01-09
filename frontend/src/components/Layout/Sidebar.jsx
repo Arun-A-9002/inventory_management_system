@@ -1,9 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import api from "../../api";
 
-export default function Sidebar({ companyDetails }) {
+export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
   const location = useLocation();
   const [openMenus, setOpenMenus] = useState({});
+  const [companyName, setCompanyName] = useState('NUTRYAH');
+
+  useEffect(() => {
+    fetchCompanyName();
+  }, []);
+
+  const fetchCompanyName = async () => {
+    try {
+      const response = await api.get('/company/');
+      if (response.data && response.data.length > 0) {
+        setCompanyName(response.data[0].name);
+      }
+    } catch (error) {
+      console.error('Error fetching company name:', error);
+    }
+  };
 
   const toggleMenu = (menuName) => {
     setOpenMenus((prev) => ({
@@ -15,7 +32,7 @@ export default function Sidebar({ companyDetails }) {
   const renderMenuItem = (item) => {
     const isActive = location.pathname === item.path;
     
-    if (item.submenu) {
+    if (item.submenu && !isCollapsed) {
       const isSubmenuActive = item.submenu.some(subItem => 
         subItem.path === location.pathname || 
         (subItem.submenu && subItem.submenu.some(nestedItem => nestedItem.path === location.pathname))
@@ -25,77 +42,47 @@ export default function Sidebar({ companyDetails }) {
         <div key={item.name} className="mb-1">
           <button
             onClick={() => toggleMenu(item.name)}
-            className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 group ${
+            className={`w-full text-left px-3 py-3 rounded-xl transition-all duration-300 flex items-center gap-3 group relative overflow-hidden ${
               isSubmenuActive 
-                ? 'bg-white/80 backdrop-blur-sm shadow-md border border-gray-200/50 text-gray-800' 
-                : 'text-gray-600 hover:bg-white/60 hover:backdrop-blur-sm hover:shadow-sm'
+                ? 'bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200/50 text-gray-800 shadow-md' 
+                : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 hover:shadow-sm'
             }`}
           >
-            <div className={`p-1.5 rounded-lg transition-colors duration-200 ${
+            <div className={`p-2 rounded-lg transition-all duration-300 z-10 ${
               isSubmenuActive 
-                ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white' 
-                : 'bg-gray-200/50 text-gray-500 group-hover:bg-gray-300/50'
+                ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg scale-105' 
+                : 'bg-gray-100 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 group-hover:scale-105'
             }`}>
               {item.icon}
             </div>
-            <span className="font-medium text-sm">{item.name}</span>
-            <svg className={`w-4 h-4 ml-auto transition-transform duration-200 ${
-              openMenus[item.name] ? 'rotate-180' : ''
-            } ${isSubmenuActive ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="font-semibold text-sm flex-1 z-10">{item.name}</span>
+            <svg className={`w-4 h-4 transition-all duration-300 z-10 ${
+              openMenus[item.name] ? 'rotate-180 text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
+            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
+            {isSubmenuActive && (
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl"></div>
+            )}
           </button>
 
           {openMenus[item.name] && (
-            <div className="ml-6 mt-2 space-y-1 border-l-2 border-gray-200/50 pl-4">
+            <div className="ml-8 mt-2 space-y-1 border-l-2 border-gradient-to-b from-blue-200 to-purple-200 pl-4 animate-fadeIn">
               {item.submenu.map((subItem) => (
-                <div key={subItem.name}>
-                  {subItem.submenu ? (
-                    <div>
-                      <button
-                        onClick={() => toggleMenu(subItem.name)}
-                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-white/50 transition-all duration-200 flex items-center gap-2 text-gray-600"
-                      >
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                        <span className="font-medium">{subItem.name}</span>
-                      </button>
-                      {openMenus[subItem.name] && (
-                        <div className="ml-4 mt-1 space-y-1">
-                          {subItem.submenu.map((nestedItem) => (
-                            <Link
-                              key={nestedItem.path}
-                              to={nestedItem.path}
-                              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
-                                location.pathname === nestedItem.path
-                                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md font-medium"
-                                  : "text-gray-600 hover:bg-white/50"
-                              }`}
-                            >
-                              <span className={`w-1 h-1 rounded-full ${
-                                location.pathname === nestedItem.path ? 'bg-white' : 'bg-gray-400'
-                              }`}></span>
-                              <span>{nestedItem.name}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      to={subItem.path}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
-                        location.pathname === subItem.path
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md font-medium"
-                          : "text-gray-600 hover:bg-white/50"
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        location.pathname === subItem.path ? 'bg-white' : 'bg-gray-400'
-                      }`}></span>
-                      <span className="font-medium">{subItem.name}</span>
-                    </Link>
-                  )}
-                </div>
+                <Link
+                  key={subItem.path}
+                  to={subItem.path}
+                  className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-300 group ${
+                    location.pathname === subItem.path
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105"
+                      : "text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-700 hover:transform hover:scale-105"
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    location.pathname === subItem.path ? 'bg-white shadow-lg' : 'bg-gray-300 group-hover:bg-blue-400'
+                  }`}></div>
+                  <span className="font-medium">{subItem.name}</span>
+                </Link>
               ))}
             </div>
           )}
@@ -103,24 +90,39 @@ export default function Sidebar({ companyDetails }) {
       );
     } else {
       return (
-        <Link
-          key={item.name}
-          to={item.path}
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group mb-1 ${
-            isActive
-              ? "bg-white/80 backdrop-blur-sm shadow-md border border-gray-200/50 text-gray-800"
-              : "text-gray-600 hover:bg-white/60 hover:backdrop-blur-sm hover:shadow-sm"
-          }`}
-        >
-          <div className={`p-1.5 rounded-lg transition-colors duration-200 ${
-            isActive 
-              ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white' 
-              : 'bg-gray-200/50 text-gray-500 group-hover:bg-gray-300/50'
-          }`}>
-            {item.icon}
-          </div>
-          <span className="font-medium text-sm">{item.name}</span>
-        </Link>
+        <div className="relative group">
+          <Link
+            key={item.name}
+            to={item.path || '#'}
+            className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+              isActive
+                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105"
+                : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 hover:shadow-md hover:transform hover:scale-105"
+            }`}
+          >
+            <div className={`p-2 rounded-lg transition-all duration-300 z-10 ${
+              isActive 
+                ? 'bg-white/20 text-white shadow-lg' 
+                : 'bg-gray-100 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 group-hover:scale-110'
+            }`}>
+              {item.icon}
+            </div>
+            {!isCollapsed && (
+              <span className="font-semibold text-sm z-10 transition-all duration-300">{item.name}</span>
+            )}
+            {isActive && (
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl"></div>
+            )}
+          </Link>
+          
+          {/* Tooltip for collapsed state */}
+          {isCollapsed && (
+            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              {item.name}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
+            </div>
+          )}
+        </div>
       );
     }
   };
@@ -242,31 +244,55 @@ export default function Sidebar({ companyDetails }) {
   ];
 
   return (
-    <div className="w-72 bg-gradient-to-b from-slate-50/95 to-gray-100/95 backdrop-blur-xl border-r border-gray-200/50 min-h-screen p-6 overflow-y-auto shadow-xl">
-      {/* Company Header */}
-      <div className="mb-8 pb-6 border-b border-gray-200/50">
-        <div className="flex items-center space-x-3 mb-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-              {companyDetails?.name || 'NUTRYAH IMS'}
-            </h2>
-            <p className="text-xs text-gray-500 font-medium">Inventory Management</p>
+    <>
+      <div className={`${isCollapsed ? 'w-16' : 'w-72'} bg-white/95 backdrop-blur-xl border-r border-gray-200/30 min-h-screen overflow-hidden shadow-2xl transition-all duration-300 ease-in-out relative`}>
+        {/* Company Header with Toggle Button */}
+        <div className={`${isCollapsed ? 'p-4' : 'p-6'} border-b border-gray-200/50 transition-all duration-300`}>
+          <div className="flex items-center justify-between">
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} transition-all duration-300`}>
+              {!isCollapsed && (
+                <div className="transition-all duration-300">
+                  <h2 className="text-lg font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                    {companyName}
+                  </h2>
+                
+                </div>
+              )}
+            </div>
+            
+            {/* Toggle Button */}
+            <button 
+              onClick={onToggle}
+              className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:scale-110"
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              <svg className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
 
-      <nav className="space-y-2">
-        {menu.map((item) => (
-          <div key={item.name}>
-            {renderMenuItem(item)}
-          </div>
-        ))}
-      </nav>
-    </div>
+        {/* Navigation */}
+        <nav className={`${isCollapsed ? 'p-2' : 'p-4'} space-y-1 overflow-y-auto max-h-[calc(100vh-140px)] transition-all duration-300`}>
+          {menu.map((item) => (
+            <div key={item.name}>
+              {renderMenuItem(item)}
+            </div>
+          ))}
+        </nav>
+      </div>
+      
+      {/* Custom CSS */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
+    </>
   );
 }

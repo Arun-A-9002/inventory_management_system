@@ -365,35 +365,44 @@ export default function PurchaseManagement() {
     }
 
     try {
-      // First create PO
+      // Get PR details with items first
+      const prRes = await api.get(`/purchase/${selectedPR.id}`);
+      const prDetails = prRes.data;
+      
+      // Create PO items from PR items
+      const poItems = prDetails.items?.map(item => ({
+        item_name: item.item_name,
+        quantity: item.quantity || 1,
+        rate: 100, // Default rate
+        tax: 18,   // Default tax
+        discount: 5 // Default discount
+      })) || [{
+        item_name: 'Items from PR',
+        quantity: 1,
+        rate: 100,
+        tax: 18,
+        discount: 5
+      }];
+      
+      // Create PO with actual items
       const poRes = await api.post('/purchase/po', {
         pr_number: selectedPR.pr_number,
-        vendor: emailForm.vendor_email.split(' - ')[0] || 'Selected Vendor',
-        items: [{
-          item_name: 'Items from PR',
-          quantity: 1,
-          rate: 0,
-          tax: 0,
-          discount: 0
-        }]
+        vendor: emailForm.vendor_email,
+        items: poItems
       });
       
-      // Then send email with PO number
-      await api.post('/purchase/send-email', {
-        pr_id: selectedPR.id,
-        pr_number: selectedPR.pr_number,
+      // Then send professional email with PDF
+      const emailRes = await api.post('/purchase/send-po-email', {
         po_number: poRes.data.po_number,
         vendor_email: emailForm.vendor_email,
-        location: emailForm.location,
-        subject: emailForm.subject,
-        message: emailForm.message
+        location: emailForm.location
       });
       
-      showToast(`PO ${poRes.data.po_number} created and email sent!`, 'success');
+      showToast(`Professional PO email sent! ${emailRes.data.message}`, 'success');
       setShowEmailModal(false);
       fetchPOList(); // Refresh PO list to show new PO
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Failed to send email';
+      const errorMsg = err.response?.data?.detail || 'Failed to send professional email';
       showToast(errorMsg, 'error');
     }
   };
@@ -715,6 +724,7 @@ export default function PurchaseManagement() {
   const [selectedPO, setSelectedPO] = useState(null);
   const [poEmailForm, setPoEmailForm] = useState({
     email: '',
+    location: '',
     subject: '',
     message: ''
   });
@@ -731,27 +741,31 @@ export default function PurchaseManagement() {
   const openPoEmailModal = (po) => {
     setSelectedPO(po);
     setPoEmailForm({
-      email: '',
-      subject: `Purchase Order ${po.po_number} - ${po.vendor}`,
-      message: `Dear ${po.vendor},\n\nPlease find the Purchase Order ${po.po_number} details.\n\nThank you.`
+      email: po.vendor_email || '',
+      location: locations.length > 0 ? locations[0].name : 'main',
+      subject: `Purchase Order ${po.po_number} for PR ${po.pr_number}`,
+      message: `Dear ${po.vendor_name || 'Vendor'},\n\nPlease find Purchase Order ${po.po_number} for Purchase Request ${po.pr_number} attached as PDF.\n\nLocation: ${locations.length > 0 ? locations[0].name : 'main'}\n\nPlease confirm receipt and delivery schedule.\n\nThank you.`
     });
     setShowPoEmailModal(true);
   };
 
   const sendPoEmail = async () => {
-    if (!poEmailForm.email) {
-      showToast('Please enter email address', 'error');
+    if (!poEmailForm.email || !poEmailForm.location) {
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
     try {
-      await api.post(`/purchase/po/${selectedPO.id}/send-email`, {
-        email: poEmailForm.email
+      const response = await api.post('/purchase/send-po-email', {
+        po_number: selectedPO.po_number,
+        vendor_email: poEmailForm.email,
+        location: poEmailForm.location
       });
-      showToast('PO email sent successfully!', 'success');
+      
+      showToast(`Professional PO email sent successfully! Total: ${response.data.total_amount}`, 'success');
       setShowPoEmailModal(false);
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Failed to send email';
+      const errorMsg = err.response?.data?.detail || 'Failed to send professional email';
       showToast(errorMsg, 'error');
     }
   };
@@ -1492,7 +1506,7 @@ export default function PurchaseManagement() {
       {showEmailModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Send Email to Vendor</h3>
+            <h3 className="text-lg font-semibold mb-4">Send Professional PO to Vendor</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Email *</label>
@@ -1576,37 +1590,34 @@ export default function PurchaseManagement() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">PO Number</label>
                   <input
                     type="text"
-                    value={emailForm.po_number || ''}
+                    value={emailForm.po_number || 'Auto-generated'}
                     readOnly
                     className="w-full rounded-lg border px-3 py-2 bg-gray-50 text-gray-600"
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-                <input
-                  type="text"
-                  value={emailForm.subject}
-                  onChange={(e) => setEmailForm({...emailForm, subject: e.target.value})}
-                  className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <h4 className="font-medium text-blue-800 mb-2">📧 Professional Email Features:</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• PDF attachment with company header</li>
+                  <li>• Professional email template</li>
+                  <li>• Item details from PR with pricing</li>
+                  <li>• Delivery confirmation request</li>
+                </ul>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
-                <textarea
-                  value={emailForm.message}
-                  onChange={(e) => setEmailForm({...emailForm, message: e.target.value})}
-                  rows={4}
-                  className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-sm text-green-700">
+                  <strong>Items to be included:</strong>
+                  <div className="mt-1 font-mono text-xs">{emailForm.message?.split('\n\n')[1]?.split('\n\nLocation:')[0] || 'Loading items...'}</div>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={sendEmailToVendor}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
               >
-                Send Email
+                📧 Send Professional Email
               </button>
               <button
                 onClick={() => setShowEmailModal(false)}
@@ -1623,43 +1634,74 @@ export default function PurchaseManagement() {
       {showPoEmailModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Send Purchase Order</h3>
+            <h3 className="text-lg font-semibold mb-4">Send Professional Purchase Order</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  value={poEmailForm.email}
-                  onChange={(e) => setPoEmailForm({...poEmailForm, email: e.target.value})}
-                  className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  placeholder="vendor@example.com"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Email *</label>
+                <div className="flex gap-2">
+                  <select
+                    value={poEmailForm.email}
+                    onChange={(e) => setPoEmailForm({...poEmailForm, email: e.target.value})}
+                    className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select vendor email</option>
+                    {vendors && vendors.length > 0 ? (
+                      vendors.map(vendor => (
+                        <option key={vendor.id} value={vendor.email}>
+                          {vendor.vendor_name} ({vendor.email})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading vendors...</option>
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={fetchVendors}
+                    className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                    title="Refresh vendors"
+                  >
+                    ↻
+                  </button>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {vendors.length === 0 ? 'No vendors with email found.' : `${vendors.length} vendors available`}
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-                <input
-                  type="text"
-                  value={poEmailForm.subject}
-                  onChange={(e) => setPoEmailForm({...poEmailForm, subject: e.target.value})}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Location *</label>
+                <select
+                  value={poEmailForm.location}
+                  onChange={(e) => setPoEmailForm({...poEmailForm, location: e.target.value})}
                   className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Select location</option>
+                  {locations.map(location => (
+                    <option key={location.id} value={location.name}>
+                      {location.name} ({location.code})
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
-                <textarea
-                  value={poEmailForm.message}
-                  onChange={(e) => setPoEmailForm({...poEmailForm, message: e.target.value})}
-                  rows={4}
-                  className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <h4 className="font-medium text-blue-800 mb-2">📧 Professional Email Features:</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• PDF attachment with company header</li>
+                  <li>• Professional email template</li>
+                  <li>• Item details and pricing</li>
+                  <li>• Delivery confirmation request</li>
+                </ul>
+              </div>
+              <div className="text-xs text-slate-500">
+                <strong>PO:</strong> {selectedPO?.po_number} | <strong>Vendor:</strong> {selectedPO?.vendor_name}
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={sendPoEmail}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
               >
-                Send Purchase Order
+                📧 Send Professional Email
               </button>
               <button
                 onClick={() => setShowPoEmailModal(false)}
