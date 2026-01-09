@@ -89,16 +89,38 @@ export default function DamagedReturns() {
     });
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!hasPermission("damaged_returns.print")) {
       showMessage("Permission denied", "error");
       return;
     }
-    const printContent = generatePrintContent();
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.print();
+    
+    try {
+      // Use the backend PDF endpoint with company header
+      const response = await api.get('/api/external-transfers/damaged-returns/pdf', {
+        responseType: 'blob'
+      });
+      
+      // Create blob URL and open in new window for printing
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      // Clean up the blob URL after a delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showMessage('Failed to generate PDF report', 'error');
+    }
   };
 
   const generatePrintContent = () => {

@@ -269,103 +269,88 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
     
     # Create PDF with better margins
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=110, bottomMargin=50, leftMargin=50, rightMargin=50)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=120, bottomMargin=50, leftMargin=50, rightMargin=50)
     
     header_format = PDFHeaderFormat(db)
     story = []
     styles = getSampleStyleSheet()
     
-    # Title - perfectly centered with better spacing
+    # Title
     title_style = styles['Title']
-    title_style.alignment = 1  # Center alignment
+    title_style.alignment = 1
     title_style.fontSize = 18
     title_style.spaceAfter = 15
-    title_style.spaceBefore = 10
-    title_style.textColor = colors.HexColor('#2E4057')
-    title = Paragraph("<b>PURCHASE ORDER</b>", title_style)
-    story.append(title)
-    story.append(Spacer(1, 25))
+    title_para = Paragraph("<b>PURCHASE ORDER</b>", title_style)
+    story.append(title_para)
+    story.append(Spacer(1, 15))
     
-    # Calculate totals with updated values first
-    recalc_subtotal = 0
-    recalc_tax = 0
-    recalc_discount = 0
+    # Create side-by-side layout for PO and vendor details
+    page_width = A4[0] - 100  # Account for margins
+    left_width = page_width * 0.48
+    right_width = page_width * 0.48
+    gap_width = page_width * 0.04
     
-    for item in filtered_items:
-        rate = item.rate if item.rate and item.rate > 0 else 100.0
-        quantity = item.quantity or 1
-        tax_percent = item.tax if item.tax else 18.0
-        discount_percent = item.discount if item.discount else 5.0
-        
-        amount = quantity * rate
-        tax_amount = amount * (tax_percent / 100)
-        discount_amount = amount * (discount_percent / 100)
-        
-        recalc_subtotal += amount
-        recalc_tax += tax_amount
-        recalc_discount += discount_amount
-    
-    recalc_grand_total = recalc_subtotal + recalc_tax - recalc_discount
-    
-    # PO Info section - better aligned
-    po_info_data = [
-        ['PO Details:', 'Summary:'],
-        [f'PO Number: {po.po_number}', f'Items Count: {len(filtered_items)}'],
-        [f'PR Number: {po.pr_number}', f'Total Amount: Rs.{recalc_grand_total:.2f}'],
-        [f'Date: {po.po_date.strftime("%d/%m/%Y") if po.po_date else "N/A"}', f'Status: {po.status.value if po.status else "Draft"}']
+    # PO Details (Left Side)
+    po_data = [
+        ['PO DETAILS'],
+        ['PO Number:', po.po_number],
+        ['PR Number:', po.pr_number],
+        ['PO Date:', po.po_date.strftime('%d/%m/%Y') if po.po_date else 'N/A'],
+        ['Status:', po.status.value if po.status else 'Draft'],
+        ['Items Count:', str(len(filtered_items))]
     ]
     
-    # PO Info section - professional layout
-    po_info_table = Table(po_info_data, colWidths=[3.5*inch, 3.5*inch])
-    po_info_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8F4FD')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
-        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#4472C4')),
-    ]))
-    story.append(po_info_table)
-    story.append(Spacer(1, 25))
-    
-    # Vendor Info - better formatted section
-    vendor_info_data = [
-        ['Vendor Details:', ''],
-        [f'Name: {vendor.vendor_name if vendor else "Unknown Vendor"}', f'Email: {po.vendor}'],
-        [f'Phone: {vendor.phone if vendor else "N/A"}', f'Contact Person: {vendor.contact_person if vendor else "N/A"}'],
-        [f'Address: {vendor.address if vendor else "N/A"}', ''],
-        [f'City: {vendor.city if vendor else "N/A"}, {vendor.state if vendor else "N/A"}', f'Country: {vendor.country if vendor else "N/A"}']
+    # Vendor Details (Right Side)
+    vendor_data = [
+        ['VENDOR DETAILS'],
+        ['Name:', vendor.vendor_name if vendor else 'Unknown Vendor'],
+        ['Email:', po.vendor],
+        ['Phone:', vendor.phone if vendor else 'N/A'],
+        ['Address:', vendor.address if vendor else 'N/A'],
+        ['City:', f"{vendor.city if vendor else 'N/A'}, {vendor.state if vendor else 'N/A'}"]
     ]
     
-    # Vendor Info - enhanced layout
-    vendor_table = Table(vendor_info_data, colWidths=[3.5*inch, 3.5*inch])
-    vendor_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
+    # Create side-by-side table
+    combined_data = []
+    max_rows = max(len(po_data), len(vendor_data))
+    
+    for i in range(max_rows):
+        left_cell = po_data[i] if i < len(po_data) else ['', '']
+        right_cell = vendor_data[i] if i < len(vendor_data) else ['', '']
+        
+        # Ensure each cell has 2 elements
+        if len(left_cell) == 1:
+            left_cell.append('')
+        if len(right_cell) == 1:
+            right_cell.append('')
+            
+        combined_data.append([left_cell[0], left_cell[1], '', right_cell[0], right_cell[1]])
+    
+    details_table = Table(combined_data, colWidths=[80, left_width-80, gap_width, 80, right_width-80])
+    details_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),  # Left header
+        ('FONTNAME', (3, 0), (4, 0), 'Helvetica-Bold'),  # Right header
+        ('FONTSIZE', (0, 0), (1, 0), 11),
+        ('FONTSIZE', (3, 0), (4, 0), 11),
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Left labels
+        ('FONTNAME', (3, 1), (3, -1), 'Helvetica-Bold'),  # Right labels
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F0F8FF')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
-        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#4472C4')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('SPAN', (0, 0), (1, 0)),  # Span left header
+        ('SPAN', (3, 0), (4, 0)),  # Span right header
     ]))
-    story.append(vendor_table)
+    
+    story.append(details_table)
     story.append(Spacer(1, 25))
     
     # Items Table with proper column widths
-    table_data = [['S.No', 'Item Name', 'Quantity', 'Rate', 'Amount', 'Tax (%)', 'Tax Amount', 'Discount (%)', 'Discount Amount', 'Net Amount']]
+    table_data = [['S.No', 'Item Name', 'Qty', 'Rate', 'Amount', 'Tax%', 'Tax Amt', 'Disc%', 'Disc Amt', 'Net Amount']]
     
     # Calculate totals
     recalc_subtotal = 0
@@ -389,41 +374,29 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
         
         table_data.append([
             str(index),
-            item.item_name[:20] if len(item.item_name) > 20 else item.item_name,
+            item.item_name[:15],  # Truncate long names
             str(quantity),
-            f"Rs.{rate:.2f}",
-            f"Rs.{amount:.2f}",
-            f"{tax_percent}%",
-            f"Rs.{tax_amount:.2f}",
-            f"{discount_percent}%",
-            f"Rs.{discount_amount:.2f}",
-            f"Rs.{net_amount:.2f}"
+            f"{rate:.0f}",
+            f"{amount:.0f}",
+            f"{tax_percent:.0f}%",
+            f"{tax_amount:.0f}",
+            f"{discount_percent:.0f}%",
+            f"{discount_amount:.0f}",
+            f"{net_amount:.0f}"
         ])
     
     recalc_grand_total = recalc_subtotal + recalc_tax - recalc_discount
     
     # Add totals rows
     table_data.extend([
-        ['', '', '', '', '', '', '', '', 'Subtotal:', f"Rs.{recalc_subtotal:.2f}"],
-        ['', '', '', '', '', '', '', '', 'Total Tax:', f"Rs.{recalc_tax:.2f}"],
-        ['', '', '', '', '', '', '', '', 'Total Discount:', f"Rs.{recalc_discount:.2f}"],
-        ['', '', '', '', '', '', '', '', 'Grand Total:', f"Rs.{recalc_grand_total:.2f}"]
+        ['', '', '', '', '', '', '', '', 'Subtotal:', f"{recalc_subtotal:.0f}"],
+        ['', '', '', '', '', '', '', '', 'Total Tax:', f"{recalc_tax:.0f}"],
+        ['', '', '', '', '', '', '', '', 'Total Discount:', f"{recalc_discount:.0f}"],
+        ['', '', '', '', '', '', '', '', 'Grand Total:', f"{recalc_grand_total:.0f}"]
     ])
     
-    # Calculate proper column widths
-    page_width = A4[0] - 100  # Account for margins
-    col_widths = [
-        page_width * 0.06,  # S.No
-        page_width * 0.20,  # Item Name
-        page_width * 0.08,  # Quantity
-        page_width * 0.10,  # Rate
-        page_width * 0.10,  # Amount
-        page_width * 0.08,  # Tax %
-        page_width * 0.10,  # Tax Amount
-        page_width * 0.08,  # Discount %
-        page_width * 0.10,  # Discount Amount
-        page_width * 0.10   # Net Amount
-    ]
+    # Fixed column widths in points
+    col_widths = [30, 80, 40, 50, 60, 40, 50, 40, 50, 60]
     
     table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([

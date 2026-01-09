@@ -738,6 +738,144 @@ def get_damaged_returns(
     
     return damaged_items
 
+@router.get("/damaged-returns/pdf")
+def generate_damaged_returns_pdf(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_damaged_returns_view())):
+    """Generate PDF for damaged returns with company header"""
+    from utils.universal_pdf_generator import UniversalPDFGenerator
+    from fastapi.responses import StreamingResponse
+    import io
+    
+    try:
+        # Get damaged returns data
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT 
+                et.transfer_no,
+                et.id as transfer_id,
+                et.staff_name,
+                et.staff_id,
+                et.staff_location,
+                et.location,
+                et.returned_at,
+                eti.item_name,
+                eti.batch_no,
+                eti.damaged_quantity,
+                eti.damage_reason
+            FROM external_transfers et
+            JOIN external_transfer_items eti ON et.id = eti.transfer_id
+            WHERE eti.damaged_quantity > 0
+            ORDER BY et.returned_at DESC, et.transfer_no DESC
+        """)
+        
+        result = db.execute(query).fetchall()
+        
+        # Prepare data for PDF
+        headers = ['Transfer No', 'Item Name', 'Batch', 'Staff Name', 'Location', 'Qty', 'Reason', 'Date']
+        data = []
+        
+        for row in result:
+            data.append([
+                row[0][:12],  # transfer_no (truncated)
+                row[7][:15],  # item_name (truncated)
+                row[8][:10] if row[8] else '-',  # batch_no (truncated)
+                row[2][:12],  # staff_name (truncated)
+                row[4][:10],  # staff_location (truncated)
+                str(row[9]),  # damaged_quantity
+                (row[10] or 'No reason')[:15],  # damage_reason (truncated)
+                row[6].strftime('%d/%m/%Y') if row[6] else 'N/A'  # returned_at
+            ])
+        
+        # Generate PDF using universal generator
+        pdf_generator = UniversalPDFGenerator(db)
+        title = "DAMAGED RETURNS REPORT"
+        
+        pdf_buffer = pdf_generator.create_pdf(
+            title=title,
+            data=data,
+            headers=headers,
+            filename="damaged_returns_report.pdf",
+            column_widths=[0.9, 1.1, 0.7, 0.9, 0.8, 0.5, 1.1, 0.7]
+        )
+        
+        return StreamingResponse(
+            io.BytesIO(pdf_buffer.read()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=damaged_returns_report.pdf"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    """Get all damaged items from external transfers with optional filters"""
+    from sqlalchemy import text
+    
+    # Build dynamic query with filters
+    base_query = """
+        SELECT 
+            et.transfer_no,
+            et.id as transfer_id,
+            et.staff_name,
+            et.staff_id,
+            et.staff_location,
+            et.location,
+            et.returned_at,
+            eti.item_name,
+            eti.batch_no,
+            eti.damaged_quantity,
+            eti.damage_reason
+        FROM external_transfers et
+        JOIN external_transfer_items eti ON et.id = eti.transfer_id
+        WHERE eti.damaged_quantity > 0
+    """
+    
+    conditions = []
+    params = {}
+    
+    if start_date:
+        conditions.append("DATE(et.returned_at) >= :start_date")
+        params["start_date"] = start_date
+    
+    if end_date:
+        conditions.append("DATE(et.returned_at) <= :end_date")
+        params["end_date"] = end_date
+    
+    if staff_name:
+        conditions.append("LOWER(et.staff_name) LIKE LOWER(:staff_name)")
+        params["staff_name"] = f"%{staff_name}%"
+    
+    if item_name:
+        conditions.append("LOWER(eti.item_name) LIKE LOWER(:item_name)")
+        params["item_name"] = f"%{item_name}%"
+    
+    if transfer_no:
+        conditions.append("LOWER(et.transfer_no) LIKE LOWER(:transfer_no)")
+        params["transfer_no"] = f"%{transfer_no}%"
+    
+    if conditions:
+        base_query += " AND " + " AND ".join(conditions)
+    
+    base_query += " ORDER BY et.returned_at DESC, et.transfer_no DESC"
+    
+    result = db.execute(text(base_query), params).fetchall()
+    
+    damaged_items = []
+    for row in result:
+        damaged_items.append({
+            "transfer_no": row[0],
+            "transfer_id": row[1],
+            "staff_name": row[2],
+            "staff_id": row[3],
+            "staff_location": row[4],
+            "location": row[5],
+            "returned_at": row[6],
+            "item_name": row[7],
+            "batch_no": row[8],
+            "damaged_quantity": float(row[9]) if row[9] else 0.0,
+            "damage_reason": row[10]
+        })
+    
+    return damaged_items
+
 @router.get("/{transfer_id}", response_model=ExternalTransferResponse)
 def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
     from sqlalchemy import text

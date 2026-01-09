@@ -799,6 +799,340 @@ def test_warranty_storage(db: Session = Depends(get_tenant_session)):
         }
     }
 
+@router.get("/{grn_id}/print-pdf")
+def print_grn_pdf(grn_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_print())):
+    """Generate HTML for GRN with company header like vendor ledger"""
+    try:
+        # Get GRN details
+        grn = db.query(GRN).filter(GRN.id == grn_id).first()
+        if not grn:
+            raise HTTPException(status_code=404, detail="GRN not found")
+        
+        # Get GRN items with batches
+        items = db.query(GRNItem).filter(GRNItem.grn_id == grn_id).all()
+        
+        # Get company data using PDF header format
+        from utils.pdf_header_format import PDFHeaderFormat
+        header_formatter = PDFHeaderFormat(db)
+        company_data = header_formatter._get_company_data()
+        
+        # Generate HTML content with proper header
+        html_content = generate_grn_html(
+            grn=grn,
+            items=items,
+            company_data=company_data,
+            db=db
+        )
+        
+        # Audit log
+        log_audit(
+            db=db,
+            current_user=current_user,
+            action="PRINT_GRN",
+            table_name="grns",
+            record_id=grn.id,
+            new_values={"grn_number": grn.grn_number},
+            description=f"Printed GRN {grn.grn_number}",
+            request=None
+        )
+        
+        return {"html_content": html_content}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_grn_html(grn, items, company_data, db):
+    """Generate HTML content for GRN with proper header format like vendor ledger"""
+    from datetime import date
+    
+    try:
+        # Company details with fallback and validation
+        company_name = (company_data.get('name', 'NUTRYAH') or 'NUTRYAH').upper() if company_data else 'NUTRYAH'
+        company_phone = f"+{company_data.get('phone', '91 XXXXXXXXXX')}" if company_data and company_data.get('phone') else '+91 XXXXXXXXXX'
+        company_email = company_data.get('email', 'info@nutryah.com') if company_data and company_data.get('email') else 'info@nutryah.com'
+        company_gst = f"GST: {company_data.get('gst_number', 'XXXXXXXXXXXX')}" if company_data and company_data.get('gst_number') else 'GST: XXXXXXXXXXXX'
+        company_address = company_data.get('address', 'Address Line 1, City, State') if company_data and company_data.get('address') else 'Address Line 1, City, State'
+        
+        # Get logo as base64
+        logo_html = get_grn_logo_html(company_data.get('logo_path') if company_data else None)
+        
+        # Generate items table with tax calculation and validation
+        items_rows = ""
+        subtotal = 0
+        total_tax = 0
+        
+        if not items:
+            items_rows = '<tr><td colspan="12" class="text-center">No items found</td></tr>'
+        else:
+            for idx, item in enumerate(items, 1):
+                try:
+                    # Validate item data
+                    item_name = item.item_name or 'Unknown Item'
+                    po_qty = item.po_qty or 0
+                    received_qty = item.received_qty or 0
+                    uom = item.uom or 'PCS'
+                    rate = float(item.rate) if item.rate else 0.0
+                    
+                    # Get tax rate from item master with error handling
+                    tax_rate = 0.0
+                    try:
+                        master_item = db.query(Item).filter(Item.name == item_name).first()
+                        if master_item and master_item.tax:
+                            tax_rate = float(master_item.tax)
+                    except Exception as e:
+                        print(f"Error fetching tax rate for {item_name}: {e}")
+                    
+                    # Get batches with error handling
+                    batches = []
+                    try:
+                        batches = db.query(Batch).filter(Batch.grn_item_id == item.id).all()
+                    except Exception as e:
+                        print(f"Error fetching batches for item {item_name}: {e}")
+                    
+                    if batches:
+                        for batch in batches:
+                            try:
+                                batch_qty = int(batch.qty) if batch.qty else 0
+                                line_amount = batch_qty * rate
+                                line_tax = line_amount * (tax_rate / 100)
+                                subtotal += line_amount
+                                total_tax += line_tax
+                                
+                                # Safe date formatting
+                                mfg_date_str = batch.mfg_date.strftime('%d/%m/%Y') if batch.mfg_date else '-'
+                                expiry_date_str = batch.expiry_date.strftime('%d/%m/%Y') if batch.expiry_date else '-'
+                                batch_no = batch.batch_no or 'N/A'
+                                
+                                items_rows += f"""
+                                    <tr>
+                                        <td class="text-center">{idx}</td>
+                                        <td>{item_name}</td>
+                                        <td class="text-center">{po_qty}</td>
+                                        <td class="text-center">{received_qty}</td>
+                                        <td class="text-center">{uom}</td>
+                                        <td class="text-right">₹{rate:.2f}</td>
+                                        <td class="text-center">{tax_rate:.1f}%</td>
+                                        <td>{batch_no}</td>
+                                        <td class="text-center">{mfg_date_str}</td>
+                                        <td class="text-center">{expiry_date_str}</td>
+                                        <td class="text-center">{batch_qty}</td>
+                                        <td class="text-right">₹{line_amount:.2f}</td>
+                                    </tr>
+                                """
+                            except Exception as e:
+                                print(f"Error processing batch {batch.batch_no if batch else 'Unknown'}: {e}")
+                    else:
+                        # Item without batches
+                        try:
+                            line_amount = received_qty * rate
+                            line_tax = line_amount * (tax_rate / 100)
+                            subtotal += line_amount
+                            total_tax += line_tax
+                            
+                            items_rows += f"""
+                                <tr>
+                                    <td class="text-center">{idx}</td>
+                                    <td>{item_name}</td>
+                                    <td class="text-center">{po_qty}</td>
+                                    <td class="text-center">{received_qty}</td>
+                                    <td class="text-center">{uom}</td>
+                                    <td class="text-right">₹{rate:.2f}</td>
+                                    <td class="text-center">{tax_rate:.1f}%</td>
+                                    <td>-</td>
+                                    <td class="text-center">-</td>
+                                    <td class="text-center">-</td>
+                                    <td class="text-center">{received_qty}</td>
+                                    <td class="text-right">₹{line_amount:.2f}</td>
+                                </tr>
+                            """
+                        except Exception as e:
+                            print(f"Error processing item without batches {item_name}: {e}")
+                            
+                except Exception as e:
+                    print(f"Error processing item {item.item_name if item else 'Unknown'}: {e}")
+                    continue
+        
+        total_amount = subtotal + total_tax
+        
+        # Safe string formatting with validation
+        grn_number = grn.grn_number or 'N/A'
+        grn_date_str = grn.grn_date.strftime('%d/%m/%Y') if grn.grn_date else 'N/A'
+        invoice_date_str = grn.invoice_date.strftime('%d/%m/%Y') if grn.invoice_date else '—'
+        status_str = grn.status.value if grn.status else '—'
+        total_amount_str = f"{grn.total_amount:.2f}" if grn.total_amount else "0.00"
+        current_date_str = date.today().strftime('%d/%m/%Y')
+        
+        # Validate GRN fields
+        po_number = grn.po_number or '—'
+        store = grn.store or '—'
+        vendor_name = grn.vendor_name or 'Unknown Vendor'
+        invoice_number = grn.invoice_number or '—'
+        
+        html_template = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GRN - {grn_number}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }}
+        .logo-section {{ width: 200px; height: 80px; display: flex; align-items: center; justify-content: center; }}
+        .logo-section img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
+        .logo-placeholder {{ width: 200px; height: 80px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; }}
+        .company-section {{ text-align: right; }}
+        .company-name {{ font-size: 16px; font-weight: bold; color: #2E8B57; margin-bottom: 5px; }}
+        .company-subtitle {{ font-size: 9px; color: #666; margin-bottom: 15px; }}
+        .company-details {{ font-size: 8px; color: #000; line-height: 1.4; }}
+        .document-title {{ text-align: center; font-size: 20px; font-weight: bold; margin: 20px 0; }}
+        .section {{ margin-bottom: 25px; }}
+        .section-title {{ font-size: 16px; font-weight: bold; margin-bottom: 10px; }}
+        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 25px; }}
+        .info-item {{ margin-bottom: 5px; }}
+        .info-label {{ font-weight: bold; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }}
+        th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .text-center {{ text-align: center; }}
+        .text-right {{ text-align: right; }}
+        .totals-section {{ margin-top: 20px; }}
+        .totals-table {{ width: 300px; margin-left: auto; }}
+        .totals-table td {{ padding: 5px 10px; }}
+        .total-row {{ border-top: 2px solid #000; font-weight: bold; }}
+        .footer {{ margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }}
+        .error {{ color: red; font-style: italic; }}
+        @media print {{ body {{ margin: 0; }} }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        {logo_html}
+        <div class="company-section">
+            <div class="company-name">{company_name}</div>
+            <div class="company-subtitle">INVENTORY MANAGEMENT SYSTEM</div>
+            <div class="company-details">
+                <div>{company_phone}</div>
+                <div>{company_email}</div>
+                <div>{company_gst}</div>
+                <div>{company_address}</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="document-title">GOODS RECEIPT NOTE</div>
+    
+    <div class="info-grid">
+        <div class="section">
+            <div class="section-title">GRN Information</div>
+            <div class="info-item"><span class="info-label">GRN Number:</span> {grn_number}</div>
+            <div class="info-item"><span class="info-label">GRN Date:</span> {grn_date_str}</div>
+            <div class="info-item"><span class="info-label">PO Number:</span> {po_number}</div>
+            <div class="info-item"><span class="info-label">Store:</span> {store}</div>
+            <div class="info-item"><span class="info-label">Status:</span> {status_str}</div>
+        </div>
+        <div class="section">
+            <div class="section-title">Vendor & Invoice Details</div>
+            <div class="info-item"><span class="info-label">Vendor Name:</span> {vendor_name}</div>
+            <div class="info-item"><span class="info-label">Invoice Number:</span> {invoice_number}</div>
+            <div class="info-item"><span class="info-label">Invoice Date:</span> {invoice_date_str}</div>
+            <div class="info-item"><span class="info-label">Total Amount:</span> ₹{total_amount_str}</div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">Items Details</div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="text-center">S.No</th>
+                    <th>Item Name</th>
+                    <th class="text-center">PO Qty</th>
+                    <th class="text-center">Received Qty</th>
+                    <th class="text-center">UOM</th>
+                    <th class="text-right">Rate</th>
+                    <th class="text-center">Tax %</th>
+                    <th>Batch No</th>
+                    <th class="text-center">Mfg Date</th>
+                    <th class="text-center">Expiry Date</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {items_rows}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="totals-section">
+        <table class="totals-table">
+            <tr><td>Subtotal:</td><td class="text-right">₹{subtotal:.2f}</td></tr>
+            <tr><td>Tax Amount:</td><td class="text-right">₹{total_tax:.2f}</td></tr>
+            <tr><td>Discount:</td><td class="text-right">₹0.00</td></tr>
+            <tr class="total-row"><td>Grand Total:</td><td class="text-right">₹{total_amount:.2f}</td></tr>
+        </table>
+    </div>
+    
+    <div class="footer">
+        <p>This is a computer generated document. No signature required.</p>
+        <p>Generated on: {current_date_str}</p>
+    </div>
+</body>
+</html>
+        """
+        
+        return html_template
+        
+    except Exception as e:
+        print(f"Error generating GRN HTML: {e}")
+        return f"<html><body><h1>Error generating GRN report</h1><p>Error: {str(e)}</p></body></html>"
+
+def get_grn_logo_html(logo_path):
+    """Get logo HTML with base64 encoded image or placeholder"""
+    if not logo_path:
+        return '<div class="logo-placeholder"><span style="color: #666; font-size: 12px;">LOGO</span></div>'
+    
+    try:
+        from pathlib import Path
+        import base64
+        
+        # Try multiple possible paths for the logo
+        possible_paths = []
+        filename = Path(logo_path).name
+        
+        possible_paths.extend([
+            Path('uploads') / filename,
+            Path('backend/uploads') / filename,
+            Path(logo_path),
+            Path('uploads') / logo_path,
+        ])
+        
+        logo_file_path = None
+        for path in possible_paths:
+            if path.exists():
+                logo_file_path = path
+                break
+        
+        if logo_file_path and logo_file_path.exists():
+            # Read logo file and convert to base64
+            with open(logo_file_path, 'rb') as f:
+                logo_data = f.read()
+            
+            if len(logo_data) > 0:
+                # Get file extension for MIME type
+                file_ext = logo_file_path.suffix.lower()
+                mime_type = 'image/jpeg' if file_ext in ['.jpg', '.jpeg'] else 'image/png'
+                
+                # Convert to base64
+                logo_base64 = base64.b64encode(logo_data).decode('utf-8')
+                
+                return f'<div class="logo-section"><img src="data:{mime_type};base64,{logo_base64}" alt="Company Logo"></div>'
+    
+    except Exception as e:
+        print(f"Error loading logo: {e}")
+    
+    # Fallback to placeholder
+    return '<div class="logo-placeholder"><span style="color: #666; font-size: 12px;">LOGO</span></div>'
+
 @router.delete("/{grn_id}")
 def delete_grn(grn_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_grn_delete())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()

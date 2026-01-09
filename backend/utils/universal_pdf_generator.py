@@ -32,7 +32,7 @@ class UniversalPDFGenerator:
         doc = SimpleDocTemplate(
             buffer, 
             pagesize=A4, 
-            topMargin=105, 
+            topMargin=120, 
             bottomMargin=40, 
             leftMargin=40, 
             rightMargin=40

@@ -421,10 +421,24 @@ export default function GoodsReceipt() {
     }
     
     try {
-      const res = await api.get(`/grn/${grn.id}`);
-      setPrintModal({ isOpen: true, grn: res.data });
+      const res = await api.get(`/grn/${grn.id}/print-pdf`);
+      
+      if (res.data.html_content) {
+        // Create a new window for printing
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(res.data.html_content);
+        printWindow.document.close();
+        
+        // Wait for content to load then print
+        printWindow.onload = () => {
+          printWindow.print();
+          printWindow.close();
+        };
+      } else {
+        showToast('Failed to generate print content', 'error');
+      }
     } catch (err) {
-      showToast('Failed to fetch GRN details for printing', 'error');
+      showToast('Failed to print GRN', 'error');
     }
   };
 
