@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
+import Toast from '../../components/Toast';
+import { useToast } from '../../utils/useToast';
 import { hasPermission } from '../../utils/permissions';
 
 export default function ExternalTransfer() {
@@ -11,7 +13,7 @@ export default function ExternalTransfer() {
   const [locations, setLocations] = useState([]);
   const [itemBatches, setItemBatches] = useState({});
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
+  const { toast, showToast, hideToast } = useToast();
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showReturnProcessing, setShowReturnProcessing] = useState(false);
   const [selectedTransferId, setSelectedTransferId] = useState(null);
@@ -50,7 +52,7 @@ export default function ExternalTransfer() {
       setTransfers(response.data || []);
     } catch (err) {
       console.error('Failed to load transfers:', err);
-      showMessage('Failed to load transfers', 'error');
+      showToast('Failed to load transfers', 'error');
     } finally {
       setLoading(false);
     }
@@ -99,19 +101,16 @@ export default function ExternalTransfer() {
     }
   };
 
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
-  };
+
 
   const handleSubmit = async () => {
     if (!hasPermission("external_transfer.create")) {
-      showMessage("Permission denied", "error");
+      showToast("Permission denied", "error");
       return;
     }
     
     if (!form.staff_name || !form.staff_id || !form.staff_location || form.items.length === 0) {
-      showMessage('All fields and at least one item are required', 'error');
+      showToast('All fields and at least one item are required', 'error');
       return;
     }
 
@@ -138,12 +137,12 @@ export default function ExternalTransfer() {
       const response = await api.post('/api/external-transfers/', payload);
       console.log('Response:', response.data);
       
-      showMessage(`External transfer created successfully: ${response.data.transfer_no}`, 'success');
+      showToast(`External transfer created successfully: ${response.data.transfer_no}`, 'success');
       resetForm();
       loadTransfers();
     } catch (err) {
       console.error('Submit error:', err);
-      showMessage('Failed to create transfer: ' + (err.response?.data?.detail || err.message), 'error');
+      showToast('Failed to create transfer: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -188,12 +187,12 @@ export default function ExternalTransfer() {
     try {
       setLoading(true);
       const response = await api.put(`/api/external-transfers/${transferId}/send`);
-      showMessage('Transfer sent successfully', 'success');
+      showToast('Transfer sent successfully', 'success');
       loadTransfers();
     } catch (err) {
       console.error('Send error:', err);
       const errorMessage = err.response?.data?.detail || err.response?.data?.message || err.message;
-      showMessage('Failed to send transfer: ' + errorMessage, 'error');
+      showToast('Failed to send transfer: ' + errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -212,7 +211,7 @@ export default function ExternalTransfer() {
       setShowReturnProcessing(true);
     } catch (err) {
       console.error('Failed to fetch transfer items:', err);
-      showMessage('Failed to fetch transfer items', 'error');
+      showToast('Failed to fetch transfer items', 'error');
     }
   };
 
@@ -224,7 +223,7 @@ export default function ExternalTransfer() {
         quantity: returnQty
       });
       
-      showMessage(res.data.message, 'success');
+      showToast(res.data.message, 'success');
       
       // Force complete refresh with cache busting
       const refreshRes = await api.get(`/api/external-transfers/${selectedTransferId}/items?t=${Date.now()}`);
@@ -233,13 +232,13 @@ export default function ExternalTransfer() {
       
     } catch (err) {
       console.error('Return processing error:', err);
-      showMessage(err.response?.data?.detail || 'Failed to process return', 'error');
+      showToast(err.response?.data?.detail || 'Failed to process return', 'error');
     }
   };
 
   const handleReturnTransfer = async (transfer) => {
     if (!hasPermission("external_transfer.return")) {
-      showMessage("Permission denied", "error");
+      showToast("Permission denied", "error");
       return;
     }
     
@@ -291,7 +290,7 @@ export default function ExternalTransfer() {
     );
     
     if (!hasReturns) {
-      showMessage('Please enter return quantities for at least one item', 'error');
+      showToast('Please enter return quantities for at least one item', 'error');
       return;
     }
     
@@ -302,7 +301,7 @@ export default function ExternalTransfer() {
     
     const missingDeadlines = itemsWithReturns.filter(item => !item.return_deadline);
     if (missingDeadlines.length > 0) {
-      showMessage('Please set return deadline for all items being returned', 'error');
+      showToast('Please set return deadline for all items being returned', 'error');
       return;
     }
     
@@ -310,7 +309,7 @@ export default function ExternalTransfer() {
     if (returnStaffChanged) {
       if (!returnStaffDetails.staff_name || !returnStaffDetails.staff_phone || 
           !returnStaffDetails.staff_email || !returnStaffDetails.change_reason) {
-        showMessage('Please fill all return staff details when staff is changed', 'error');
+        showToast('Please fill all return staff details when staff is changed', 'error');
         return;
       }
     }
@@ -339,7 +338,7 @@ export default function ExternalTransfer() {
       console.log('Return payload:', payload);
       const response = await api.put(`/api/external-transfers/${selectedTransfer.id}/return`, payload);
       console.log('Return response:', response.data);
-      showMessage('Items returned successfully', 'success');
+      showToast('Items returned successfully', 'success');
       loadTransfers();
       setShowReturnModal(false);
       setReturnItems([]);
@@ -348,7 +347,7 @@ export default function ExternalTransfer() {
     } catch (err) {
       console.error('Return error:', err);
       const errorMessage = err.response?.data?.detail || err.response?.data?.message || err.message;
-      showMessage('Failed to return items: ' + errorMessage, 'error');
+      showToast('Failed to return items: ' + errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -408,13 +407,13 @@ export default function ExternalTransfer() {
       };
       
       await api.put(`/api/external-transfers/${selectedTransfer.id}`, payload);
-      showMessage('Transfer updated successfully', 'success');
+      showToast('Transfer updated successfully', 'success');
       loadTransfers();
       setShowEditModal(false);
       resetForm();
     } catch (err) {
       console.error('Edit error:', err);
-      showMessage('Failed to update transfer: ' + (err.response?.data?.detail || err.message), 'error');
+      showToast('Failed to update transfer: ' + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -422,7 +421,7 @@ export default function ExternalTransfer() {
 
   const handlePrintHistory = async (transfer) => {
     if (!hasPermission("external_transfer.print")) {
-      showMessage("Permission denied", "error");
+      showToast("Permission denied", "error");
       return;
     }
     
@@ -450,13 +449,13 @@ export default function ExternalTransfer() {
       
     } catch (error) {
       console.error('Error generating PDF:', error);
-      showMessage('Failed to generate PDF report', 'error');
+      showToast('Failed to generate PDF report', 'error');
     }
   };
 
   const handleDownloadPDF = async (transfer) => {
     if (!hasPermission("external_transfer.download")) {
-      showMessage("Permission denied", "error");
+      showToast("Permission denied", "error");
       return;
     }
     
@@ -479,7 +478,7 @@ export default function ExternalTransfer() {
       
     } catch (error) {
       console.error('Error generating PDF:', error);
-      showMessage('Failed to generate PDF', 'error');
+      showToast('Failed to generate PDF', 'error');
     }
   };
 
@@ -614,13 +613,7 @@ export default function ExternalTransfer() {
         </div>
       </div>
 
-      {message.text && (
-        <div className={`mx-6 mt-4 p-3 rounded-lg ${
-          message.type === 'error' ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-green-100 text-green-700 border border-green-300'
-        }`}>
-          {message.text}
-        </div>
-      )}
+
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
@@ -1529,6 +1522,12 @@ export default function ExternalTransfer() {
       )
       </>
       )}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

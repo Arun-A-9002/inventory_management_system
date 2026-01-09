@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import { getCountries, getStates, getCities } from "../../utils/locationData";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function Vendor() {
@@ -8,6 +10,7 @@ export default function Vendor() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const { toast, showToast, hideToast } = useToast();
   
   // QUALIFICATION STATES - COMMENTED FOR FUTURE USE
   // const [qualificationForm, setQualificationForm] = useState({
@@ -100,6 +103,7 @@ export default function Vendor() {
       setVendors(res.data || []);
     } catch (err) {
       console.error("Error loading vendors:", err);
+      showToast("Failed to load vendors", 'error');
     } finally {
       setLoading(false);
     }
@@ -155,30 +159,34 @@ export default function Vendor() {
 
   const registerVendor = async () => {
     if (!hasPermission(editingId ? "vendors.edit" : "vendors.create")) {
-      return alert("Permission denied");
+      showToast("Permission denied", 'error');
+      return;
     }
     if (!vendorForm.vendor_name || !vendorForm.phone || !vendorForm.email) {
-      return alert("Vendor name, phone, and email are required");
+      showToast("Vendor name, phone, and email are required", 'error');
+      return;
     }
 
     try {
       if (editingId) {
         await api.put(`/vendors/${editingId}`, vendorForm);
+        showToast("Vendor updated successfully", 'success');
       } else {
         await api.post("/vendors/", vendorForm);
+        showToast("Vendor created successfully", 'success');
       }
       resetForm();
       loadVendors();
-      alert("Vendor saved successfully");
     } catch (err) {
       console.error(err);
-      alert("Error saving vendor");
+      showToast("Error saving vendor", 'error');
     }
   };
 
   const handleEdit = (vendor) => {
     if (!hasPermission("vendors.edit")) {
-      return alert("Permission denied");
+      showToast("Permission denied", 'error');
+      return;
     }
     setEditingId(vendor.id);
     const country = vendor.country || "";
@@ -214,21 +222,24 @@ export default function Vendor() {
 
   const handleDelete = async (id) => {
     if (!hasPermission("vendors.delete")) {
-      return alert("Permission denied");
+      showToast("Permission denied", 'error');
+      return;
     }
     if (!window.confirm("Delete this vendor?")) return;
     try {
       await api.delete(`/vendors/${id}`);
+      showToast("Vendor deleted successfully", 'success');
       loadVendors();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete vendor");
+      showToast("Failed to delete vendor", 'error');
     }
   };
 
   const updateVendorStatus = async (vendorId, newStatus) => {
     if (!hasPermission("vendors.status")) {
-      return alert("Permission denied");
+      showToast("Permission denied", 'error');
+      return;
     }
     try {
       const statusValue = newStatus === "Active" ? "active" : "inactive";
@@ -240,9 +251,10 @@ export default function Vendor() {
             : vendor
         )
       );
+      showToast(`Vendor ${newStatus === "Active" ? "activated" : "deactivated"} successfully`, 'success');
     } catch (err) {
       console.error(err);
-      alert("Failed to update vendor status");
+      showToast("Failed to update vendor status", 'error');
       loadVendors();
     }
   };
@@ -1228,6 +1240,13 @@ export default function Vendor() {
           </div>
         </div>
       )} */}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

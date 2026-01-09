@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import MasterDataHeader from "../../components/MasterDataHeader";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function Category() {
@@ -8,6 +10,7 @@ export default function Category() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const { toast, showToast, hideToast } = useToast();
 
   const [form, setForm] = useState({
     name: "",
@@ -28,55 +31,73 @@ export default function Category() {
       setCategories(res.data || []);
     } catch (err) {
       console.error(err);
-      alert("Failed to load categories");
+      showToast("Failed to load categories", 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCreate = async () => {
-    if (!hasPermission("category.create")) return alert("Permission denied");
-    if (!form.name.trim()) return alert("Category name is required");
+    if (!hasPermission("category.create")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
+    if (!form.name.trim()) {
+      showToast("Category name is required", 'error');
+      return;
+    }
 
     try {
       await api.post("/category/", form);
       setForm({ name: "", description: "" });
       setShowCreateForm(false);
+      showToast("Category created successfully", 'success');
       loadCategories();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.detail || "Create failed");
+      showToast(err?.response?.data?.detail || "Create failed", 'error');
     }
   };
 
   const startEdit = (c) => {
-    if (!hasPermission("category.edit")) return alert("Permission denied");
+    if (!hasPermission("category.edit")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     setEditingId(c.id);
     setEditForm({ ...c });
   };
 
   const handleUpdate = async () => {
-    if (!hasPermission("category.edit")) return alert("Permission denied");
+    if (!hasPermission("category.edit")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     try {
       await api.put(`/category/${editingId}`, editForm);
       setEditingId(null);
+      showToast("Category updated successfully", 'success');
       loadCategories();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.detail || "Update failed");
+      showToast(err?.response?.data?.detail || "Update failed", 'error');
     }
   };
 
   const handleDelete = async (id) => {
-    if (!hasPermission("category.delete")) return alert("Permission denied");
+    if (!hasPermission("category.delete")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     if (!window.confirm("Delete this category?")) return;
 
     try {
       await api.delete(`/category/${id}`);
+      showToast("Category deleted successfully", 'success');
       loadCategories();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.detail || "Delete failed");
+      showToast(err?.response?.data?.detail || "Delete failed", 'error');
     }
   };
 
@@ -261,6 +282,13 @@ export default function Category() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

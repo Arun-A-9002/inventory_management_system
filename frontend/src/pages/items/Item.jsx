@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import api from "../../api";
 import QRCode from "react-qr-code";
 import JsBarcode from "jsbarcode";
+import Toast from "../../components/Toast";
 import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function Item() {
   const [items, setItems] = useState([]);
-  const { showToast } = useToast();
+  const { toast, showToast, hideToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
@@ -1192,6 +1193,13 @@ const downloadQR = () => {
       )}
       
       </div>
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </>
   );
 }

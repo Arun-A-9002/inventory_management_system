@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api';
+import Toast from '../../components/Toast';
+import { useToast } from '../../utils/useToast';
 import { hasPermission } from '../../utils/permissions';
 
 export default function CustomerRegistration() {
@@ -8,6 +10,7 @@ export default function CustomerRegistration() {
   const [showForm, setShowForm] = useState(false);
   const [viewingCustomer, setViewingCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const { toast, showToast, hideToast } = useToast();
   const [customerForm, setCustomerForm] = useState({
     customer_type: '',
     org_name: '', org_address: '', org_pan: '', org_gst: '', org_mobile: '', org_type: '',
@@ -16,7 +19,6 @@ export default function CustomerRegistration() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
 
   useEffect(() => {
     if (hasPermission('customers.view')) {
@@ -31,12 +33,13 @@ export default function CustomerRegistration() {
       setUsers(res.data || []);
     } catch (err) {
       console.error('Failed to fetch users:', err);
+      showToast('Failed to load users', 'error');
     }
   };
 
   const fetchCustomers = async () => {
     if (!hasPermission('customers.view')) {
-      showMessage('You do not have permission to view customers', 'error');
+      showToast('You do not have permission to view customers', 'error');
       return;
     }
     
@@ -45,24 +48,21 @@ export default function CustomerRegistration() {
       setCustomers(res.data || []);
     } catch (err) {
       if (err.response?.status === 404 || err.response?.data?.detail?.includes('table')) {
-        showMessage('Customer table not found. Please run database migrations.', 'error');
+        showToast('Customer table not found. Please run database migrations.', 'error');
       } else if (err.message === 'Network Error') {
-        showMessage('Backend server is not running. Please start the server.', 'error');
+        showToast('Backend server is not running. Please start the server.', 'error');
       } else {
-        showMessage('Failed to load customers: ' + (err.response?.data?.detail || err.message), 'error');
+        showToast('Failed to load customers: ' + (err.response?.data?.detail || err.message), 'error');
       }
       setCustomers([]);
     }
   };
 
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
-  };
+
 
   const updateCustomerStatus = async (customerId, status) => {
     if (!hasPermission('customers.status')) {
-      showMessage('You do not have permission to change customer status', 'error');
+      showToast('You do not have permission to change customer status', 'error');
       return;
     }
     
@@ -72,10 +72,10 @@ export default function CustomerRegistration() {
         setCustomers(customers.map(customer => 
           customer.id === customerId ? { ...customer, status: status } : customer
         ));
-        showMessage(status === 'approved' ? 'Customer approved and email sent successfully' : `Customer status updated to ${status}`);
+        showToast(status === 'approved' ? 'Customer approved and email sent successfully' : `Customer status updated to ${status}`, 'success');
       }
     } catch (err) {
-      showMessage('Failed to update customer status: ' + (err.response?.data?.detail || err.message), 'error');
+      showToast('Failed to update customer status: ' + (err.response?.data?.detail || err.message), 'error');
       fetchCustomers();
     }
   };
@@ -84,23 +84,23 @@ export default function CustomerRegistration() {
     e.preventDefault();
     
     if (!hasPermission(editingCustomer ? 'customers.edit' : 'customers.create')) {
-      showMessage(`You do not have permission to ${editingCustomer ? 'edit' : 'create'} customers`, 'error');
+      showToast(`You do not have permission to ${editingCustomer ? 'edit' : 'create'} customers`, 'error');
       return;
     }
     
     if (!customerForm.customer_type) {
-      showMessage('Please select customer type', 'error');
+      showToast('Please select customer type', 'error');
       return;
     }
 
     if (customerForm.customer_type === 'organization') {
       if (!customerForm.org_name || !customerForm.org_mobile) {
-        showMessage('Organization name and mobile are required', 'error');
+        showToast('Organization name and mobile are required', 'error');
         return;
       }
     } else if (customerForm.customer_type === 'self') {
       if (!customerForm.name || !customerForm.mobile) {
-        showMessage('Name and mobile are required', 'error');
+        showToast('Name and mobile are required', 'error');
         return;
       }
     }
@@ -109,10 +109,10 @@ export default function CustomerRegistration() {
       setLoading(true);
       if (editingCustomer) {
         await api.put(`/customers/${editingCustomer.id}`, customerForm);
-        showMessage('Customer updated successfully');
+        showToast('Customer updated successfully', 'success');
       } else {
         await api.post('/customers/', customerForm);
-        showMessage('Customer registered successfully');
+        showToast('Customer registered successfully', 'success');
       }
       
       setCustomerForm({
@@ -125,7 +125,7 @@ export default function CustomerRegistration() {
       setEditingCustomer(null);
       fetchCustomers();
     } catch (err) {
-      showMessage(`Failed to ${editingCustomer ? 'update' : 'register'} customer: ` + (err.response?.data?.detail || err.message), 'error');
+      showToast(`Failed to ${editingCustomer ? 'update' : 'register'} customer: ` + (err.response?.data?.detail || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -288,7 +288,7 @@ export default function CustomerRegistration() {
 
   const handleEdit = (customer) => {
     if (!hasPermission('customers.edit')) {
-      showMessage('You do not have permission to edit customers', 'error');
+      showToast('You do not have permission to edit customers', 'error');
       return;
     }
     
@@ -309,17 +309,17 @@ export default function CustomerRegistration() {
 
   const handleDelete = async (customer) => {
     if (!hasPermission('customers.delete')) {
-      showMessage('You do not have permission to delete customers', 'error');
+      showToast('You do not have permission to delete customers', 'error');
       return;
     }
     
     if (window.confirm(`Are you sure you want to delete customer "${customer.customer_type === 'organization' ? customer.org_name : customer.name}"?`)) {
       try {
         await api.delete(`/customers/${customer.id}`);
-        showMessage('Customer deleted successfully');
+        showToast('Customer deleted successfully', 'success');
         fetchCustomers();
       } catch (error) {
-        showMessage('Failed to delete customer: ' + (error.response?.data?.detail || error.message), 'error');
+        showToast('Failed to delete customer: ' + (error.response?.data?.detail || error.message), 'error');
       }
     }
   };
@@ -390,13 +390,6 @@ export default function CustomerRegistration() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Message */}
-        {message.text && (
-          <div className={`mb-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            {message.text}
-          </div>
-        )}
-
         {/* Customer List */}
         {loading && customers.length === 0 ? (
           <div className="flex justify-center items-center h-64">
@@ -762,6 +755,13 @@ export default function CustomerRegistration() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

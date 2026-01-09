@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function InventoryLocations() {
@@ -10,7 +12,7 @@ export default function InventoryLocations() {
   const [editingLocation, setEditingLocation] = useState(null);
   const [viewingLocation, setViewingLocation] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
+  const { toast, showToast, hideToast } = useToast();
   const [formData, setFormData] = useState({
     code: "",
     name: "",
@@ -24,14 +26,9 @@ export default function InventoryLocations() {
     }
   }, []);
 
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
-  };
-
   const loadLocations = async () => {
     if (!hasPermission('locations.view')) {
-      showMessage('You do not have permission to view locations', 'error');
+      showToast('You do not have permission to view locations', 'error');
       return;
     }
 
@@ -42,7 +39,7 @@ export default function InventoryLocations() {
       setLocations(locationData);
       filterLocations(locationData, activeFilter);
     } catch (error) {
-      showMessage('Failed to load locations: ' + (error.response?.data?.detail || error.message), 'error');
+      showToast('Failed to load locations: ' + (error.response?.data?.detail || error.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -68,17 +65,17 @@ export default function InventoryLocations() {
     
     const requiredPermission = formData.location_type === 'external' ? 'locations.create_external' : 'locations.create_internal';
     if (!editingLocation && !hasPermission(requiredPermission)) {
-      showMessage(`You do not have permission to create ${formData.location_type} locations`, 'error');
+      showToast(`You do not have permission to create ${formData.location_type} locations`, 'error');
       return;
     }
 
     if (editingLocation && !hasPermission('locations.edit')) {
-      showMessage('You do not have permission to edit locations', 'error');
+      showToast('You do not have permission to edit locations', 'error');
       return;
     }
 
     if (!formData.code || !formData.name) {
-      showMessage("Code and Name are required", 'error');
+      showToast("Code and Name are required", 'error');
       return;
     }
 
@@ -86,15 +83,15 @@ export default function InventoryLocations() {
     try {
       if (editingLocation) {
         await api.put(`/inventory/locations/${editingLocation.id}`, formData);
-        showMessage('Location updated successfully');
+        showToast('Location updated successfully', 'success');
       } else {
         await api.post("/inventory/locations/", formData);
-        showMessage('Location created successfully');
+        showToast('Location created successfully', 'success');
       }
       handleCancel();
       await loadLocations();
     } catch (error) {
-      showMessage(error.response?.data?.detail || "Error saving location", 'error');
+      showToast(error.response?.data?.detail || "Error saving location", 'error');
     } finally {
       setLoading(false);
     }
@@ -102,7 +99,7 @@ export default function InventoryLocations() {
 
   const handleEdit = (location) => {
     if (!hasPermission('locations.edit')) {
-      showMessage('You do not have permission to edit locations', 'error');
+      showToast('You do not have permission to edit locations', 'error');
       return;
     }
 
@@ -122,7 +119,7 @@ export default function InventoryLocations() {
 
   const handleStatusToggle = async (location) => {
     if (!hasPermission('locations.edit')) {
-      showMessage('You do not have permission to change location status', 'error');
+      showToast('You do not have permission to change location status', 'error');
       return;
     }
 
@@ -145,7 +142,7 @@ export default function InventoryLocations() {
         ...location,
         is_active: newStatus
       });
-      showMessage(`Location ${newStatus ? 'activated' : 'deactivated'} successfully`);
+      showToast(`Location ${newStatus ? 'activated' : 'deactivated'} successfully`, 'success');
     } catch (error) {
       // Revert local state on error
       setLocations(prevLocations => 
@@ -158,13 +155,13 @@ export default function InventoryLocations() {
           loc.id === location.id ? { ...loc, is_active: !newStatus } : loc
         )
       );
-      showMessage(error.response?.data?.detail || "Error updating location status", 'error');
+      showToast(error.response?.data?.detail || "Error updating location status", 'error');
     }
   };
 
   const handleExternalLocation = () => {
     if (!hasPermission('locations.create_external')) {
-      showMessage('You do not have permission to create external locations', 'error');
+      showToast('You do not have permission to create external locations', 'error');
       return;
     }
 
@@ -179,7 +176,7 @@ export default function InventoryLocations() {
 
   const handleInternalLocation = () => {
     if (!hasPermission('locations.create_internal')) {
-      showMessage('You do not have permission to create internal locations', 'error');
+      showToast('You do not have permission to create internal locations', 'error');
       return;
     }
 
@@ -263,13 +260,6 @@ export default function InventoryLocations() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Message */}
-        {message.text && (
-          <div className={`mb-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            {message.text}
-          </div>
-        )}
-
         {/* Filter Tabs */}
         <div className="mb-6">
           <div className="border-b border-gray-200">
@@ -631,6 +621,13 @@ export default function InventoryLocations() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

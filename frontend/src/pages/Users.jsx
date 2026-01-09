@@ -1,6 +1,8 @@
 // src/pages/Users.jsx
 import { useEffect, useState } from "react";
 import api from "../api";
+import Toast from "../components/Toast";
+import { useToast } from "../utils/useToast";
 import { hasPermission } from "../utils/permissions";
 
 export default function Users() {
@@ -19,6 +21,7 @@ export default function Users() {
   const [isActive, setIsActive] = useState(true);
   const [selectedRoles, setSelectedRoles] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
+  const { toast, showToast, hideToast } = useToast();
 
   useEffect(() => {
     if (hasPermission("users.view")) loadAll();
@@ -33,7 +36,7 @@ export default function Users() {
       setUsers(uRes.data || []);
     } catch (e) {
       console.error("Load error:", e);
-      alert("Failed to load data");
+      showToast("Failed to load data", 'error');
     } finally {
       setLoading(false);
     }
@@ -46,10 +49,19 @@ export default function Users() {
   }
 
   async function handleCreate() {
-    if (!editingId && !hasPermission("users.create")) return alert("Permission denied");
-    if (editingId && !hasPermission("users.update")) return alert("Permission denied");
+    if (!editingId && !hasPermission("users.create")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
+    if (editingId && !hasPermission("users.update")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
 
-    if (!fullName || !email || (!editingId && !password)) return alert("Name, email and password required");
+    if (!fullName || !email || (!editingId && !password)) {
+      showToast("Name, email and password required", 'error');
+      return;
+    }
 
     try {
       const payload = {
@@ -68,11 +80,12 @@ export default function Users() {
         await api.put(`/users/${editingId}`, { ...payload, password: password || undefined });
       }
 
+      showToast(editingId ? "User updated successfully" : "User created successfully", 'success');
       closeModal();
       await loadAll();
     } catch (e) {
       console.error("Full error:", e);
-      alert(e?.response?.data?.detail || "Save failed");
+      showToast(e?.response?.data?.detail || "Save failed", 'error');
     }
   }
 
@@ -84,7 +97,10 @@ export default function Users() {
   }
 
   function startEdit(u) {
-    if (!hasPermission("users.update")) return alert("Permission denied");
+    if (!hasPermission("users.update")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     setEditingId(u.id);
     setFullName(u.full_name);
     setEmail(u.email);
@@ -95,14 +111,18 @@ export default function Users() {
   }
 
   async function handleDelete(id) {
-    if (!hasPermission("users.delete")) return alert("Permission denied");
+    if (!hasPermission("users.delete")) {
+      showToast("Permission denied", 'error');
+      return;
+    }
     if (!window.confirm("Delete user?")) return;
     try {
       await api.delete(`/users/${id}`);
+      showToast("User deleted successfully", 'success');
       await loadAll();
     } catch (e) {
       console.error(e);
-      alert("Delete failed");
+      showToast("Delete failed", 'error');
     }
   }
 
@@ -407,6 +427,13 @@ export default function Users() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

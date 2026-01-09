@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function StockManagement() {
@@ -10,6 +12,7 @@ export default function StockManagement() {
   const [dashboard, setDashboard] = useState(null);
   const [selectedBatches, setSelectedBatches] = useState({});
   const [viewModal, setViewModal] = useState({ isOpen: false, item: null });
+  const { toast, showToast, hideToast } = useToast();
   
 
 
@@ -48,7 +51,7 @@ export default function StockManagement() {
 
   const handleDispense = async (item, batchNo) => {
     if (!hasPermission("stock_ledger.dispense")) {
-      alert("Permission denied");
+      showToast("Permission denied", 'error');
       return;
     }
     
@@ -67,11 +70,11 @@ export default function StockManagement() {
           status: isExpired(batch.expiry_date) ? 'Expired' : 'Good'
         });
         
-        alert('Item dispensed successfully and recorded in dispensed items');
+        showToast('Item dispensed successfully and recorded in dispensed items', 'success');
         loadData();
         setViewModal({ isOpen: false, item: null });
       } catch (error) {
-        alert('Failed to dispense item: ' + (error.response?.data?.detail || error.message));
+        showToast('Failed to dispense item: ' + (error.response?.data?.detail || error.message), 'error');
       }
     }
   };
@@ -113,6 +116,7 @@ export default function StockManagement() {
       console.log('Stock data:', enrichedStocks);
     } catch (error) {
       console.error("Error loading data:", error);
+      showToast("Failed to load stock data", 'error');
     }
   };
 
@@ -459,6 +463,13 @@ export default function StockManagement() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import Toast from '../components/Toast';
+import { useToast } from '../utils/useToast';
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const { toast, showToast, hideToast } = useToast();
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -34,6 +37,7 @@ export default function AuditLog() {
       }));
     } catch (error) {
       console.error('Error fetching audit logs:', error);
+      showToast('Failed to load audit logs', 'error');
     } finally {
       setLoading(false);
     }
@@ -83,7 +87,7 @@ export default function AuditLog() {
       }, 1000);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF report');
+      showToast('Error generating PDF report', 'error');
     }
   };
 
@@ -104,7 +108,7 @@ export default function AuditLog() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      alert('Error downloading PDF report');
+      showToast('Error downloading PDF report', 'error');
     }
   };
 
@@ -349,6 +353,13 @@ export default function AuditLog() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }
