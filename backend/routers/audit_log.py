@@ -8,7 +8,7 @@ from typing import Optional
 import json
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from datetime import datetime
@@ -98,9 +98,9 @@ def print_audit_logs(
     
     logs = query.order_by(AuditLog.timestamp.desc()).all()
     
-    # Create PDF with exact margins to align with header
+    # Create PDF with portrait orientation
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=110, bottomMargin=40, leftMargin=40, rightMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=110, bottomMargin=40, leftMargin=20, rightMargin=20)
     
     # Initialize header format
     header_format = PDFHeaderFormat(db)
@@ -126,46 +126,77 @@ def print_audit_logs(
     story.append(report_info)
     story.append(Spacer(1, 15))
     
-    # Table data with better text handling
-    table_data = [['Timestamp', 'User', 'Action', 'Module', 'Description']]
+    # Create paragraph style for table cells
+    cell_style = ParagraphStyle(
+        'CellStyle',
+        fontSize=6,
+        leading=7,
+        wordWrap='CJK'
+    )
+    
+    # Table data with Paragraph objects for proper text wrapping
+    table_data = [['ID', 'User', 'Action', 'Table', 'Old Values', 'New Values', 'IP', 'User Agent', 'Timestamp']]
     
     for log in logs:
-        timestamp = log.timestamp.strftime('%m-%d %H:%M') if log.timestamp else 'N/A'  # Shorter format
-        user = (log.user_name or 'System')[:12]  # Limit to 12 chars
-        action = (log.action or 'N/A')[:8]  # Limit to 8 chars
-        module = (log.module or 'N/A')[:12]  # Limit to 12 chars
-        description = (log.description or f"{log.action} on {log.table_name}")[:35]  # Limit to 35 chars
+        timestamp = log.timestamp.strftime('%m/%d %H:%M') if log.timestamp else 'N/A'
+        user = (log.user_name or 'System')[:10]
+        
+        # Wrap long text in Paragraph objects
+        action = Paragraph(log.action or 'N/A', cell_style)
+        table_name = Paragraph(log.table_name or log.module or 'N/A', cell_style)
+        
+        # Show full JSON values in human-readable format
+        old_values = 'N/A'
+        if log.old_values:
+            try:
+                old_json = json.loads(log.old_values)
+                old_readable = '\n'.join([f'{k}: {v}' for k, v in old_json.items()])
+                old_values = Paragraph(old_readable, cell_style)
+            except:
+                old_values = Paragraph(str(log.old_values), cell_style)
+        else:
+            old_values = Paragraph('N/A', cell_style)
+        
+        new_values = 'N/A'
+        if log.new_values:
+            try:
+                new_json = json.loads(log.new_values)
+                new_readable = '\n'.join([f'{k}: {v}' for k, v in new_json.items()])
+                new_values = Paragraph(new_readable, cell_style)
+            except:
+                new_values = Paragraph(str(log.new_values), cell_style)
+        else:
+            new_values = Paragraph('N/A', cell_style)
+        
+        ip_address = log.ip_address or 'N/A'
+        user_agent = Paragraph(log.user_agent or 'N/A', cell_style)
             
-        table_data.append([timestamp, user, action, module, description])
+        table_data.append([str(log.id), user, action, table_name, old_values, new_values, ip_address, user_agent, timestamp])
     
-    # Create table with optimized column widths
-    table = Table(table_data, colWidths=[1.0*inch, 0.9*inch, 0.7*inch, 1.0*inch, 2.4*inch])
+    # Create table with dynamic row heights to accommodate wrapped text
+    table = Table(table_data, colWidths=[0.4*inch, 0.6*inch, 0.8*inch, 0.8*inch, 1.4*inch, 1.4*inch, 0.7*inch, 1.0*inch, 0.8*inch])
     table.setStyle(TableStyle([
         # Header styling
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Center align headers
-        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # Center align timestamp column
-        ('ALIGN', (1, 1), (2, -1), 'CENTER'),  # Center align user and action columns
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Center align module column
-        ('ALIGN', (4, 1), (4, -1), 'LEFT'),    # Left align description column
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('TOPPADDING', (0, 0), (-1, 0), 6),
         
         # Data rows styling
         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('FONTSIZE', (0, 1), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 3),
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         
         # Grid and borders
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     
     story.append(table)
