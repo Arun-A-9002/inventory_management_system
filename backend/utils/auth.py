@@ -255,7 +255,9 @@ def get_current_user(Authorization: str = Header(None)) -> dict:
             from database import get_tenant_db
             from models.tenant_models import User
 
-            tenant_db_gen = get_tenant_db("arun")
+            # Get the tenant database name from the token
+            tenant_db_name = payload.get("tenant_db", "arun")  # fallback to arun for old tokens
+            tenant_db_gen = get_tenant_db(tenant_db_name)
             tenant_db = next(tenant_db_gen)
 
             # sub may be string; convert safely

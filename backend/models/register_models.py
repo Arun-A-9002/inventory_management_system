@@ -26,6 +26,7 @@ class Tenant(Base):
     admin_phone = Column(String(50))
     admin_secondary_phone = Column(String(50))
     designation = Column(String(100))
+    tenant_code = Column(String(50))
 
     status = Column(String(50))
     password_hash = Column(String(255))

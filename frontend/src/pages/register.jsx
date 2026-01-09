@@ -1,17 +1,34 @@
 import React, { useEffect, useState } from "react";
+import { CheckCircle, Building, MapPin, User, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
 /* ---------- Popup component ---------- */
 const Popup = ({ type = "error", message = "", onClose }) => (
-  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-    <div
-      className={`p-6 rounded-xl shadow-xl text-white text-base font-medium max-w-lg text-center ${
-        type === "success" ? "bg-green-600" : "bg-red-600"
-      }`}
-    >
-      <div style={{ whiteSpace: "pre-wrap" }}>{String(message)}</div>
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
+    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 transform transition-all">
+      <div className="flex items-center justify-center mb-4">
+        {type === "success" ? (
+          <CheckCircle className="w-12 h-12 text-green-500" />
+        ) : (
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <span className="text-red-500 text-xl font-bold">!</span>
+          </div>
+        )}
+      </div>
+      <div className="text-center mb-6">
+        <h3 className={`text-lg font-semibold mb-2 ${
+          type === "success" ? "text-green-800" : "text-red-800"
+        }`}>
+          {type === "success" ? "Success!" : "Error"}
+        </h3>
+        <p className="text-gray-600 whitespace-pre-wrap">{String(message)}</p>
+      </div>
       <button
         onClick={onClose}
-        className="mt-4 inline-block bg-white text-black px-4 py-2 rounded-lg"
+        className={`w-full py-3 rounded-xl font-medium transition-colors ${
+          type === "success" 
+            ? "bg-green-500 hover:bg-green-600 text-white" 
+            : "bg-red-500 hover:bg-red-600 text-white"
+        }`}
       >
         Close
       </button>
@@ -30,10 +47,34 @@ const validators = {
     /[a-z]/.test(v) &&
     /\d/.test(v) &&
     /[!@#$%^&*(),.?":{}|<>]/.test(v),
-  city: (v) => ["Chennai", "Coimbatore", "Madurai", "Trichy", "Salem"].includes(v),
-  state: (v) =>
-    ["Tamil Nadu", "Kerala", "Karnataka", "Andhra Pradesh", "Telangana"].includes(v),
+  city: (v) => v?.trim() !== "",
+  state: (v) => v?.trim() !== "",
 };
+
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+  "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi", "Jammu and Kashmir",
+  "Ladakh", "Puducherry", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Lakshadweep",
+  "Andaman and Nicobar Islands"
+];
+
+const INDIAN_CITIES = [
+  "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Ahmedabad", "Chennai", "Kolkata", "Surat", "Pune", "Jaipur",
+  "Lucknow", "Kanpur", "Nagpur", "Indore", "Thane", "Bhopal", "Visakhapatnam", "Pimpri-Chinchwad",
+  "Patna", "Vadodara", "Ghaziabad", "Ludhiana", "Agra", "Nashik", "Faridabad", "Meerut", "Rajkot",
+  "Kalyan-Dombivli", "Vasai-Virar", "Varanasi", "Srinagar", "Aurangabad", "Dhanbad", "Amritsar",
+  "Navi Mumbai", "Allahabad", "Ranchi", "Howrah", "Coimbatore", "Jabalpur", "Gwalior", "Vijayawada",
+  "Jodhpur", "Madurai", "Raipur", "Kota", "Guwahati", "Chandigarh", "Solapur", "Hubballi-Dharwad",
+  "Tiruchirappalli", "Bareilly", "Mysore", "Tiruppur", "Gurgaon", "Aligarh", "Jalandhar", "Bhubaneswar",
+  "Salem", "Warangal", "Guntur", "Bhiwandi", "Saharanpur", "Gorakhpur", "Bikaner", "Amravati",
+  "Noida", "Jamshedpur", "Bhilai", "Cuttack", "Firozabad", "Kochi", "Nellore", "Bhavnagar",
+  "Dehradun", "Durgapur", "Asansol", "Rourkela", "Nanded", "Kolhapur", "Ajmer", "Akola",
+  "Gulbarga", "Jamnagar", "Ujjain", "Loni", "Siliguri", "Jhansi", "Ulhasnagar", "Jammu",
+  "Sangli-Miraj & Kupwad", "Mangalore", "Erode", "Belgaum", "Ambattur", "Tirunelveli", "Malegaon",
+  "Gaya", "Jalgaon", "Udaipur", "Maheshtala"
+];
 
 export default function Register() {
 
@@ -65,6 +106,7 @@ export default function Register() {
     pincode: "",
     contact_phone: "",
     contact_email: "",
+    tenant_code: "",
     admin_name: "",
     admin_email: "",
     admin_phone: "",
@@ -156,7 +198,7 @@ export default function Register() {
     const fields = [
       ["organization_name", "organization_type", "organization_license_number", "contact_phone", "contact_email"],
       ["organization_address", "city", "state", "pincode"],
-      ["admin_name", "admin_email", "admin_phone", "admin_secondary_phone", "designation", "status", "password"],
+      ["admin_name", "admin_email", "admin_phone", "admin_secondary_phone", "designation", "status", "password", "tenant_code"],
     ][current];
 
     let ok = true;
@@ -227,51 +269,98 @@ export default function Register() {
   /* ---------- UI COMPONENTS ---------- */
 
   const StepHeader = () => (
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex gap-3 items-center">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className={`px-3 py-1 rounded-full ${
-              step === i
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-600"
-            }`}
-          >
-            {i + 1}
-          </div>
-        ))}
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-4">
+          {[
+            { icon: Building, label: "Company" },
+            { icon: MapPin, label: "Address" },
+            { icon: User, label: "Admin" }
+          ].map((stepInfo, i) => {
+            const Icon = stepInfo.icon;
+            return (
+              <div key={i} className="flex items-center">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${
+                  step === i
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : step > i
+                    ? "bg-green-500 text-white"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {step > i ? (
+                    <CheckCircle className="w-5 h-5" />
+                  ) : (
+                    <Icon className="w-5 h-5" />
+                  )}
+                </div>
+                {i < 2 && (
+                  <div className={`w-16 h-1 mx-2 rounded-full transition-all ${
+                    step > i ? "bg-green-500" : "bg-gray-200"
+                  }`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-sm font-medium text-gray-500">
+          Step {step + 1} of 3
+        </div>
       </div>
-
-      <div className="text-sm text-gray-500">Step {step + 1} of 3</div>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          {[
+            "Company Information",
+            "Address Details", 
+            "Administrator Setup"
+          ][step]}
+        </h2>
+        <p className="text-gray-600">
+          {[
+            "Tell us about your organization",
+            "Where is your business located?",
+            "Set up your admin account"
+          ][step]}
+        </p>
+      </div>
     </div>
   );
 
   /* ---------- SECRET KEY SCREEN ---------- */
   if (!verified) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-blue-100 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
         {popup.show && (
           <Popup type={popup.type} message={popup.message} onClose={() => setPopup({ show: false })} />
         )}
 
-        <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md text-center">
-          <h2 className="text-2xl font-bold mb-4">Enter Secret Key</h2>
+        <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Secure Access</h2>
+            <p className="text-gray-600">Enter your authorization key to continue</p>
+          </div>
 
-          <input
-            type="password"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="Enter secure access key"
-            className="w-full border rounded-xl p-3 bg-gray-50 mb-4"
-          />
+          <div className="space-y-4">
+            <input
+              type="password"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="Enter access key"
+              className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+              onKeyPress={(e) => e.key === 'Enter' && verifyKey()}
+            />
 
-          <button
-            onClick={verifyKey}
-            className="bg-blue-600 text-white w-full py-3 rounded-xl font-semibold hover:bg-blue-700"
-          >
-            Verify Key
-          </button>
+            <button
+              onClick={verifyKey}
+              className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
+            >
+              Verify Access
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -279,381 +368,472 @@ export default function Register() {
 
   /* ---------- MAIN FORM UI ---------- */
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
-
-      {/* LEFT SIDE BLUE PANEL */}
-      <div className="hidden lg:flex bg-blue-100 relative">
-        <div className="flex flex-col items-center justify-center text-center px-10">
-          <h1 className="text-blue-800 text-4xl font-bold mb-4 leading-snug">
-            Empowering Organization With  
-            <br /> Smart, Connected Nutryah
-          </h1>
-          <p className="text-black text-lg max-w-md">
-            Nutryah provides advanced automation,
-            modern patient management and real-time monitoring tools.
-          </p>
-        </div>
-      </div>
-
-      {/* RIGHT SIDE FORM */}
-      <div className="w-full flex justify-center items-center p-6 bg-blue-100 overflow-y-auto">
-
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
+        
         {popup.show && (
           <Popup type={popup.type} message={popup.message} onClose={() => setPopup({ show: false })} />
         )}
 
-        <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-3xl">
-          <StepHeader />
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">Organization Registration</h1>
+          <p className="text-gray-600">Join Nutryah's smart inventory management platform</p>
+        </div>
 
-          <form onSubmit={handleFinalSubmit}>
+        {/* Main Form Card */}
+        <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden">
+          <div className="p-8 lg:p-12">
+            <StepHeader />
+
+            <form onSubmit={handleFinalSubmit} className="space-y-6">
 
             {/* ---------------- STEP 1 ---------------- */}
             {step === 0 && (
-              <>
-                <h2 className="text-2xl font-bold mb-6 text-center">
-                  Company Details
-                </h2>
-
+              <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
                   {/* Organization Name */}
-                  <div>
-                    <label className="block mb-1 font-medium">Organization Name</label>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Organization Name *
+                    </label>
                     <input
                       name="organization_name"
                       value={form.organization_name}
                       onChange={handleChange}
-                      placeholder="Enter organization name"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      placeholder="Enter your organization name"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.organization_name && (
-                      <p className="text-red-500 text-xs mt-1">{errors.organization_name}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.organization_name}
+                      </p>
                     )}
                   </div>
 
                   {/* Organization Type */}
                   <div>
-                    <label className="block mb-1 font-medium">Organization Type</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Organization Type *
+                    </label>
                     <input
                       name="organization_type"
                       value={form.organization_type}
                       onChange={handleChange}
-                      placeholder="e.g. Clinic, Company"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      placeholder="e.g. Clinic, Hospital, Pharmacy"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.organization_type && (
-                      <p className="text-red-500 text-xs mt-1">{errors.organization_type}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.organization_type}
+                      </p>
                     )}
                   </div>
 
                   {/* License Number */}
                   <div>
-                    <label className="block mb-1 font-medium">License Number</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      License Number *
+                    </label>
                     <input
                       name="organization_license_number"
                       value={form.organization_license_number}
                       onChange={handleChange}
                       placeholder="Ex: LIC-12345"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.organization_license_number && (
-                      <p className="text-red-500 text-xs mt-1">{errors.organization_license_number}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.organization_license_number}
+                      </p>
                     )}
                   </div>
 
                   {/* Contact Phone */}
                   <div>
-                    <label className="block mb-1 font-medium">Contact Phone</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Contact Phone *
+                    </label>
                     <input
                       name="contact_phone"
                       value={form.contact_phone}
                       onChange={handleChange}
-                      placeholder="10-digit phone"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      placeholder="10-digit phone number"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.contact_phone && (
-                      <p className="text-red-500 text-xs mt-1">{errors.contact_phone}</p>
-                    )}
-                  </div>
-
-                  {/* Contact Email */}
-                  <div className="md:col-span-2">
-                    <label className="block mb-1 font-medium">Contact Email</label>
-                    <input
-                      name="contact_email"
-                      value={form.contact_email}
-                      onChange={handleChange}
-                      placeholder="example@company.com"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.contact_email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.contact_email}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-end mt-6">
-                  <button type="button" onClick={goNext} className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700">
-                    Next: Address
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ---------------- STEP 2 ---------------- */}
-            {step === 1 && (
-              <>
-                <h2 className="text-2xl font-bold mb-6 text-center">
-                  Address Details
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                  {/* Address */}
-                  <div className="md:col-span-2">
-                    <label className="block mb-1 font-medium">Address</label>
-                    <input
-                      name="organization_address"
-                      value={form.organization_address}
-                      onChange={handleChange}
-                      placeholder="Street / Area / Building"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.organization_address && (
-                      <p className="text-red-500 text-xs mt-1">{errors.organization_address}</p>
-                    )}
-                  </div>
-
-                  {/* City */}
-                  <div>
-                    <label className="block mb-1 font-medium">City</label>
-                    <select
-                      name="city"
-                      value={form.city}
-                      onChange={handleChange}
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    >
-                      <option value="">Select City</option>
-                      <option>Chennai</option>
-                      <option>Coimbatore</option>
-                      <option>Madurai</option>
-                      <option>Trichy</option>
-                      <option>Salem</option>
-                    </select>
-                    {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city}</p>}
-                  </div>
-
-                  {/* State */}
-                  <div>
-                    <label className="block mb-1 font-medium">State</label>
-                    <select
-                      name="state"
-                      value={form.state}
-                      onChange={handleChange}
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    >
-                      <option value="">Select State</option>
-                      <option>Tamil Nadu</option>
-                      <option>Kerala</option>
-                      <option>Karnataka</option>
-                      <option>Andhra Pradesh</option>
-                      <option>Telangana</option>
-                    </select>
-                    {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state}</p>}
-                  </div>
-
-                  {/* Pincode */}
-                  <div>
-                    <label className="block mb-1 font-medium">Pincode</label>
-                    <input
-                      name="pincode"
-                      value={form.pincode}
-                      onChange={handleChange}
-                      placeholder="6-digit pincode"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
-                  </div>
-                </div>
-
-                <div className="flex justify-between mt-6">
-                  <button type="button" onClick={goBack} className="px-6 py-3 bg-gray-200 rounded-xl hover:bg-gray-300">
-                    Back
-                  </button>
-                  <button type="button" onClick={goNext} className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700">
-                    Next: Admin
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ---------------- STEP 3 ---------------- */}
-            {step === 2 && (
-              <>
-                <h2 className="text-2xl font-bold mb-6 text-center">
-                  Admin Details
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                  {/* Admin Name */}
-                  <div>
-                    <label className="block mb-1 font-medium">Admin Name</label>
-                    <input
-                      name="admin_name"
-                      value={form.admin_name}
-                      onChange={handleChange}
-                      placeholder="Full name"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.admin_name && (
-                      <p className="text-red-500 text-xs mt-1">{errors.admin_name}</p>
-                    )}
-                  </div>
-
-                  {/* Designation */}
-                  <div>
-                    <label className="block mb-1 font-medium">Designation</label>
-                    <input
-                      name="designation"
-                      value={form.designation}
-                      onChange={handleChange}
-                      placeholder="Owner / Manager"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.designation && (
-                      <p className="text-red-500 text-xs mt-1">{errors.designation}</p>
-                    )}
-                  </div>
-
-                  {/* Admin Phone */}
-                  <div>
-                    <label className="block mb-1 font-medium">Admin Phone</label>
-                    <input
-                      name="admin_phone"
-                      value={form.admin_phone}
-                      onChange={handleChange}
-                      placeholder="10-digit phone"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.admin_phone && (
-                      <p className="text-red-500 text-xs mt-1">{errors.admin_phone}</p>
-                    )}
-                  </div>
-
-                  {/* Secondary Phone */}
-                  <div>
-                    <label className="block mb-1 font-medium">Admin Secondary Phone</label>
-                    <input
-                      name="admin_secondary_phone"
-                      value={form.admin_secondary_phone}
-                      onChange={handleChange}
-                      placeholder="Backup phone"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.admin_secondary_phone && (
-                      <p className="text-red-500 text-xs mt-1">{errors.admin_secondary_phone}</p>
-                    )}
-                  </div>
-
-                  {/* Admin Email */}
-                  <div>
-                    <label className="block mb-1 font-medium">Admin Email</label>
-                    <input
-                      name="admin_email"
-                      value={form.admin_email}
-                      onChange={handleChange}
-                      placeholder="admin@company.com"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
-                    />
-                    {errors.admin_email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.admin_email}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.contact_phone}
+                      </p>
                     )}
                   </div>
 
                   {/* Contact Email */}
                   <div>
-                    <label className="block mb-1 font-medium">Contact Email</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Contact Email *
+                    </label>
                     <input
                       name="contact_email"
                       value={form.contact_email}
                       onChange={handleChange}
                       placeholder="contact@company.com"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.contact_email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.contact_email}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.contact_email}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-6">
+                  <button 
+                    type="button" 
+                    onClick={goNext} 
+                    className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl flex items-center"
+                  >
+                    Next: Address Details
+                    <ArrowRight className="ml-2 w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- STEP 2 ---------------- */}
+            {step === 1 && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Address */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Street Address *
+                    </label>
+                    <input
+                      name="organization_address"
+                      value={form.organization_address}
+                      onChange={handleChange}
+                      placeholder="Street, Area, Building details"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.organization_address && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.organization_address}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* City */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      City *
+                    </label>
+                    <select
+                      name="city"
+                      value={form.city}
+                      onChange={handleChange}
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    >
+                      <option value="">Select your city</option>
+                      {INDIAN_CITIES.map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    {errors.city && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.city}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      State *
+                    </label>
+                    <select
+                      name="state"
+                      value={form.state}
+                      onChange={handleChange}
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    >
+                      <option value="">Select your state</option>
+                      {INDIAN_STATES.map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                    {errors.state && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.state}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Pincode */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Pincode *
+                    </label>
+                    <input
+                      name="pincode"
+                      value={form.pincode}
+                      onChange={handleChange}
+                      placeholder="6-digit pincode"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.pincode && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.pincode}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-6">
+                  <button 
+                    type="button" 
+                    onClick={goBack} 
+                    className="bg-gray-200 text-gray-700 px-8 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-colors flex items-center"
+                  >
+                    <ArrowLeft className="mr-2 w-4 h-4" />
+                    Back
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={goNext} 
+                    className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl flex items-center"
+                  >
+                    Next: Admin Setup
+                    <ArrowRight className="ml-2 w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- STEP 3 ---------------- */}
+            {step === 2 && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Admin Name */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Administrator Name *
+                    </label>
+                    <input
+                      name="admin_name"
+                      value={form.admin_name}
+                      onChange={handleChange}
+                      placeholder="Full name of administrator"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.admin_name && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.admin_name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Designation */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Designation *
+                    </label>
+                    <input
+                      name="designation"
+                      value={form.designation}
+                      onChange={handleChange}
+                      placeholder="Owner, Manager, Director"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.designation && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.designation}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Admin Phone */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Primary Phone *
+                    </label>
+                    <input
+                      name="admin_phone"
+                      value={form.admin_phone}
+                      onChange={handleChange}
+                      placeholder="10-digit phone number"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.admin_phone && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.admin_phone}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Secondary Phone */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Secondary Phone *
+                    </label>
+                    <input
+                      name="admin_secondary_phone"
+                      value={form.admin_secondary_phone}
+                      onChange={handleChange}
+                      placeholder="Backup phone number"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.admin_secondary_phone && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.admin_secondary_phone}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Admin Email */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Administrator Email *
+                    </label>
+                    <input
+                      name="admin_email"
+                      value={form.admin_email}
+                      onChange={handleChange}
+                      placeholder="admin@company.com"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.admin_email && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.admin_email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Contact Email */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Contact Email *
+                    </label>
+                    <input
+                      name="contact_email"
+                      value={form.contact_email}
+                      onChange={handleChange}
+                      placeholder="contact@company.com"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.contact_email && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.contact_email}
+                      </p>
                     )}
                   </div>
 
                   {/* Status */}
                   <div>
-                    <label className="block mb-1 font-medium">Status</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Status *
+                    </label>
                     <input
                       name="status"
                       value={form.status}
                       onChange={handleChange}
                       placeholder="Active"
-                      className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
                     />
                     {errors.status && (
-                      <p className="text-red-500 text-xs mt-1">{errors.status}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.status}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Tenant Code */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Tenant Code *
+                    </label>
+                    <input
+                      name="tenant_code"
+                      value={form.tenant_code}
+                      onChange={handleChange}
+                      placeholder="Unique tenant identifier"
+                      className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                    {errors.tenant_code && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.tenant_code}
+                      </p>
                     )}
                   </div>
 
                   {/* Password */}
-                  <div>
-                    <label className="block mb-1 font-medium">Password</label>
-
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Password *
+                    </label>
                     <div className="relative">
                       <input
                         type={showPassword ? "text" : "password"}
                         name="password"
                         value={form.password}
                         onChange={handleChange}
-                        placeholder="Strong password"
-                        className="w-full border border-gray-300 rounded-xl p-3 bg-gray-50 pr-12"
+                        placeholder="Create a strong password"
+                        className="w-full border-2 border-gray-200 rounded-xl p-4 bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none pr-12"
                       />
-
                       <button
                         type="button"
                         onClick={() => setShowPassword((s) => !s)}
-                        className="absolute right-3 top-3 text-sm text-gray-600"
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                       >
-                        {showPassword ? "Hide" : "Show"}
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
-
-                    <p
-                      className={`mt-1 text-sm ${
-                        getPasswordStrength() === "Strong"
-                          ? "text-green-600"
-                          : getPasswordStrength() === "Medium"
-                          ? "text-yellow-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {getPasswordStrength()}
-                    </p>
-
+                    <div className="mt-2 flex items-center space-x-2">
+                      <div className={`h-2 w-full bg-gray-200 rounded-full overflow-hidden`}>
+                        <div className={`h-full transition-all ${
+                          getPasswordStrength() === "Strong" ? "w-full bg-green-500" :
+                          getPasswordStrength() === "Medium" ? "w-2/3 bg-yellow-500" :
+                          getPasswordStrength() === "Weak" ? "w-1/3 bg-red-500" : "w-0"
+                        }`} />
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        getPasswordStrength() === "Strong" ? "text-green-600" :
+                        getPasswordStrength() === "Medium" ? "text-yellow-600" :
+                        "text-red-600"
+                      }`}>
+                        {getPasswordStrength() || "Enter password"}
+                      </span>
+                    </div>
                     {errors.password && (
-                      <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <span className="mr-1">⚠</span> {errors.password}
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-6">
-                  <button type="button" onClick={goBack} className="px-6 py-3 bg-gray-200 rounded-xl hover:bg-gray-300">
+                <div className="flex justify-between pt-6">
+                  <button 
+                    type="button" 
+                    onClick={goBack} 
+                    className="bg-gray-200 text-gray-700 px-8 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-colors flex items-center"
+                  >
+                    <ArrowLeft className="mr-2 w-4 h-4" />
                     Back
                   </button>
-
-                  <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700">
-                    Submit
+                  <button 
+                    type="submit" 
+                    className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-lg hover:shadow-xl flex items-center"
+                  >
+                    Complete Registration
+                    <CheckCircle className="ml-2 w-4 h-4" />
                   </button>
                 </div>
-              </>
+              </div>
             )}
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>

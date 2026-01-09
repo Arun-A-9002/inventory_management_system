@@ -167,6 +167,21 @@ def get_tenant_db(tenant_db_name: str = "arun"):
 
 
 # -------------------------------------------------------
+# DYNAMIC TENANT DB DEPENDENCY
+# -------------------------------------------------------
+def get_current_tenant_db():
+    """Get tenant database based on current user's JWT token"""
+    from utils.auth import get_current_user
+    from fastapi import Depends
+    
+    def _get_tenant_db(current_user = Depends(get_current_user)):
+        tenant_db_name = current_user.get("tenant_db", "arun")  # fallback to arun
+        return get_tenant_db(tenant_db_name)
+    
+    return _get_tenant_db
+
+
+# -------------------------------------------------------
 # RUN DEFAULT TENANT INITIALIZATION
 # -------------------------------------------------------
 # Removed init_tenant_db() to prevent startup errors

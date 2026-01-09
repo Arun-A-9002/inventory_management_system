@@ -51,29 +51,39 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                 log_audit(f"OTP SENT TO ADMIN {req.email}")
                 return {"message": "OTP sent to email"}
         
-        # Then check tenant users in arun database
+        # Then check tenant users - find which database they belong to
         from database import get_tenant_db
         from models.tenant_models import User
         from utils.auth import verify_password
         
-        tenant_db_gen = get_tenant_db("arun")
-        tenant_db = next(tenant_db_gen)
-        
-        tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
-        
-        if tenant_user and verify_password(req.password, tenant_user.hashed_password):
-            if not tenant_user.is_active:
-                tenant_db.close()
-                raise HTTPException(400, "Account is inactive")
-            
-            # Send OTP for tenant user
-            otp = generate_otp(req.email)
-            send_otp_email(req.email, otp)
-            tenant_db.close()
-            log_audit(f"OTP SENT TO TENANT USER {req.email}")
-            return {"message": "OTP sent to email"}
-        
-        tenant_db.close()
+        # Find the tenant database for this user
+        tenant_record = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+        if not tenant_record:
+            # Check if this email exists in any tenant database by checking all tenants
+            all_tenants = db.query(Tenant).all()
+            for tenant in all_tenants:
+                try:
+                    tenant_db_gen = get_tenant_db(tenant.database_name)
+                    tenant_db = next(tenant_db_gen)
+                    
+                    tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+                    
+                    if tenant_user and verify_password(req.password, tenant_user.hashed_password):
+                        if not tenant_user.is_active:
+                            tenant_db.close()
+                            raise HTTPException(400, "Account is inactive")
+                        
+                        # Send OTP for tenant user
+                        otp = generate_otp(req.email)
+                        send_otp_email(req.email, otp)
+                        tenant_db.close()
+                        log_audit(f"OTP SENT TO TENANT USER {req.email} in DB {tenant.database_name}")
+                        return {"message": "OTP sent to email"}
+                    
+                    tenant_db.close()
+                except Exception as e:
+                    log_error(e, f"Error checking tenant DB {tenant.database_name}")
+                    continue
         
         log_error(Exception("Invalid credentials"), location="Login Check")
         raise HTTPException(400, "Invalid email or password")
@@ -113,7 +123,9 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
                 "email": user.admin_email,
                 "org": user.organization_name,
                 "role": "admin",
-                "full_name": user.organization_name  # Use org name as display name for admin
+                "tenant_db": user.database_name,  # Add tenant database name
+                "user_type": "admin",  # Specify user type as admin
+                "full_name": user.admin_name  # Use admin name instead of org name
             })
 
             # Refresh token rotation
@@ -134,40 +146,47 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             log_audit(f"ADMIN LOGIN SUCCESS → {req.email}")
             return {"access_token": access_token, "token_type": "bearer"}
         
-        # Then check tenant users
+        # Then check tenant users - find which database they belong to
         from database import get_tenant_db
         from models.tenant_models import User
         
-        tenant_db_gen = get_tenant_db("arun")
-        tenant_db = next(tenant_db_gen)
-        
-        tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
-        
-        if tenant_user:
-            # Get user permissions
-            permissions = []
-            for role in tenant_user.roles:
-                for permission in role.permissions:
-                    permissions.append(permission.name)
-            
-            # Get role names
-            role_names = [role.name for role in tenant_user.roles]
-            primary_role = role_names[0] if role_names else "user"
-            
-            access_token = create_access_token({
-                "sub": str(tenant_user.id),
-                "email": tenant_user.email,
-                "tenant_db": "arun",
-                "user_type": "tenant_user",
-                "permissions": list(set(permissions)),  # Remove duplicates
-                "full_name": tenant_user.full_name,
-                "role": primary_role
-            })
-            tenant_db.close()
-            log_audit(f"TENANT USER LOGIN SUCCESS → {req.email}")
-            return {"access_token": access_token, "token_type": "bearer"}
-        
-        tenant_db.close()
+        # Find the tenant database for this user
+        all_tenants = db.query(Tenant).all()
+        for tenant in all_tenants:
+            try:
+                tenant_db_gen = get_tenant_db(tenant.database_name)
+                tenant_db = next(tenant_db_gen)
+                
+                tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+                
+                if tenant_user:
+                    # Get user permissions
+                    permissions = []
+                    for role in tenant_user.roles:
+                        for permission in role.permissions:
+                            permissions.append(permission.name)
+                    
+                    # Get role names
+                    role_names = [role.name for role in tenant_user.roles]
+                    primary_role = role_names[0] if role_names else "user"
+                    
+                    access_token = create_access_token({
+                        "sub": str(tenant_user.id),
+                        "email": tenant_user.email,
+                        "tenant_db": tenant.database_name,  # Use the correct tenant database
+                        "user_type": "tenant_user",
+                        "permissions": list(set(permissions)),  # Remove duplicates
+                        "full_name": tenant_user.full_name,
+                        "role": primary_role
+                    })
+                    tenant_db.close()
+                    log_audit(f"TENANT USER LOGIN SUCCESS → {req.email} in DB {tenant.database_name}")
+                    return {"access_token": access_token, "token_type": "bearer"}
+                
+                tenant_db.close()
+            except Exception as e:
+                log_error(e, f"Error checking tenant DB {tenant.database_name} for verify")
+                continue
         
         log_error(Exception("User not found"), location="OTP Verify User Fetch")
         raise HTTPException(400, "Invalid email")
@@ -224,9 +243,13 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
         # -------------------------------
         new_access = create_access_token({
             "sub": str(user.id),
-            "tenant_id": user.id,   # 👈 ADDED
+            "tenant_id": user.id,
             "email": user.admin_email,
-            "org": user.organization_name
+            "org": user.organization_name,
+            "tenant_db": user.database_name,  # Add tenant database name
+            "role": "admin",
+            "user_type": "admin",  # Specify user type as admin
+            "full_name": user.admin_name
         })
 
         log_audit(f"TOKEN ROTATED → {user.admin_email}")
@@ -290,28 +313,41 @@ def get_profile(current_user = Depends(get_current_user)):
         if current_user.get("org"):
             profile["organization"] = current_user.get("org")
         
-        # Add tenant info and fetch full name for tenant users
+        # Fetch user details from database for all users
         if current_user.get("tenant_db"):
             profile["tenant_db"] = current_user.get("tenant_db")
             
-            # Fetch full name from tenant database
             try:
                 from database import get_tenant_db
                 from models.tenant_models import User
                 
-                tenant_db_gen = get_tenant_db("arun")
+                tenant_db_name = current_user.get("tenant_db")
+                tenant_db_gen = get_tenant_db(tenant_db_name)
                 tenant_db = next(tenant_db_gen)
                 
                 user_id = int(current_user.get("sub"))
-                db_user = tenant_db.query(User).filter(User.id == user_id).first()
                 
-                if db_user:
-                    profile["full_name"] = db_user.full_name
-                    # Get role names from user roles
-                    role_names = [role.name for role in db_user.roles]
-                    if role_names:
-                        profile["role_names"] = role_names
-                        profile["role"] = role_names[0] if len(role_names) == 1 else "Multiple Roles"
+                if current_user.get("user_type") == "admin":
+                    # For admin users, fetch from master DB first, then check tenant DB
+                    from database import get_master_db
+                    master_db_gen = get_master_db()
+                    master_db = next(master_db_gen)
+                    
+                    admin_user = master_db.query(Tenant).filter(Tenant.id == user_id).first()
+                    if admin_user:
+                        profile["full_name"] = admin_user.admin_name
+                    master_db.close()
+                else:
+                    # For tenant users, fetch from tenant DB
+                    db_user = tenant_db.query(User).filter(User.id == user_id).first()
+                    
+                    if db_user:
+                        profile["full_name"] = db_user.full_name
+                        # Get role names from user roles
+                        role_names = [role.name for role in db_user.roles]
+                        if role_names:
+                            profile["role_names"] = role_names
+                            profile["role"] = role_names[0] if len(role_names) == 1 else "Multiple Roles"
                 
                 tenant_db.close()
             except Exception as e:

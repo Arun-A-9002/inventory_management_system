@@ -19,6 +19,7 @@ class RegisterModel(BaseModel):
     admin_phone: str
     admin_secondary_phone: str
     designation: str
+    tenant_code: str
 
     status: str
     password: str
@@ -27,18 +28,16 @@ class RegisterModel(BaseModel):
     @field_validator("city")
     @classmethod
     def validate_city(cls, v):
-        CITY_LIST = ["Chennai", "Coimbatore", "Madurai", "Trichy", "Salem"]
-        if v not in CITY_LIST:
-            raise ValueError(f"City must be one of: {CITY_LIST}")
+        if not v or v.strip() == "":
+            raise ValueError("City is required")
         return v
 
     # STATE VALIDATION
     @field_validator("state")
     @classmethod
     def validate_state(cls, v):
-        STATE_LIST = ["Tamil Nadu", "Kerala", "Karnataka", "Andhra Pradesh", "Telangana"]
-        if v not in STATE_LIST:
-            raise ValueError(f"State must be one of: {STATE_LIST}")
+        if not v or v.strip() == "":
+            raise ValueError("State is required")
         return v
 
     # PINCODE

@@ -46,9 +46,9 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
             )
             raise HTTPException(400, "Admin email already exists")
 
-        # Generate DB name
-        db_name = to_db_name(data.organization_name)
-        log_audit(f"Generated DB Name: {db_name}")
+        # Generate DB name from tenant code
+        db_name = data.tenant_code.lower().strip()
+        log_audit(f"Using tenant code as DB Name: {db_name}")
 
         # Hash password
         hashed_password = hashlib.sha256(data.password.encode()).hexdigest()
@@ -64,6 +64,7 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
             pincode=data.pincode,
             contact_phone=data.contact_phone,
             contact_email=data.contact_email,
+            tenant_code=data.tenant_code,
 
             admin_name=data.admin_name,
             admin_email=data.admin_email,
@@ -99,6 +100,51 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
 
         log_audit(f"Tenant tables created for database: {db_name}")
 
+        # -----------------------------------------------------
+        # STEP 3 → Create admin user in tenant DB
+        # -----------------------------------------------------
+        from models.tenant_models import User, Department
+        from sqlalchemy.orm import sessionmaker
+        
+        TenantSession = sessionmaker(bind=tenant_engine)
+        tenant_db = TenantSession()
+        
+        try:
+            # Create default department if not exists
+            default_dept = tenant_db.query(Department).filter(Department.name == "Administration").first()
+            if not default_dept:
+                default_dept = Department(
+                    name="Administration",
+                    description="Default administration department",
+                    is_active=True
+                )
+                tenant_db.add(default_dept)
+                tenant_db.commit()
+                tenant_db.refresh(default_dept)
+                log_audit(f"Default department created in tenant DB: {db_name}")
+            
+            # Create admin user with proper password hashing
+            from utils.auth import hash_password
+            
+            admin_user = User(
+                full_name=data.admin_name,
+                email=data.admin_email,
+                hashed_password=hash_password(data.password),  # Use the same hashing as tenant users
+                is_active=True,
+                department_id=default_dept.id
+            )
+            tenant_db.add(admin_user)
+            tenant_db.commit()
+            tenant_db.refresh(admin_user)
+            log_audit(f"Admin user created in tenant DB: {db_name} with ID: {admin_user.id}")
+            
+        except Exception as e:
+            tenant_db.rollback()
+            log_error(e, f"Failed to create admin user in tenant DB: {db_name}")
+            raise e
+        finally:
+            tenant_db.close()
+
         # Send registration confirmation email
         email_sent = send_registration_email(
             admin_email=data.admin_email,
@@ -114,6 +160,7 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         return {
             "message": "Organization registered successfully",
             "id": tenant.id,
+            "database_name": db_name,
             "email_sent": email_sent
         }
 
