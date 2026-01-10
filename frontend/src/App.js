@@ -10,6 +10,7 @@ import MainLayout from "./components/Layout/MainLayout";
 import Department from "./pages/Department";
 import Roles from "./pages/Roles";
 import Users from "./pages/Users";
+import ActiveSessions from "./pages/ActiveSessions";
 
 // Organization Setup Pages
 import OrganizationStructure from "./pages/organization/OrganizationStructure";
@@ -80,6 +81,7 @@ function App() {
           <Route path="department" element={<Department />} />
           <Route path="roles" element={<Roles />} />
           <Route path="users" element={<Users />} />
+          <Route path="active-sessions" element={<ActiveSessions />} />
 
           
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import api from "../../api";
 
 export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onToggleDispensedSidebar }) {
@@ -76,9 +77,25 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    window.location.href = "/";
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Logout button clicked');
+    
+    try {
+      console.log('Calling backend logout endpoint...');
+      // Call backend logout endpoint
+      await api.post('/auth/logout');
+      console.log('Backend logout successful');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Continue with logout even if backend call fails
+    } finally {
+      console.log('Clearing localStorage and redirecting...');
+      // Clear local storage and redirect
+      localStorage.removeItem("access_token");
+      window.location.href = "/";
+    }
   };
 
   const handleRefresh = async () => {
@@ -176,7 +193,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
 
           {/* User Profile Dropdown */}
           {userInfo && (
-            <div className="relative" ref={dropdownRef}>
+            <div className="relative" ref={dropdownRef} style={{zIndex: 1000}}>
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200/50 shadow-sm hover:bg-white/90 transition-all duration-200"
@@ -202,14 +219,15 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
               </button>
               
               {/* Dropdown Menu */}
-              {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-lg py-2 z-50">
-                  <div className="px-4 py-2 border-b border-gray-200/50">
+              {isDropdownOpen && createPortal(
+                <div className="fixed right-8 w-48 bg-white rounded-xl border border-gray-200 shadow-xl py-2" style={{zIndex: 99999, top: '80px'}}>
+                  <div className="px-4 py-2 border-b border-gray-200">
                     <p className="text-sm font-semibold text-gray-800">{userInfo.name}</p>
                     <p className="text-xs text-gray-500">{userInfo.email}</p>
                   </div>
                   <button 
                     onClick={handleLogout}
+                    onMouseDown={(e) => e.stopPropagation()}
                     className="w-full flex items-center px-4 py-2 text-left text-red-600 hover:bg-red-50 transition-colors duration-200 group"
                   >
                     <svg className="w-4 h-4 mr-3 group-hover:translate-x-0.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +235,8 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
                     </svg>
                     <span className="text-sm font-medium">Logout</span>
                   </button>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           )}

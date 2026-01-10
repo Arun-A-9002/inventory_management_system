@@ -70,9 +70,16 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
             # Check if it's an email format
             if '@' in req.login_identifier:
                 tenant_user = tenant_db.query(User).filter(User.email == req.login_identifier).first()
+                log_api(f"Searching by email: {req.login_identifier} - Found: {tenant_user is not None}")
             else:
                 # Assume it's a login code
                 tenant_user = tenant_db.query(User).filter(User.login_code == req.login_identifier.upper()).first()
+                log_api(f"Searching by login_code: {req.login_identifier.upper()} - Found: {tenant_user is not None}")
+                
+                # Debug: Let's see what login codes exist in the database
+                all_users = tenant_db.query(User).all()
+                existing_codes = [u.login_code for u in all_users]
+                log_api(f"Existing login codes in DB: {existing_codes}")
             
             if tenant_user and verify_password(req.password, tenant_user.hashed_password):
                 if not tenant_user.is_active:
@@ -98,11 +105,9 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                         ).all()
                         
                         if existing_sessions:
-                            # Deactivate existing sessions to allow new login
-                            for session in existing_sessions:
-                                session.is_active = False
-                            tenant_db.commit()
-                            log_audit(f"DEACTIVATED EXISTING SESSIONS for user {tenant_user.email} - multi-login disabled")
+                            tenant_db.close()
+                            log_audit(f"LOGIN BLOCKED - User {tenant_user.email} already logged in on another device")
+                            raise HTTPException(400, "You are already logged in on another device. Please logout from the other device first or contact your administrator to enable multi-login.")
                     
                     # Get user permissions
                     permissions = []
@@ -268,15 +273,16 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             if tenant_user:
                 # Check multi-login settings
                 if not tenant_user.multi_login_enabled:
-                    # Deactivate existing sessions
+                    # Check for existing active sessions
                     existing_sessions = tenant_db.query(UserSession).filter(
                         UserSession.user_id == tenant_user.id,
                         UserSession.is_active == True
                     ).all()
                     
-                    for session in existing_sessions:
-                        session.is_active = False
-                    tenant_db.commit()
+                    if existing_sessions:
+                        tenant_db.close()
+                        log_audit(f"2FA LOGIN BLOCKED - User {tenant_user.email} already logged in on another device")
+                        raise HTTPException(400, "You are already logged in on another device. Please logout from the other device first or contact your administrator to enable multi-login.")
                 
                 # Get user permissions
                 permissions = []
@@ -400,11 +406,40 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
 # LOGOUT
 # --------------------------
 @router.post("/logout")
-def logout(response: Response, request: Request, db: Session = Depends(get_master_db)):
+def logout(response: Response, request: Request, db: Session = Depends(get_master_db), current_user = Depends(get_current_user)):
 
     log_api("LOGOUT CALLED")
 
     try:
+        # Handle tenant user logout (deactivate session)
+        if current_user.get("user_type") == "tenant_user":
+            session_token = current_user.get("session_token")
+            tenant_db_name = current_user.get("tenant_db")
+            
+            if session_token and tenant_db_name:
+                from database import get_tenant_db
+                from models.tenant_models import UserSession
+                
+                try:
+                    tenant_db_gen = get_tenant_db(tenant_db_name)
+                    tenant_db = next(tenant_db_gen)
+                    
+                    # Deactivate the current session
+                    session = tenant_db.query(UserSession).filter(
+                        UserSession.session_token == session_token,
+                        UserSession.is_active == True
+                    ).first()
+                    
+                    if session:
+                        session.is_active = False
+                        tenant_db.commit()
+                        log_audit(f"SESSION DEACTIVATED for user {current_user.get('email')}")
+                    
+                    tenant_db.close()
+                except Exception as e:
+                    log_error(e, "Error deactivating tenant user session")
+        
+        # Handle admin logout (clear refresh token)
         raw = request.cookies.get("refresh_token")
 
         if raw:
@@ -420,7 +455,7 @@ def logout(response: Response, request: Request, db: Session = Depends(get_maste
 
         log_audit("LOGOUT SUCCESS")
 
-        return {"message": "Logged out"}
+        return {"message": "Logged out successfully"}
 
     except Exception as e:
         log_error(e, location="Logout Endpoint")
@@ -516,4 +551,119 @@ def get_profile(current_user = Depends(get_current_user)):
         
     except Exception as e:
         log_error(e, location="Profile Endpoint")
+        raise HTTPException(500, "Internal server error")
+
+
+# --------------------------
+# GET ACTIVE SESSIONS (Admin only)
+# --------------------------
+@router.get("/active-sessions")
+def get_active_sessions(current_user = Depends(get_current_user)):
+    """Get all active user sessions for administrators."""
+    log_api(f"ACTIVE SESSIONS REQUEST → {current_user.get('email')}")
+    
+    try:
+        # Only allow admin users to view active sessions
+        if current_user.get("user_type") != "admin":
+            raise HTTPException(403, "Access denied. Admin privileges required.")
+        
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(400, "Tenant database not found")
+        
+        from database import get_tenant_db
+        from models.tenant_models import UserSession, User
+        
+        tenant_db_gen = get_tenant_db(tenant_db_name)
+        tenant_db = next(tenant_db_gen)
+        
+        # Get all active sessions with user details
+        active_sessions = tenant_db.query(UserSession, User).join(
+            User, UserSession.user_id == User.id
+        ).filter(
+            UserSession.is_active == True
+        ).all()
+        
+        sessions_data = []
+        for session, user in active_sessions:
+            sessions_data.append({
+                "session_id": session.id,
+                "user_id": user.id,
+                "user_name": user.full_name,
+                "user_email": user.email,
+                "login_code": user.login_code,
+                "multi_login_enabled": user.multi_login_enabled,
+                "ip_address": session.ip_address,
+                "user_agent": session.user_agent,
+                "login_time": session.login_time,
+                "last_activity": session.last_activity
+            })
+        
+        tenant_db.close()
+        
+        return {
+            "active_sessions": sessions_data,
+            "total_sessions": len(sessions_data)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(e, location="Active Sessions Endpoint")
+        raise HTTPException(500, "Internal server error")
+
+
+# --------------------------
+# FORCE LOGOUT USER SESSION (Admin only)
+# --------------------------
+@router.post("/force-logout/{session_id}")
+def force_logout_session(session_id: int, current_user = Depends(get_current_user)):
+    """Force logout a specific user session (Admin only)."""
+    log_api(f"FORCE LOGOUT SESSION {session_id} → {current_user.get('email')}")
+    
+    try:
+        # Only allow admin users to force logout sessions
+        if current_user.get("user_type") != "admin":
+            raise HTTPException(403, "Access denied. Admin privileges required.")
+        
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(400, "Tenant database not found")
+        
+        from database import get_tenant_db
+        from models.tenant_models import UserSession, User
+        
+        tenant_db_gen = get_tenant_db(tenant_db_name)
+        tenant_db = next(tenant_db_gen)
+        
+        # Find the session
+        session = tenant_db.query(UserSession).filter(
+            UserSession.id == session_id,
+            UserSession.is_active == True
+        ).first()
+        
+        if not session:
+            tenant_db.close()
+            raise HTTPException(404, "Active session not found")
+        
+        # Get user details for logging
+        user = tenant_db.query(User).filter(User.id == session.user_id).first()
+        
+        # Deactivate the session
+        session.is_active = False
+        tenant_db.commit()
+        
+        log_audit(f"ADMIN FORCE LOGOUT → Session {session_id} for user {user.email if user else 'Unknown'} by admin {current_user.get('email')}")
+        
+        tenant_db.close()
+        
+        return {
+            "message": f"Session {session_id} has been terminated successfully",
+            "user_email": user.email if user else "Unknown"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(e, location="Force Logout Endpoint")
         raise HTTPException(500, "Internal server error")

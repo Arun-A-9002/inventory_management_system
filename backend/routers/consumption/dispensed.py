@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from database import get_current_tenant_db_name, get_tenant_db
-from models.tenant_models import IssueHeader, IssueItem
+from models.tenant_models import IssueHeader, IssueItem, User
 from schemas.tenant_schemas import *
-from datetime import date
+from datetime import date, datetime
+import uuid
 
 router = APIRouter(prefix="/consumption", tags=["Dispensed Items"])
 
@@ -15,40 +16,52 @@ def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
 def dispense_batch(data: dict, db: Session = Depends(get_db)):
     """Dispense a specific batch directly"""
     
-    issue_no = f"DISP-{date.today().strftime('%Y%m%d%H%M%S')}"
+    issue_no = f"DISP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4())[:8]}"
     
-    # Create issue header
-    header = IssueHeader(
-        issue_no=issue_no,
-        issue_type="DEPARTMENT",
-        department="Direct Dispense",
-        issue_date=date.today(),
-        requested_by="System",
-        remarks="Direct batch dispense from stock details"
-    )
-    db.add(header)
-    db.commit()
-    db.refresh(header)
-    
-    # Create issue item
-    db.add(IssueItem(
-        issue_id=header.id,
-        item_name=data.get("item_name"),
-        qty=data.get("quantity"),
-        uom="PCS",
-        batch_no=data.get("batch_no"),
-        item_type="CONSUMABLE",
-        remarks=f"Dispensed from {data.get('location')} - {data.get('status')}"
-    ))
-    
-    db.commit()
-    return {"message": "Batch dispensed successfully", "issue_no": issue_no}
+    try:
+        # Create issue header
+        header = IssueHeader(
+            issue_no=issue_no,
+            issue_type="DEPARTMENT",
+            department="Direct Dispense",
+            issue_date=date.today(),
+            requested_by="System",
+            remarks="Direct batch dispense from stock details"
+        )
+        db.add(header)
+        db.commit()
+        db.refresh(header)
+        
+        # Create issue item
+        db.add(IssueItem(
+            issue_id=header.id,
+            item_name=data.get("item_name"),
+            qty=data.get("quantity"),
+            uom="PCS",
+            batch_no=data.get("batch_no"),
+            item_type="CONSUMABLE",
+            remarks=f"Dispensed from {data.get('location')} - {data.get('status')}"
+        ))
+        
+        # Update stock - completely remove the batch
+        from models.tenant_models import Batch, GRNItem, GRN, GRNStatus
+        
+        batch = db.query(Batch).filter(Batch.batch_no == data.get("batch_no")).first()
+        if batch:
+            # Always delete the batch completely when dispensed
+            db.delete(batch)
+        
+        db.commit()
+        return {"message": "Batch dispensed successfully", "issue_no": issue_no}
+    except Exception as e:
+        db.rollback()
+        raise e
 
 @router.get("/dispensed-items")
 def get_dispensed_items(db: Session = Depends(get_db)):
     """Get all dispensed/issued items with details"""
     
-    # Join IssueHeader and IssueItem to get complete dispensed items data
+    # Join IssueHeader, IssueItem, and User to get complete dispensed items data
     dispensed_items = db.query(
         IssueHeader.issue_no,
         IssueHeader.issue_type,
@@ -62,9 +75,12 @@ def get_dispensed_items(db: Session = Depends(get_db)):
         IssueItem.uom,
         IssueItem.batch_no,
         IssueItem.item_type,
-        IssueItem.remarks
+        IssueItem.remarks,
+        User.full_name.label('user_name')
     ).join(
         IssueItem, IssueHeader.id == IssueItem.issue_id
+    ).outerjoin(
+        User, IssueHeader.requested_by == User.login_code
     ).order_by(desc(IssueHeader.issue_date)).all()
     
     result = []
@@ -77,6 +93,7 @@ def get_dispensed_items(db: Session = Depends(get_db)):
             "external_ref": item.external_ref,
             "issue_date": item.issue_date.strftime("%Y-%m-%d") if item.issue_date else None,
             "requested_by": item.requested_by,
+            "user_name": item.user_name or "System",
             "item_name": item.item_name,
             "qty": item.qty,
             "uom": item.uom,

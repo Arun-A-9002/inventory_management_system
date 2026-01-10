@@ -1,0 +1,35 @@
+# React Core
+react==19.2.1
+react-dom==19.2.1
+react-scripts==5.0.1
+
+# Routing
+react-router-dom==7.10.1
+
+# UI Components and Icons
+lucide-react==0.562.0
+
+# Barcode and QR Code Generation
+jsbarcode==3.12.1
+react-qr-code==2.0.18
+
+# PDF Generation
+jspdf==4.0.0
+
+# Testing Libraries
+@testing-library/react==16.3.0
+@testing-library/jest-dom==6.9.1
+@testing-library/user-event==13.5.0
+@testing-library/dom==10.4.1
+
+# Performance Monitoring
+web-vitals==2.1.4
+
+# Development Dependencies
+tailwindcss==3.4.18
+autoprefixer==10.4.22
+postcss==8.5.6
+
+# Note: This is a requirements.txt representation of package.json dependencies
+# For actual installation, use: npm install or yarn install
+# The versions listed here correspond to the package.json dependencies

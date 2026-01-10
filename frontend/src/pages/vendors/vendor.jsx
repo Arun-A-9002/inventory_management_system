@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import api from "../../api";
 import { getCountries, getStates, getCities } from "../../utils/locationData";
 import Toast from "../../components/Toast";
@@ -12,19 +12,6 @@ export default function Vendor() {
   const [editingId, setEditingId] = useState(null);
   const { toast, showToast, hideToast } = useToast();
   
-  const loadVendors = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/vendors/");
-      setVendors(res.data || []);
-    } catch (err) {
-      console.error("Error loading vendors:", err);
-      showToast("Failed to load vendors", 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
-
   const [vendorForm, setVendorForm] = useState({
     vendor_name: "",
     contact_person: "",
@@ -46,11 +33,24 @@ export default function Vendor() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
 
+  const loadVendors = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/vendors/");
+      setVendors(res.data || []);
+    } catch (err) {
+      console.error("Error loading vendors:", err);
+      showToast("Failed to load vendors", 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (hasPermission("vendors.view")) {
       loadVendors();
     }
-  }, [loadVendors]);
+  }, []);
 
   const [availableStates, setAvailableStates] = useState([]);
   const [availableCities, setAvailableCities] = useState([]);

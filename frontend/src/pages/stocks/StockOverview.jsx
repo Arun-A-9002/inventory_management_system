@@ -9,10 +9,21 @@ export default function StockOverview() {
   const [error, setError] = useState(null);
   const [selectedBatches, setSelectedBatches] = useState({});
   const [dispenseQuantities, setDispenseQuantities] = useState({});
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
 
   useEffect(() => {
     fetchStockData();
   }, []);
+
+  useEffect(() => {
+    // Check for expired items after data is loaded
+    if (stockData.length > 0) {
+      const expiredItems = stockData.filter(item => getExpiredBatches(item.batches).length > 0);
+      if (expiredItems.length > 0) {
+        setShowExpiredModal(true);
+      }
+    }
+  }, [stockData]);
 
   const fetchStockData = async () => {
     try {
@@ -87,8 +98,6 @@ export default function StockOverview() {
     const selectedBatchIndex = selectedBatches[item.id];
     const quantity = parseInt(dispenseQuantities[item.id] || 0);
     
-    console.log('Dispense clicked:', { itemId: item.id, selectedBatchIndex, quantity });
-    
     if (!quantity || quantity <= 0) {
       alert('Please enter a valid quantity');
       return;
@@ -100,22 +109,23 @@ export default function StockOverview() {
     }
     
     const selectedBatch = item.batches[selectedBatchIndex];
-    if (quantity > selectedBatch.qty) {
-      alert('Quantity exceeds available stock in selected batch');
-      return;
-    }
     
     try {
-      console.log('Making API call:', `${API_BASE_URL}/stock-overview/dispense/${item.id}?batch_index=${selectedBatchIndex}&quantity=${quantity}`);
-      const response = await axios.post(`${API_BASE_URL}/stock-overview/dispense/${item.id}?batch_index=${selectedBatchIndex}&quantity=${quantity}`);
-      console.log('API response:', response.data);
+      // Call dispense-batch endpoint to completely remove the batch
+      const response = await axios.post(`${API_BASE_URL}/consumption/dispense-batch`, {
+        item_name: item.item_name,
+        quantity: selectedBatch.qty, // Dispense entire batch
+        batch_no: selectedBatch.batch_no,
+        location: selectedBatch.location || item.location,
+        status: 'dispensed'
+      });
       
       setDispenseQuantities(prev => ({ ...prev, [item.id]: '' }));
       setSelectedBatches(prev => ({ ...prev, [item.id]: null }));
       
       fetchStockData();
       
-      alert(`Successfully dispensed ${quantity} units`);
+      alert(`Successfully dispensed entire batch ${selectedBatch.batch_no} (${selectedBatch.qty} units)`);
     } catch (err) {
       console.error('Dispense error:', err);
       alert('Failed to dispense stock: ' + (err.response?.data?.detail || err.message));
@@ -166,6 +176,19 @@ export default function StockOverview() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Stock Overview</h1>
+        
+        {/* Dashboard Cards - Loading State */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-8 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
         <div className="flex justify-center items-center h-64">
           <div className="text-lg">Loading...</div>
         </div>
@@ -177,6 +200,16 @@ export default function StockOverview() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Stock Overview</h1>
+        
+        {/* Dashboard Cards - Error State */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="text-center text-gray-500">—</div>
+            </div>
+          ))}
+        </div>
+        
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
@@ -186,7 +219,101 @@ export default function StockOverview() {
 
   return (
     <div className="p-6">
+      {/* Expired Items Modal */}
+      {showExpiredModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <svg className="w-8 h-8 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h2 className="text-xl font-bold text-red-800">Expired Items Alert!</h2>
+            </div>
+            <p className="text-gray-700 mb-4">
+              You have {stockData.filter(item => getExpiredBatches(item.batches).length > 0).length} items with expired batches. 
+              Please dispense expired items first before continuing other work.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowExpiredModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                Later
+              </button>
+              <button
+                onClick={() => setShowExpiredModal(false)}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Dispense Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <h1 className="text-2xl font-bold mb-6">Stock Overview</h1>
+      
+      {/* Dashboard Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-blue-600">Total Items</p>
+              <p className="text-2xl font-bold text-blue-800">{stockData.length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-green-600">Good Stock</p>
+              <p className="text-2xl font-bold text-green-800">{stockData.filter(item => item.available_qty > item.min_stock).length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-yellow-600">Low Stock Alerts</p>
+              <p className="text-2xl font-bold text-yellow-800">{stockData.filter(item => item.available_qty <= item.min_stock).length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-red-600">Expiry Alerts</p>
+              <p className="text-2xl font-bold text-red-800">{stockData.filter(item => getExpiredBatches(item.batches).length > 0).length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-purple-600">Add New</p>
+              <p className="text-2xl font-bold text-purple-800">+</p>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -315,14 +442,10 @@ export default function StockOverview() {
                       <div className="flex gap-1">
                         <button
                           onClick={() => handleDispense(item)}
-                          className={`px-3 py-1 rounded text-sm text-white ${
-                            selectedBatch && isExpired(selectedBatch.expiry_date)
-                              ? "bg-orange-500 hover:bg-orange-600"
-                              : "bg-red-500 hover:bg-red-600"
-                          }`}
-                          disabled={(!selectedBatches[item.id] && selectedBatches[item.id] !== 0) || !dispenseQuantities[item.id]}
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                          disabled={(!selectedBatches[item.id] && selectedBatches[item.id] !== 0)}
                         >
-                          {selectedBatch && isExpired(selectedBatch.expiry_date) ? "Dispense Expired" : "Dispense"}
+                          Dispense Batch
                         </button>
                         {hasExpiredBatches && (
                           <button

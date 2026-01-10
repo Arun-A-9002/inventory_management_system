@@ -296,12 +296,16 @@ export default function Users() {
                       <div className="flex flex-wrap gap-1 mt-1">
                         {user.two_factor_enabled && (
                           <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                            2FA Enabled
+                            🔐 2FA Enabled
                           </span>
                         )}
-                        {user.multi_login_enabled && (
+                        {user.multi_login_enabled ? (
                           <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                            Multi-Login
+                            🔄 Multi-Login
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full">
+                            🔒 Single Session
                           </span>
                         )}
                         {!user.two_factor_enabled && !user.multi_login_enabled && (
@@ -486,7 +490,9 @@ export default function Users() {
                     />
                     <div className="ml-3">
                       <div className="text-sm font-medium text-gray-900">Multi-Login</div>
-                      <div className="text-xs text-gray-500">Allow multiple simultaneous logins</div>
+                      <div className="text-xs text-gray-500">
+                        Allow multiple simultaneous logins. If disabled, user will be blocked from logging in if already logged in on another device.
+                      </div>
                     </div>
                   </label>
                 </div>

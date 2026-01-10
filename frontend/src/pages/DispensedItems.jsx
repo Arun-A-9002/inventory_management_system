@@ -5,7 +5,6 @@ export default function DispensedItems() {
   const [dispensedItems, setDispensedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('ALL');
 
   useEffect(() => {
     fetchDispensedItems();
@@ -24,13 +23,9 @@ export default function DispensedItems() {
   };
 
   const filteredItems = dispensedItems.filter(item => {
-    const matchesSearch = item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.issue_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (item.department && item.department.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesFilter = filterType === 'ALL' || item.issue_type === filterType;
-    
-    return matchesSearch && matchesFilter;
+    return item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           item.issue_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (item.department && item.department.toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
   const getTypeColor = (type) => {
@@ -58,29 +53,13 @@ export default function DispensedItems() {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search by item name, issue number, or department..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="ALL">All Types</option>
-              <option value="DEPARTMENT">Department</option>
-              <option value="PROJECT">Project</option>
-              <option value="EXTERNAL">External</option>
-            </select>
-          </div>
-        </div>
+        <input
+          type="text"
+          placeholder="Search by item name, issue number, or department..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
       </div>
 
       {/* Items List */}
@@ -107,6 +86,7 @@ export default function DispensedItems() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dispensed By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
@@ -148,6 +128,9 @@ export default function DispensedItems() {
                         {item.issue_type === 'PROJECT' && item.project_code}
                         {item.issue_type === 'EXTERNAL' && item.external_ref}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{item.user_name || 'System'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{item.issue_date}</div>

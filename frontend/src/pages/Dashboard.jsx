@@ -7,6 +7,7 @@ export default function Dashboard() {
     totalItems: 0,
     totalStock: 0,
     lowStockItems: 0,
+    expiredItems: 0,
     totalVendors: 0,
     totalCustomers: 0,
     activeLocations: 0,
@@ -43,6 +44,7 @@ export default function Dashboard() {
 
       let totalStockValue = 0;
       let lowStockCount = 0;
+      let expiredCount = 0;
       
       if (stockRes.status === 'fulfilled' && stockRes.value.data) {
         stockRes.value.data.forEach(item => {
@@ -51,6 +53,24 @@ export default function Dashboard() {
           totalStockValue += qty * 50;
           if (qty < minStock) {
             lowStockCount++;
+          }
+          
+          // Check for expired batches
+          if (item.batches && item.batches.length > 0) {
+            const hasExpiredBatch = item.batches.some(batch => {
+              if (!batch.expiry_date || batch.expiry_date === "—") return false;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const parts = batch.expiry_date.split('/');
+              if (parts.length === 3) {
+                const expiry = new Date(parts[2], parts[1] - 1, parts[0]);
+                return expiry < today;
+              }
+              return false;
+            });
+            if (hasExpiredBatch) {
+              expiredCount++;
+            }
           }
         });
       }
@@ -66,6 +86,7 @@ export default function Dashboard() {
         totalItems: itemsRes.status === 'fulfilled' ? (itemsRes.value.data?.length || 0) : 0,
         totalStock: totalStockValue,
         lowStockItems: lowStockCount,
+        expiredItems: expiredCount,
         totalVendors: vendorsRes.status === 'fulfilled' ? (vendorsRes.value.data?.length || 0) : 0,
         totalCustomers: customersRes.status === 'fulfilled' ? (customersRes.value.data?.length || 0) : 0,
         activeLocations: locationsRes.status === 'fulfilled' ? (locationsRes.value.data?.length || 0) : 0,
@@ -181,18 +202,35 @@ export default function Dashboard() {
               <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">Dashboard</h1>
               <p className="text-gray-600 text-lg font-medium">Welcome to {companyName} Inventory Management System</p>
             </div>
-            {/* Low Stock Alert */}
-            {stats.lowStockItems > 0 && (
-              <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-2xl p-4 shadow-lg">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                  <div>
-                    <p className="font-semibold">Low Stock Alert</p>
-                    <p className="text-sm opacity-75">{stats.lowStockItems} items require attention</p>
+            {/* Alerts Section */}
+            {(stats.lowStockItems > 0 || stats.expiredItems > 0) && (
+              <div className="space-y-3">
+                {stats.lowStockItems > 0 && (
+                  <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-2xl p-4 shadow-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <div>
+                        <p className="font-semibold">Low Stock Alert</p>
+                        <p className="text-sm opacity-75">{stats.lowStockItems} items require attention</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+                {stats.expiredItems > 0 && (
+                  <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/50 text-red-800 rounded-2xl p-4 shadow-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="font-semibold">Expired Stock Alert</p>
+                        <p className="text-sm opacity-75">{stats.expiredItems} items have expired batches</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -221,12 +259,12 @@ export default function Dashboard() {
               trend={2.1}
             />
             <StatCard
-              title="Low Stock Items"
-              value={stats.lowStockItems}
-              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>}
+              title="Expired Items"
+              value={stats.expiredItems}
+              icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               color="from-red-500 to-red-600"
               link="/app/stocks"
-              trend={-1.5}
+              trend={0}
             />
             <StatCard
               title="Active Vendors"
