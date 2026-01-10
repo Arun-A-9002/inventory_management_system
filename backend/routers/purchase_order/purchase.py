@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from datetime import date
 import uuid
 import os
@@ -35,10 +35,10 @@ router = APIRouter(
     tags=["Purchase Management"]
 )
 
-DEFAULT_TENANT_DB = "arun"
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -129,7 +129,7 @@ def create_purchase_request(data: PRCreate, request: Request = None, db: Session
     return pr
 
 @router.post("/pr")
-def create_purchase_request_pr(data: PRCreate, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_purchase_request_create())):
+def create_purchase_request_pr(data: PRCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_create())):
     pr_number = f"PR-{uuid.uuid4().hex[:6].upper()}"
 
     pr = PurchaseRequest(

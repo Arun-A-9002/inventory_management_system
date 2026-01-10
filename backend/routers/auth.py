@@ -31,59 +31,61 @@ router = APIRouter(tags=["Authentication"], prefix="/auth")
 # LOGIN REQUEST → SEND OTP
 # --------------------------
 class LoginModel(BaseModel):
+    tenant_code: str
     email: str
     password: str
 
 
 @router.post("/login")
 def login(req: LoginModel, db: Session = Depends(get_master_db)):
-    log_api(f"LOGIN ATTEMPT → {req.email}")
+    log_api(f"LOGIN ATTEMPT → {req.email} with tenant code {req.tenant_code}")
     
     try:
-        # First check admin users
-        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+        # First find the tenant by tenant_code
+        tenant = db.query(Tenant).filter(Tenant.tenant_code == req.tenant_code).first()
         
-        if user:
+        if not tenant:
+            log_error(Exception("Invalid tenant code"), location="Login Check")
+            raise HTTPException(400, "Invalid tenant code")
+        
+        # Check if this is an admin login (admin_email matches)
+        if tenant.admin_email == req.email:
             hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
-            if hashed_pw == user.password_hash:
+            if hashed_pw == tenant.password_hash:
                 otp = generate_otp(req.email)
                 send_otp_email(req.email, otp)
-                log_audit(f"OTP SENT TO ADMIN {req.email}")
+                log_audit(f"OTP SENT TO ADMIN {req.email} for tenant {req.tenant_code}")
                 return {"message": "OTP sent to email"}
+            else:
+                log_error(Exception("Invalid admin password"), location="Login Check")
+                raise HTTPException(400, "Invalid email or password")
         
-        # Then check tenant users - find which database they belong to
+        # Check tenant users in the specific tenant database
         from database import get_tenant_db
         from models.tenant_models import User
         from utils.auth import verify_password
         
-        # Find the tenant database for this user
-        tenant_record = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
-        if not tenant_record:
-            # Check if this email exists in any tenant database by checking all tenants
-            all_tenants = db.query(Tenant).all()
-            for tenant in all_tenants:
-                try:
-                    tenant_db_gen = get_tenant_db(tenant.database_name)
-                    tenant_db = next(tenant_db_gen)
-                    
-                    tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
-                    
-                    if tenant_user and verify_password(req.password, tenant_user.hashed_password):
-                        if not tenant_user.is_active:
-                            tenant_db.close()
-                            raise HTTPException(400, "Account is inactive")
-                        
-                        # Send OTP for tenant user
-                        otp = generate_otp(req.email)
-                        send_otp_email(req.email, otp)
-                        tenant_db.close()
-                        log_audit(f"OTP SENT TO TENANT USER {req.email} in DB {tenant.database_name}")
-                        return {"message": "OTP sent to email"}
-                    
+        try:
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+            
+            if tenant_user and verify_password(req.password, tenant_user.hashed_password):
+                if not tenant_user.is_active:
                     tenant_db.close()
-                except Exception as e:
-                    log_error(e, f"Error checking tenant DB {tenant.database_name}")
-                    continue
+                    raise HTTPException(400, "Account is inactive")
+                
+                # Send OTP for tenant user
+                otp = generate_otp(req.email)
+                send_otp_email(req.email, otp)
+                tenant_db.close()
+                log_audit(f"OTP SENT TO TENANT USER {req.email} in tenant {req.tenant_code}")
+                return {"message": "OTP sent to email"}
+            
+            tenant_db.close()
+        except Exception as e:
+            log_error(e, f"Error checking tenant DB {tenant.database_name}")
         
         log_error(Exception("Invalid credentials"), location="Login Check")
         raise HTTPException(400, "Invalid email or password")
@@ -99,6 +101,7 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
 # VERIFY OTP → ISSUE TOKENS
 # --------------------------
 class OTPVerifyModel(BaseModel):
+    tenant_code: str
     email: str
     otp: str
 
@@ -106,32 +109,38 @@ class OTPVerifyModel(BaseModel):
 @router.post("/verify")
 def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_master_db)):
 
-    log_api(f"OTP VERIFY ATTEMPT → {req.email}")
+    log_api(f"OTP VERIFY ATTEMPT → {req.email} for tenant {req.tenant_code}")
 
     try:
         if not verify_otp(req.email, req.otp):
             log_error(Exception("Invalid OTP"), location="OTP Verify")
             raise HTTPException(400, "Invalid or expired OTP")
 
-        # Check admin users first
-        user = db.query(Tenant).filter(Tenant.admin_email == req.email).first()
+        # Find the tenant by tenant_code
+        tenant = db.query(Tenant).filter(Tenant.tenant_code == req.tenant_code).first()
         
-        if user:
+        if not tenant:
+            log_error(Exception("Invalid tenant code"), location="OTP Verify")
+            raise HTTPException(400, "Invalid tenant code")
+
+        # Check if this is an admin login
+        if tenant.admin_email == req.email:
             access_token = create_access_token({
-                "sub": str(user.id),
-                "tenant_id": user.id,
-                "email": user.admin_email,
-                "org": user.organization_name,
+                "sub": str(tenant.id),
+                "tenant_id": tenant.id,
+                "email": tenant.admin_email,
+                "org": tenant.organization_name,
                 "role": "admin",
-                "tenant_db": user.database_name,  # Add tenant database name
-                "user_type": "admin",  # Specify user type as admin
-                "full_name": user.admin_name  # Use admin name instead of org name
+                "tenant_db": tenant.database_name,
+                "tenant_code": tenant.tenant_code,
+                "user_type": "admin",
+                "full_name": tenant.admin_name
             })
 
             # Refresh token rotation
             raw_refresh = generate_refresh_token()
-            user.refresh_token_hash = hash_token(raw_refresh)
-            user.refresh_token_expires_at = refresh_expiry()
+            tenant.refresh_token_hash = hash_token(raw_refresh)
+            tenant.refresh_token_expires_at = refresh_expiry()
             db.commit()
 
             response.set_cookie(
@@ -143,50 +152,47 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
                 max_age=7 * 24 * 3600
             )
 
-            log_audit(f"ADMIN LOGIN SUCCESS → {req.email}")
+            log_audit(f"ADMIN LOGIN SUCCESS → {req.email} for tenant {req.tenant_code}")
             return {"access_token": access_token, "token_type": "bearer"}
         
-        # Then check tenant users - find which database they belong to
+        # Check tenant users in the specific tenant database
         from database import get_tenant_db
         from models.tenant_models import User
         
-        # Find the tenant database for this user
-        all_tenants = db.query(Tenant).all()
-        for tenant in all_tenants:
-            try:
-                tenant_db_gen = get_tenant_db(tenant.database_name)
-                tenant_db = next(tenant_db_gen)
+        try:
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+            
+            if tenant_user:
+                # Get user permissions
+                permissions = []
+                for role in tenant_user.roles:
+                    for permission in role.permissions:
+                        permissions.append(permission.name)
                 
-                tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
+                # Get role names
+                role_names = [role.name for role in tenant_user.roles]
+                primary_role = role_names[0] if role_names else "user"
                 
-                if tenant_user:
-                    # Get user permissions
-                    permissions = []
-                    for role in tenant_user.roles:
-                        for permission in role.permissions:
-                            permissions.append(permission.name)
-                    
-                    # Get role names
-                    role_names = [role.name for role in tenant_user.roles]
-                    primary_role = role_names[0] if role_names else "user"
-                    
-                    access_token = create_access_token({
-                        "sub": str(tenant_user.id),
-                        "email": tenant_user.email,
-                        "tenant_db": tenant.database_name,  # Use the correct tenant database
-                        "user_type": "tenant_user",
-                        "permissions": list(set(permissions)),  # Remove duplicates
-                        "full_name": tenant_user.full_name,
-                        "role": primary_role
-                    })
-                    tenant_db.close()
-                    log_audit(f"TENANT USER LOGIN SUCCESS → {req.email} in DB {tenant.database_name}")
-                    return {"access_token": access_token, "token_type": "bearer"}
-                
+                access_token = create_access_token({
+                    "sub": str(tenant_user.id),
+                    "email": tenant_user.email,
+                    "tenant_db": tenant.database_name,
+                    "tenant_code": tenant.tenant_code,
+                    "user_type": "tenant_user",
+                    "permissions": list(set(permissions)),
+                    "full_name": tenant_user.full_name,
+                    "role": primary_role
+                })
                 tenant_db.close()
-            except Exception as e:
-                log_error(e, f"Error checking tenant DB {tenant.database_name} for verify")
-                continue
+                log_audit(f"TENANT USER LOGIN SUCCESS → {req.email} for tenant {req.tenant_code}")
+                return {"access_token": access_token, "token_type": "bearer"}
+            
+            tenant_db.close()
+        except Exception as e:
+            log_error(e, f"Error checking tenant DB {tenant.database_name} for verify")
         
         log_error(Exception("User not found"), location="OTP Verify User Fetch")
         raise HTTPException(400, "Invalid email")
@@ -246,9 +252,10 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
             "tenant_id": user.id,
             "email": user.admin_email,
             "org": user.organization_name,
-            "tenant_db": user.database_name,  # Add tenant database name
+            "tenant_db": user.database_name,
+            "tenant_code": user.tenant_code,
             "role": "admin",
-            "user_type": "admin",  # Specify user type as admin
+            "user_type": "admin",
             "full_name": user.admin_name
         })
 

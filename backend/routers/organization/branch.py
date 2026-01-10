@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 from models.tenant_models import Branch, Company, AuditLog
 from schemas.tenant_schemas import (
@@ -56,7 +59,7 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # CREATE BRANCH
 # --------------------------
 @router.post("/", response_model=BranchResponse)
-def create_branch(data: BranchCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_create())):
+def create_branch(data: BranchCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_branch_create())):
     log_api("CREATE BRANCH")
 
     try:
@@ -101,7 +104,7 @@ def create_branch(data: BranchCreate, request: Request, db: Session = Depends(ge
 # LIST ALL BRANCHES
 # --------------------------
 @router.get("/", response_model=list[BranchResponse])
-def list_branches(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_view())):
+def list_branches(db: Session = Depends(get_db), current_user: dict = Depends(require_branch_view())):
     return db.query(Branch).all()
 
 
@@ -109,7 +112,7 @@ def list_branches(db: Session = Depends(get_tenant_db), current_user: dict = Dep
 # GET A BRANCH
 # --------------------------
 @router.get("/{branch_id}", response_model=BranchResponse)
-def get_branch(branch_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_view())):
+def get_branch(branch_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_branch_view())):
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(404, "Branch not found")
@@ -120,7 +123,7 @@ def get_branch(branch_id: int, db: Session = Depends(get_tenant_db), current_use
 # UPDATE BRANCH
 # --------------------------
 @router.put("/{branch_id}", response_model=BranchResponse)
-def update_branch(branch_id: int, data: BranchUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_edit())):
+def update_branch(branch_id: int, data: BranchUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_branch_edit())):
     log_api("UPDATE BRANCH")
 
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
@@ -174,7 +177,7 @@ def update_branch(branch_id: int, data: BranchUpdate, request: Request, db: Sess
 # DELETE BRANCH
 # --------------------------
 @router.delete("/{branch_id}")
-def delete_branch(branch_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_branch_delete())):
+def delete_branch(branch_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_branch_delete())):
     log_api("DELETE BRANCH")
 
     branch = db.query(Branch).filter(Branch.id == branch_id).first()

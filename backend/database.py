@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import urllib.parse
 import pymysql
+from fastapi import HTTPException
 
 from models.register_models import Base
 from utils.logger import log_error, log_audit, log_api
@@ -25,7 +26,7 @@ TENANT_USER = DB_USER
 TENANT_PASSWORD = DB_PASSWORD
 TENANT_HOST = DB_HOST
 TENANT_PORT = DB_PORT
-TENANT_DATABASE_URL = f"mysql+pymysql://{TENANT_USER}:{urllib.parse.quote_plus(TENANT_PASSWORD)}@{TENANT_HOST}:{TENANT_PORT}/arun"
+# TENANT_DATABASE_URL is now dynamically generated per tenant
 
 DB_URL = (
     f"mysql+pymysql://{DB_USER}:{urllib.parse.quote_plus(DB_PASSWORD)}"
@@ -130,7 +131,7 @@ def get_tenant_sessionmaker(db_name: str):
 # -------------------------------------------------------
 # FINAL — TENANT SESSION (USED IN ROUTERS)
 # -------------------------------------------------------
-def get_tenant_db(tenant_db_name: str = "arun"):
+def get_tenant_db(tenant_db_name: str):
 
     """Creates tenant DB if not exists, ensures tables exist, returns session."""
     try:
@@ -175,10 +176,29 @@ def get_current_tenant_db():
     from fastapi import Depends
     
     def _get_tenant_db(current_user = Depends(get_current_user)):
-        tenant_db_name = current_user.get("tenant_db", "arun")  # fallback to arun
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(status_code=400, detail="No tenant database specified")
         return get_tenant_db(tenant_db_name)
     
     return _get_tenant_db
+
+
+# -------------------------------------------------------
+# HELPER FUNCTION TO GET TENANT DB NAME FROM TOKEN
+# -------------------------------------------------------
+def get_current_tenant_db_name():
+    """Get current tenant database name from JWT token"""
+    from utils.auth import get_current_user
+    from fastapi import Depends
+    
+    def _get_tenant_db_name(current_user = Depends(get_current_user)):
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(status_code=400, detail="No tenant database specified")
+        return tenant_db_name
+    
+    return _get_tenant_db_name
 
 
 # -------------------------------------------------------
@@ -328,6 +348,28 @@ def ensure_missing_columns(engine):
                 print("Created audit_logs table")
             except Exception as e:
                 print(f"Error creating audit_logs table: {e}")
+            
+            # Add missing columns to external_transfer_transactions table
+            transaction_columns = [
+                ("return_staff_name", "VARCHAR(255) NULL"),
+                ("return_staff_phone", "VARCHAR(20) NULL"),
+                ("return_staff_email", "VARCHAR(191) NULL")
+            ]
+            
+            for column_name, column_def in transaction_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE external_transfer_transactions ADD COLUMN {column_name} {column_def}"))
+                    print(f"Added {column_name} column to external_transfer_transactions table")
+                except Exception as e:
+                    if "Duplicate column name" not in str(e):
+                        print(f"Error adding {column_name} column: {e}")
+            
+            # Remove hardcoded Administration department if exists
+            try:
+                conn.execute(text("DELETE FROM departments WHERE name = 'Administration' AND description = 'Default administration department'"))
+                print("Removed hardcoded Administration department")
+            except Exception as e:
+                print(f"Error removing hardcoded department: {e}")
             
             # Ensure logo column is LONGBLOB in companies table
             try:

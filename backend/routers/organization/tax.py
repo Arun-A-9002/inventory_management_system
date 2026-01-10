@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import TaxCode, AuditLog
 from schemas.tenant_schemas import (
     TaxCodeCreate, TaxCodeUpdate, TaxCodeResponse
@@ -10,6 +10,9 @@ from schemas.tenant_schemas import (
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/tax", tags=["Tax / GST / HSN"])
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -53,7 +56,7 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # CREATE TAX CODE
 # --------------------------
 @router.post("/", response_model=TaxCodeResponse)
-def create_tax_code(data: TaxCodeCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def create_tax_code(data: TaxCodeCreate, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     log_api("CREATE TAX CODE")
 
     try:
@@ -89,7 +92,7 @@ def create_tax_code(data: TaxCodeCreate, request: Request, db: Session = Depends
 # LIST TAX CODES
 # --------------------------
 @router.get("/", response_model=list[TaxCodeResponse])
-def list_tax_codes(db: Session = Depends(get_tenant_db)):
+def list_tax_codes(db: Session = Depends(get_db)):
     return db.query(TaxCode).all()
 
 
@@ -97,7 +100,7 @@ def list_tax_codes(db: Session = Depends(get_tenant_db)):
 # GET ONE TAX CODE
 # --------------------------
 @router.get("/{tax_id}", response_model=TaxCodeResponse)
-def get_tax_code(tax_id: int, db: Session = Depends(get_tenant_db)):
+def get_tax_code(tax_id: int, db: Session = Depends(get_db)):
     tax = db.query(TaxCode).filter(TaxCode.id == tax_id).first()
     if not tax:
         raise HTTPException(404, "Tax code not found")
@@ -108,7 +111,7 @@ def get_tax_code(tax_id: int, db: Session = Depends(get_tenant_db)):
 # UPDATE TAX CODE
 # --------------------------
 @router.put("/{tax_id}", response_model=TaxCodeResponse)
-def update_tax_code(tax_id: int, data: TaxCodeUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def update_tax_code(tax_id: int, data: TaxCodeUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     log_api("UPDATE TAX CODE")
 
     tax = db.query(TaxCode).filter(TaxCode.id == tax_id).first()
@@ -145,7 +148,7 @@ def update_tax_code(tax_id: int, data: TaxCodeUpdate, request: Request, db: Sess
 # DELETE TAX CODE
 # --------------------------
 @router.delete("/{tax_id}")
-def delete_tax_code(tax_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def delete_tax_code(tax_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     log_api("DELETE TAX CODE")
 
     tax = db.query(TaxCode).filter(TaxCode.id == tax_id).first()

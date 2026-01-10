@@ -89,6 +89,9 @@ from routers.external_transfer.external_transfer import router as external_trans
 # Audit Logs
 from routers.audit_log import router as audit_log_router
 
+# Permissions Management
+from routers.permissions import router as permissions_router
+
 # ----------------------------------------------------------
 # LOGGER
 # ----------------------------------------------------------
@@ -170,6 +173,9 @@ app.include_router(external_transfer_router)
 
 # Audit Logs
 app.include_router(audit_log_router)
+
+# Permissions Management
+app.include_router(permissions_router, prefix="/api/permissions")
 
 # ----------------------------------------------------------
 # GLOBAL MIDDLEWARE: REQUEST LOGGING + ERROR HANDLING

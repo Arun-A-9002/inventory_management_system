@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import json
 import io
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import ExternalTransfer, ExternalTransferItem, ExternalTransferStatus, AuditLog
 from schemas.tenant_schemas import (
     ExternalTransferCreate,
@@ -24,12 +24,15 @@ from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/external-transfers", tags=["External Transfers"])
 
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
+
 def generate_transfer_no():
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"ET{timestamp}"
 
 @router.post("/", response_model=ExternalTransferResponse)
-def create_external_transfer(transfer_data: ExternalTransferCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
+def create_external_transfer(transfer_data: ExternalTransferCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_create())):
     try:
         print(f"Creating transfer with data: {transfer_data}")
         
@@ -95,7 +98,7 @@ def test_endpoint():
     return {"message": "API working", "status": "ok"}
 
 @router.get("/debug/stock/{location}")
-def debug_stock_for_location(location: str, db: Session = Depends(get_tenant_db)):
+def debug_stock_for_location(location: str, db: Session = Depends(get_db)):
     try:
         # Get all stock for this location
         stock_records = db.execute(text("""
@@ -119,7 +122,7 @@ def debug_stock_for_location(location: str, db: Session = Depends(get_tenant_db)
         return {"error": str(e)}
 
 @router.get("/debug/transfer/{transfer_id}")
-def debug_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def debug_transfer_items(transfer_id: int, db: Session = Depends(get_db)):
     try:
         transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
         if not transfer:
@@ -139,7 +142,7 @@ def debug_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db))
         return {"error": str(e)}
 
 @router.get("/", response_model=List[ExternalTransferResponse])
-def get_external_transfers(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_view())):
+def get_external_transfers(db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_view())):
     try:
         transfers = db.query(ExternalTransfer).all()
         print(f"Found {len(transfers)} transfers")
@@ -149,7 +152,7 @@ def get_external_transfers(db: Session = Depends(get_tenant_db), current_user: d
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{transfer_id}/send")
-def send_transfer(transfer_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_create())):
+def send_transfer(transfer_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_create())):
     try:
         transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
         if not transfer:
@@ -293,7 +296,7 @@ def send_transfer(transfer_id: int, request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{transfer_id}/return")
-def return_transfer(transfer_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_return())):
+def return_transfer(transfer_id: int, return_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_return())):
     try:
         print(f"DEBUG: Raw return_data received: {return_data}")
         
@@ -486,7 +489,7 @@ def return_transfer(transfer_id: int, return_data: dict, request: Request, db: S
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{transfer_id}", response_model=ExternalTransferResponse)
-def update_external_transfer(transfer_id: int, transfer_data: ExternalTransferUpdate, db: Session = Depends(get_tenant_db)):
+def update_external_transfer(transfer_id: int, transfer_data: ExternalTransferUpdate, db: Session = Depends(get_db)):
     try:
         transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
         if not transfer:
@@ -530,7 +533,7 @@ def update_external_transfer(transfer_id: int, transfer_data: ExternalTransferUp
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/test-data")
-def create_test_data(db: Session = Depends(get_tenant_db)):
+def create_test_data(db: Session = Depends(get_db)):
     try:
         transfer = ExternalTransfer(
             transfer_no=generate_transfer_no(),
@@ -559,7 +562,7 @@ def create_test_data(db: Session = Depends(get_tenant_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{transfer_id}/items")
-def get_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def get_transfer_items(transfer_id: int, db: Session = Depends(get_db)):
     """Get transfer items for return processing"""
     from sqlalchemy import text
     
@@ -603,7 +606,7 @@ def get_transfer_items(transfer_id: int, db: Session = Depends(get_tenant_db)):
     return items
 
 @router.post("/{transfer_id}/process-return")
-def process_transfer_return(transfer_id: int, return_data: dict, db: Session = Depends(get_tenant_db)):
+def process_transfer_return(transfer_id: int, return_data: dict, db: Session = Depends(get_db)):
     """Process transfer item return - update returned quantity additively"""
     from sqlalchemy import text
     
@@ -665,7 +668,7 @@ def get_damaged_returns(
     staff_name: str = None,
     item_name: str = None,
     transfer_no: str = None,
-    db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_damaged_returns_view())
 ):
     """Get all damaged items from external transfers with optional filters"""
@@ -739,7 +742,7 @@ def get_damaged_returns(
     return damaged_items
 
 @router.get("/damaged-returns/pdf")
-def generate_damaged_returns_pdf(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_damaged_returns_view())):
+def generate_damaged_returns_pdf(db: Session = Depends(get_db), current_user: dict = Depends(require_damaged_returns_view())):
     """Generate PDF for damaged returns with company header"""
     from utils.universal_pdf_generator import UniversalPDFGenerator
     from fastapi.responses import StreamingResponse
@@ -877,7 +880,7 @@ def generate_damaged_returns_pdf(db: Session = Depends(get_tenant_db), current_u
     return damaged_items
 
 @router.get("/{transfer_id}", response_model=ExternalTransferResponse)
-def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def get_external_transfer(transfer_id: int, db: Session = Depends(get_db)):
     from sqlalchemy import text
     
     transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
@@ -992,7 +995,7 @@ def get_external_transfer(transfer_id: int, db: Session = Depends(get_tenant_db)
     return transfer_dict
 
 @router.post("/check-deadlines")
-def check_return_deadlines(db: Session = Depends(get_tenant_db)):
+def check_return_deadlines(db: Session = Depends(get_db)):
     """Check for upcoming return deadlines and send email alerts"""
     try:
         # Get transfers with upcoming deadlines (next 3 days)
@@ -1054,7 +1057,7 @@ def check_return_deadlines(db: Session = Depends(get_tenant_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/send-deadline-alerts")
-def send_deadline_alerts(db: Session = Depends(get_tenant_db)):
+def send_deadline_alerts(db: Session = Depends(get_db)):
     """Send email alerts for upcoming return deadlines"""
     import smtplib
     from email.mime.text import MIMEText
@@ -1125,7 +1128,7 @@ def send_deadline_alerts(db: Session = Depends(get_tenant_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 @router.put("/{transfer_id}/return-simple")
-def return_transfer_simple(transfer_id: int, data: dict, db: Session = Depends(get_tenant_db)):
+def return_transfer_simple(transfer_id: int, data: dict, db: Session = Depends(get_db)):
     """Simple return endpoint that accepts raw JSON"""
     try:
         print(f"RAW DATA: {data}")
@@ -1156,12 +1159,12 @@ def return_transfer_simple(transfer_id: int, data: dict, db: Session = Depends(g
         db.rollback()
         raise HTTPException(400, str(e))
 @router.post("/test-return-data")
-def test_return_data(data: dict, db: Session = Depends(get_tenant_db)):
+def test_return_data(data: dict, db: Session = Depends(get_db)):
     """Test endpoint to see what data is being sent from frontend"""
     print(f"RAW DATA RECEIVED: {data}")
     return {"received_data": data}
 @router.get("/{transfer_id}/debug-staff")
-def debug_return_staff(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def debug_return_staff(transfer_id: int, db: Session = Depends(get_db)):
     """Debug endpoint to check return staff details"""
     transfer = db.query(ExternalTransfer).filter(ExternalTransfer.id == transfer_id).first()
     if not transfer:
@@ -1176,7 +1179,7 @@ def debug_return_staff(transfer_id: int, db: Session = Depends(get_tenant_db)):
         "staff_change_reason": transfer.staff_change_reason
     }
 @router.get("/{transfer_id}/transactions")
-def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_tenant_db)):
+def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_db)):
     """Get all transaction history for a transfer"""
     try:
         query = text("""
@@ -1225,7 +1228,7 @@ def get_transfer_transactions(transfer_id: int, db: Session = Depends(get_tenant
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{transfer_id}/print-pdf")
-def print_external_transfer_pdf(transfer_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_print())):
+def print_external_transfer_pdf(transfer_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_print())):
     """Generate PDF for external transfer with company header"""
     try:
         # Get transfer details
@@ -1512,7 +1515,7 @@ def print_external_transfer_pdf(transfer_id: int, db: Session = Depends(get_tena
 
 # Add audit log endpoint for external transfers
 @router.get("/{transfer_id}/audit-logs")
-def get_external_transfer_audit_logs(transfer_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_external_transfer_view())):
+def get_external_transfer_audit_logs(transfer_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_external_transfer_view())):
     """Get audit logs for a specific external transfer"""
     # Get audit logs for this external transfer
     audit_logs = db.query(AuditLog).filter(

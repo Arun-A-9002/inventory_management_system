@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import StockOverview
 
 router = APIRouter(prefix="/stock-overview", tags=["Stock Overview"])
 
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
+
 @router.get("/")
-def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
+def get_all_stock_overview(db: Session = Depends(get_db)):
     """Get all stock overview records from GRN batches"""
     from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
@@ -94,7 +97,7 @@ def get_all_stock_overview(db: Session = Depends(get_tenant_db)):
     return result
 
 @router.get("/by-location/{location_name}")
-def get_stock_by_location(location_name: str, db: Session = Depends(get_tenant_db)):
+def get_stock_by_location(location_name: str, db: Session = Depends(get_db)):
     """Get stock overview records filtered by location"""
     from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
@@ -146,7 +149,7 @@ def get_stock_by_location(location_name: str, db: Session = Depends(get_tenant_d
     return result
 
 @router.put("/increase-stock/{batch_no}")
-def increase_stock_by_batch(batch_no: str, quantity: int, db: Session = Depends(get_tenant_db)):
+def increase_stock_by_batch(batch_no: str, quantity: int, db: Session = Depends(get_db)):
     """Increase stock quantity for items with specific batch number"""
     from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
@@ -188,7 +191,7 @@ def increase_stock_by_batch(batch_no: str, quantity: int, db: Session = Depends(
     }
 
 @router.get("/batches/{item_name}")
-def get_item_batches(item_name: str, db: Session = Depends(get_tenant_db)):
+def get_item_batches(item_name: str, db: Session = Depends(get_db)):
     """Get all batch numbers for a specific item"""
     batches = db.query(StockOverview.batch_no).filter(
         StockOverview.item_name == item_name,
@@ -198,7 +201,7 @@ def get_item_batches(item_name: str, db: Session = Depends(get_tenant_db)):
     return [batch[0] for batch in batches if batch[0]]
 
 @router.post("/dispense/{item_id}")
-def dispense_stock(item_id: int, batch_index: int, quantity: int, db: Session = Depends(get_tenant_db)):
+def dispense_stock(item_id: int, batch_index: int, quantity: int, db: Session = Depends(get_db)):
     """Dispense stock from a specific batch"""
     from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
@@ -234,7 +237,7 @@ def dispense_stock(item_id: int, batch_index: int, quantity: int, db: Session = 
     return {"message": f"Dispensed {quantity} units from batch {target_batch.batch_no}"}
 
 @router.post("/return-stock")
-def return_stock_to_batch(item_name: str, batch_no: str, quantity: int, db: Session = Depends(get_tenant_db)):
+def return_stock_to_batch(item_name: str, batch_no: str, quantity: int, db: Session = Depends(get_db)):
     """Return stock to a specific batch"""
     from models.tenant_models import Item, GRN, GRNItem, Batch, GRNStatus
     
@@ -274,7 +277,7 @@ def return_stock_to_batch(item_name: str, batch_no: str, quantity: int, db: Sess
     }
 
 @router.post("/create-test-batches")
-def create_test_batches(db: Session = Depends(get_tenant_db)):
+def create_test_batches(db: Session = Depends(get_db)):
     """Create test batch data for Paracetamol"""
     
     # Clear existing Paracetamol records

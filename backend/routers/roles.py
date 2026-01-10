@@ -5,7 +5,7 @@ from typing import List
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Role, Permission, AuditLog
 from schemas.tenant_schemas import (
     RoleCreate, RoleUpdate, RoleResponse,
@@ -15,11 +15,11 @@ from utils.auth import check_permission
 
 router = APIRouter(prefix="/roles", tags=["Roles"])
 
-DEFAULT_TENANT_DB = "arun"
 
 
-def get_tenant_session():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -65,7 +65,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
 # ===========================================================
 @router.get("/permissions", response_model=List[PermissionResponse])
 def list_permissions(
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.view")),
 ):
     return db.query(Permission).order_by(Permission.group, Permission.label).all()
@@ -77,7 +77,7 @@ def list_permissions(
 @router.post("/permissions", response_model=PermissionResponse)
 def create_permission(
     payload: PermissionCreate,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.create")),
 ):
     existing = db.query(Permission).filter(Permission.name == payload.name).first()
@@ -98,7 +98,7 @@ def create_permission(
 def create_role(
     payload: RoleCreate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.create")),
 ):
     if db.query(Role).filter(Role.name == payload.name).first():
@@ -145,7 +145,7 @@ def create_role(
 # ===========================================================
 @router.get("/", response_model=List[RoleResponse])
 def list_roles(
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.view")),
 ):
     return db.query(Role).order_by(Role.name).all()
@@ -157,7 +157,7 @@ def list_roles(
 @router.get("/{role_id}", response_model=RoleResponse)
 def get_role(
     role_id: int,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.view")),
 ):
     role = db.query(Role).filter(Role.id == role_id).first()
@@ -174,7 +174,7 @@ def update_role(
     role_id: int,
     payload: RoleUpdate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.update")),
 ):
     role = db.query(Role).filter(Role.id == role_id).first()
@@ -241,7 +241,7 @@ def update_role(
 def delete_role(
     role_id: int,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.delete")),
 ):
     role = db.query(Role).filter(Role.id == role_id).first()

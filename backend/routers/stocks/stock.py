@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Stock, StockLedger, StockTransfer, StockIssue, Item, GRNItem, Batch, Department, AuditLog
 from schemas.tenant_schemas import *
 from utils.permissions import require_stock_ledger_view, require_stock_ledger_dispense, require_stock_ledger_available_qty
@@ -10,10 +10,10 @@ from typing import List
 import json
 
 router = APIRouter(prefix="/stocks", tags=["Stock Management"])
-DEFAULT_DB = "arun"
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # ---------------- OVERVIEW ----------------
 @router.get("/")

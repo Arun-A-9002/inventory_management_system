@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import AuditLog
 from utils.pdf_header_format import PDFHeaderFormat
 from typing import Optional
@@ -16,6 +16,9 @@ import io
 
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
+
 @router.get("/test")
 def test_endpoint():
     """Test endpoint to verify router is working"""
@@ -23,7 +26,7 @@ def test_endpoint():
 
 @router.get("/")
 def get_audit_logs(
-    db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     module: Optional[str] = Query(None),
@@ -79,7 +82,7 @@ def get_audit_logs(
 
 @router.get("/print")
 def print_audit_logs(
-    db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
     module: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
     user_name: Optional[str] = Query(None),
@@ -216,7 +219,7 @@ def print_audit_logs(
     )
 
 @router.post("/create-sample")
-def create_sample_log(db: Session = Depends(get_tenant_db)):
+def create_sample_log(db: Session = Depends(get_db)):
     """Create a sample audit log entry"""
     sample_log = AuditLog(
         user_name="system",

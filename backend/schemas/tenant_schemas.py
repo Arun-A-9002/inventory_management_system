@@ -512,20 +512,20 @@ class ItemResponse(ItemBase):
 # ================= VENDOR =================
 class VendorCreate(BaseModel):
     vendor_name: str
-    contact_person: Optional[str]
+    contact_person: Optional[str] = None
     phone: str
     email: str
-    address: Optional[str]
+    address: Optional[str] = None
     country: str
-    state: Optional[str]
-    city: Optional[str]
-    pan_number: Optional[str]
-    gst_number: Optional[str]
+    state: Optional[str] = None
+    city: Optional[str] = None
+    pan_number: Optional[str] = None
+    gst_number: Optional[str] = None
     # Bank Details
-    ifsc_code: Optional[str]
-    account_number: Optional[str]
-    account_holder_name: Optional[str]
-    branch_name: Optional[str]
+    ifsc_code: Optional[str] = None
+    account_number: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    branch_name: Optional[str] = None
 
 class VendorResponse(VendorCreate):
     id: int

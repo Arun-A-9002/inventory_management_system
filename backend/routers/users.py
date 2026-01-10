@@ -7,7 +7,7 @@ import secrets
 import logging
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import User, Role, AuditLog
 from schemas.tenant_schemas import UserCreate, UserUpdate, UserResponse
 from utils.auth import hash_password, send_welcome_email, check_permission
@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-DEFAULT_TENANT_DB = "arun"
 
 
-def get_tenant_session():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -68,7 +68,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
 def create_user(
     payload: UserCreate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("users.create")),
 ):
     # Check duplicate email
@@ -132,7 +132,7 @@ def create_user(
 # ===========================================================
 @router.get("/", response_model=List[UserResponse])
 def list_users(
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("users.view")),
 ):
     return db.query(User).order_by(User.full_name).all()
@@ -144,7 +144,7 @@ def list_users(
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user_by_id(
     user_id: int,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("users.view")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
@@ -161,7 +161,7 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("users.update")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
@@ -236,7 +236,7 @@ def update_user(
 def delete_user(
     user_id: int,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("users.delete")),
 ):
     user = db.query(User).filter(User.id == user_id).first()

@@ -8,7 +8,7 @@ from pathlib import Path
 import base64
 from typing import Optional
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Company, AuditLog
 from schemas.tenant_schemas import (
     CompanyCreate, CompanyUpdate, CompanyResponse
@@ -21,6 +21,9 @@ router = APIRouter(prefix="/company", tags=["Company"])
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -75,7 +78,7 @@ async def create_company(
     phone: str = Form(...),
     logo: Optional[UploadFile] = File(None),
     request: Request = None,
-    db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_company_create())
 ):
     log_api("CREATE COMPANY")
@@ -153,7 +156,7 @@ async def create_company(
 # LIST ALL COMPANIES
 # --------------------------
 @router.get("/", response_model=list[CompanyResponse])
-def list_companies(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_view())):
+def list_companies(db: Session = Depends(get_db), current_user: dict = Depends(require_company_view())):
     return db.query(Company).all()
 
 
@@ -161,7 +164,7 @@ def list_companies(db: Session = Depends(get_tenant_db), current_user: dict = De
 # GET SINGLE COMPANY
 # --------------------------
 @router.get("/{company_id}", response_model=CompanyResponse)
-def get_company(company_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_view())):
+def get_company(company_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_company_view())):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(404, "Company not found")
@@ -183,7 +186,7 @@ async def update_company(
     phone: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
     request: Request = None,
-    db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_company_edit())
 ):
     log_api("UPDATE COMPANY")
@@ -276,7 +279,7 @@ async def update_company(
 # DELETE COMPANY
 # --------------------------
 @router.delete("/{company_id}")
-def delete_company(company_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_company_delete())):
+def delete_company(company_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_company_delete())):
     log_api("DELETE COMPANY")
 
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -326,7 +329,7 @@ def serve_logo_file(filename: str):
 # GET COMPANY LOGO PATH
 # --------------------------
 @router.get("/{company_id}/logo")
-def get_company_logo_path(company_id: int, db: Session = Depends(get_tenant_db)):
+def get_company_logo_path(company_id: int, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company or not company.logo_path:
         raise HTTPException(404, "Logo not found")
@@ -338,7 +341,7 @@ def get_company_logo_path(company_id: int, db: Session = Depends(get_tenant_db))
 # GET FIRST COMPANY LOGO PATH (for reports)
 # --------------------------
 @router.get("/logo")
-def get_first_company_logo_path(db: Session = Depends(get_tenant_db)):
+def get_first_company_logo_path(db: Session = Depends(get_db)):
     company = db.query(Company).first()
     if not company or not company.logo_path:
         raise HTTPException(404, "Logo not found")
@@ -350,7 +353,7 @@ def get_first_company_logo_path(db: Session = Depends(get_tenant_db)):
 # DEBUG: CHECK COMPANY LOGO STATUS
 # --------------------------
 @router.get("/logo-status")
-def check_logo_status(db: Session = Depends(get_tenant_db)):
+def check_logo_status(db: Session = Depends(get_db)):
     company = db.query(Company).first()
     if not company:
         return {"status": "no_company", "message": "No company found"}

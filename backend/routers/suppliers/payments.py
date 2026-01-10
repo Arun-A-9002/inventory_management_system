@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import VendorPayment, GRN, AuditLog, Vendor
 from utils.permissions import require_vendor_ledger_view, require_vendor_ledger_pay, require_vendor_ledger_print
 from datetime import date
 from decimal import Decimal
 
 router = APIRouter()
-DEFAULT_DB = "arun"
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):

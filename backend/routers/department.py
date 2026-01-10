@@ -5,7 +5,7 @@ from typing import List
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db, get_current_tenant_db
 from models.tenant_models import Department, AuditLog
 from schemas.tenant_schemas import (
     DepartmentCreate,
@@ -17,11 +17,11 @@ from utils.permissions import require_department_view
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
 
-DEFAULT_TENANT_DB = "arun"
 
 
-def get_tenant_session():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -69,7 +69,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
 def create_department(
     payload: DepartmentCreate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("departments.create")),
 ):
     exists = db.query(Department).filter(Department.name == payload.name).first()
@@ -110,7 +110,7 @@ def create_department(
 # ===========================================================
 @router.get("/", response_model=List[DepartmentResponse])
 def list_departments(
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_department_view()),
 ):
     return db.query(Department).all()
@@ -122,7 +122,7 @@ def list_departments(
 @router.get("/{dept_id}", response_model=DepartmentResponse)
 def get_department(
     dept_id: int,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_department_view()),
 ):
     dept = db.query(Department).filter(Department.id == dept_id).first()
@@ -139,7 +139,7 @@ def update_department(
     dept_id: int,
     payload: DepartmentUpdate,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("departments.update")),
 ):
     dept = db.query(Department).filter(Department.id == dept_id).first()
@@ -191,7 +191,7 @@ def update_department(
 def delete_department(
     dept_id: int,
     request: Request,
-    db: Session = Depends(get_tenant_session),
+    db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("departments.delete")),
 ):
     dept = db.query(Department).filter(Department.id == dept_id).first()

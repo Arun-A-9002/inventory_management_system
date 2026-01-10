@@ -3,13 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import date, datetime
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import (
     ReturnHeader, ReturnItem, Customer,
     DisposalTransaction, SalvageValuation,
     ReturnTypeEnum, ItemConditionEnum, DisposalMethodEnum, AuditLog
 )
-from utils.email import send_email
+from utils.email_service_old import send_email
 from utils.permissions import (
     require_return_disposal_view, 
     require_return_disposal_create, 
@@ -20,6 +20,9 @@ from utils.permissions import (
 from typing import List, Optional
 
 router = APIRouter(prefix="/returns", tags=["Return & Disposal"])
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -60,7 +63,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
     db.commit()
 
 @router.get("/")
-def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def list_returns(db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all returns with proper location data"""
     returns = db.query(ReturnHeader).order_by(ReturnHeader.created_at.desc()).all()
     
@@ -88,7 +91,7 @@ def list_returns(db: Session = Depends(get_tenant_db), current_user: dict = Depe
 
 # ---------------- CREATE RETURN ----------------
 @router.post("/")
-def create_return(return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def create_return(return_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create new return"""
     # Generate return number
     return_no = f"RTN{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -204,7 +207,7 @@ def create_return(return_data: dict, request: Request, db: Session = Depends(get
 
 # ---------------- GET RETURN DETAILS ----------------
 @router.get("/{return_id}")
-def get_return_details(return_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def get_return_details(return_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get return details with items"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -232,7 +235,7 @@ def get_return_details(return_id: int, db: Session = Depends(get_tenant_db), cur
     }
 
 @router.get("/{return_id}/items")
-def get_return_items(return_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def get_return_items(return_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get return items for a specific return with correct rates, warranty, and tax info"""
     return_items = db.query(ReturnItem).filter(ReturnItem.return_id == return_id).all()
     
@@ -290,7 +293,7 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db), curre
 
 # ---------------- UPDATE RETURN ----------------
 @router.put("/{return_id}")
-def update_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+def update_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_edit())):
     """Update existing return"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -394,7 +397,7 @@ def update_return(return_id: int, return_data: dict, request: Request, db: Sessi
 
 # ---------------- UPDATE RETURN STATUS ----------------
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_status_approve())):
+def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_status_approve())):
     """Update return status and handle stock adjustments"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -540,7 +543,7 @@ def update_return_status(return_id: int, status: str, request: Request, db: Sess
 
 # ---------------- UPDATE RETURN ITEM ----------------
 @router.put("/{return_id}/items/{item_id}")
-def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_edit())):
     """Update specific return item"""
     return_item = db.query(ReturnItem).filter(
         ReturnItem.return_id == return_id,
@@ -605,7 +608,7 @@ def update_return_item(return_id: int, item_id: int, item_data: dict, request: R
 
 # ---------------- ADD RETURN ITEM ----------------
 @router.post("/{return_id}/items")
-def add_return_item(return_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_edit())):
+def add_return_item(return_id: int, item_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_edit())):
     """Add new item to existing return"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -659,7 +662,7 @@ def add_return_item(return_id: int, item_data: dict, request: Request, db: Sessi
 
 # ---------------- DELETE RETURN ITEM ----------------
 @router.delete("/{return_id}/items/{item_id}")
-def delete_return_item(return_id: int, item_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_delete())):
+def delete_return_item(return_id: int, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_delete())):
     """Delete specific return item"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -707,7 +710,7 @@ def delete_return_item(return_id: int, item_id: int, request: Request, db: Sessi
 
 # ---------------- DELETE RETURN ----------------
 @router.delete("/{return_id}")
-def delete_return(return_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_delete())):
+def delete_return(return_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_delete())):
     """Delete return (only if status is DRAFT)"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -750,7 +753,7 @@ def delete_return(return_id: int, request: Request, db: Session = Depends(get_te
 
 # ---------------- DISPOSAL ----------------
 @router.post("/disposal")
-def process_disposal(disposal_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def process_disposal(disposal_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_create())):
     """Process item disposal"""
     transaction_no = f"DSP{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -794,14 +797,14 @@ def process_disposal(disposal_data: dict, request: Request, db: Session = Depend
 
 # ---------------- LIST DISPOSALS ----------------
 @router.get("/disposals")
-def list_disposals(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def list_disposals(db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all disposal transactions"""
     disposals = db.query(DisposalTransaction).order_by(DisposalTransaction.created_at.desc()).all()
     return disposals
 
 # ---------------- SALVAGE VALUATION ----------------
 @router.post("/salvage")
-def create_salvage_valuation(salvage_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_create())):
+def create_salvage_valuation(salvage_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_create())):
     """Create salvage valuation"""
     salvage_no = f"SAL{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
@@ -854,14 +857,14 @@ def create_salvage_valuation(salvage_data: dict, request: Request, db: Session =
 
 # ---------------- LIST SALVAGE VALUATIONS ----------------
 @router.get("/salvage")
-def list_salvage_valuations(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def list_salvage_valuations(db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Get all salvage valuations"""
     salvages = db.query(SalvageValuation).order_by(SalvageValuation.created_at.desc()).all()
     return salvages
 
 # ---------------- GENERATE INVOICE & SEND EMAIL ----------------
 @router.post("/generate-invoice")
-def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_return_disposal_view())):
+def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_db), current_user: dict = Depends(require_return_disposal_view())):
     """Generate invoice for customer return and send via email"""
     return_id = data.get('return_id')
     customer_id = data.get('customer_id')
@@ -890,8 +893,8 @@ def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant
     if not customer_email:
         raise HTTPException(400, "Customer email not found")
     
-    # Generate invoice content
-    invoice_content = generate_invoice_html(return_header, return_items, customer)
+    # Generate invoice content - pass the db session
+    invoice_content = generate_invoice_html(return_header, return_items, customer, db)
     
     # Send email
     try:
@@ -909,7 +912,7 @@ def generate_invoice_and_send_email(data: dict, db: Session = Depends(get_tenant
     except Exception as e:
         raise HTTPException(500, f"Failed to send email: {str(e)}")
 
-def generate_invoice_html(return_header, return_items, customer):
+def generate_invoice_html(return_header, return_items, customer, db):
     """Generate HTML invoice content"""
     from models.tenant_models import Item
     from database import get_tenant_db
@@ -920,9 +923,7 @@ def generate_invoice_html(return_header, return_items, customer):
     items_html = ""
     total_amount = 0
     
-    # Get database session to fetch item MRP
-    db_gen = get_tenant_db("arun")
-    db = next(db_gen)
+    # Use the passed database session
     
     for item in return_items:
         # Get item details from Item table
@@ -985,12 +986,12 @@ def generate_invoice_html(return_header, return_items, customer):
     </html>
     """
     
-    db.close()  # Close database connection
+    # Database session is managed by the caller
     return html_content
 
 # ---------------- TEST ENDPOINT ----------------
 @router.get("/test-update/{return_id}")
-def test_return_update(return_id: int, db: Session = Depends(get_tenant_db)):
+def test_return_update(return_id: int, db: Session = Depends(get_db)):
     """Test endpoint to verify return update functionality"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:

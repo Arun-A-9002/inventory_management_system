@@ -167,6 +167,43 @@ PERMISSIONS = [
 ]
 
 
+def seed_permissions_for_tenant(tenant_db: str) -> bool:
+    """
+    Seed permissions for a specific tenant database.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        engine = get_tenant_engine(tenant_db)
+        SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+        db = SessionLocal()
+
+        try:
+            added = 0
+            for name, label, group in PERMISSIONS:
+                exists = db.query(Permission).filter(Permission.name == name).first()
+                if exists:
+                    continue
+                perm = Permission(name=name, label=label, group=group)
+                db.add(perm)
+                added += 1
+
+            db.commit()
+            print(f"Permission seeding completed for '{tenant_db}'. Added {added} permissions.")
+            return True
+
+        except Exception as e:
+            db.rollback()
+            print(f"Permission seeding failed for '{tenant_db}': {e}")
+            return False
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        print(f"Failed to connect to tenant DB '{tenant_db}': {e}")
+        return False
+
+
 def main():
     if len(sys.argv) < 2:
         print("ERROR: Provide tenant DB name.\nExample: python seed_permission.py arun")

@@ -19,7 +19,10 @@ from models.tenant_models import TenantBase
 from utils.logger import log_error, log_audit, log_api
 
 # Email utility
-from utils.email import send_registration_email
+from utils.email_service_old import send_registration_email
+
+# Permission seeding utility
+from utils.seed_permission import seed_permissions_for_tenant
 
 router = APIRouter()
 
@@ -38,14 +41,64 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
     try:
         log_audit(f"Registration initiated for Org: {data.organization_name}")
 
-        # Check existing email
-        if db.query(Tenant).filter(Tenant.admin_email == data.admin_email).first():
+        # Check existing email and handle accordingly
+        existing_tenant = db.query(Tenant).filter(Tenant.admin_email == data.admin_email).first()
+        if existing_tenant:
+            log_audit(f"Found existing registration for email: {data.admin_email}")
+            
+            # Option 1: Return error (current behavior)
             log_error(
                 Exception("Duplicate admin email"),
                 location="register() - email already exists"
             )
             raise HTTPException(400, "Admin email already exists")
 
+        # Check existing tenant code
+        existing_tenant_code = db.query(Tenant).filter(Tenant.tenant_code == data.tenant_code).first()
+        if existing_tenant_code:
+            log_audit(f"Found existing tenant code: {data.tenant_code}")
+            log_error(
+                Exception("Duplicate tenant code"),
+                location="register() - tenant code already exists"
+            )
+            raise HTTPException(409, "Tenant code already exists")
+            
+            # Option 2: Update existing registration (uncomment below to enable)
+            # log_audit(f"Updating existing registration for: {data.admin_email}")
+            # # Delete old tenant database if it exists
+            # old_db_name = existing_tenant.database_name
+            # try:
+            #     import pymysql
+            #     conn = pymysql.connect(host="localhost", user="root", password="", port=3306)
+            #     cursor = conn.cursor()
+            #     cursor.execute(f"DROP DATABASE IF EXISTS `{old_db_name}`")
+            #     conn.close()
+            #     log_audit(f"Deleted old database: {old_db_name}")
+            # except Exception as e:
+            #     log_error(e, f"Failed to delete old database: {old_db_name}")
+            # 
+            # # Update existing tenant record
+            # existing_tenant.organization_name = data.organization_name
+            # existing_tenant.organization_type = data.organization_type
+            # existing_tenant.organization_license_number = data.organization_license_number
+            # existing_tenant.organization_address = data.organization_address
+            # existing_tenant.city = data.city
+            # existing_tenant.state = data.state
+            # existing_tenant.pincode = data.pincode
+            # existing_tenant.contact_phone = data.contact_phone
+            # existing_tenant.contact_email = data.contact_email
+            # existing_tenant.tenant_code = data.tenant_code
+            # existing_tenant.admin_name = data.admin_name
+            # existing_tenant.admin_phone = data.admin_phone
+            # existing_tenant.admin_secondary_phone = data.admin_secondary_phone
+            # existing_tenant.designation = data.designation
+            # existing_tenant.status = data.status
+            # existing_tenant.password_hash = hashlib.sha256(data.password.encode()).hexdigest()
+            # existing_tenant.database_name = data.tenant_code.lower().strip()
+            # 
+            # tenant = existing_tenant
+
+        # Only create new tenant if no existing one found
         # Generate DB name from tenant code
         db_name = data.tenant_code.lower().strip()
         log_audit(f"Using tenant code as DB Name: {db_name}")
@@ -81,6 +134,8 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         db.commit()
         db.refresh(tenant)
         log_audit(f"Tenant saved in master DB with ID: {tenant.id}")
+        # Get the database name for further processing
+        db_name = tenant.database_name
 
         # -----------------------------------------------------
         # STEP 1 → Create the tenant database
@@ -88,7 +143,7 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         import pymysql
         conn = pymysql.connect(host="localhost", user="root", password="", port=3306)
         cursor = conn.cursor()
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}`")
         conn.close()
         log_audit(f"Database created for tenant: {db_name}")
 
@@ -101,7 +156,16 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         log_audit(f"Tenant tables created for database: {db_name}")
 
         # -----------------------------------------------------
-        # STEP 3 → Create admin user in tenant DB
+        # STEP 3 → Seed permissions in tenant DB
+        # -----------------------------------------------------
+        permissions_seeded = seed_permissions_for_tenant(db_name)
+        if permissions_seeded:
+            log_audit(f"Permissions seeded successfully for tenant: {db_name}")
+        else:
+            log_error(Exception("Permission seeding failed"), f"Failed to seed permissions for tenant: {db_name}")
+
+        # -----------------------------------------------------
+        # STEP 4 → Create admin user in tenant DB
         # -----------------------------------------------------
         from models.tenant_models import User, Department
         from sqlalchemy.orm import sessionmaker
@@ -161,6 +225,7 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
             "message": "Organization registered successfully",
             "id": tenant.id,
             "database_name": db_name,
+            "permissions_seeded": permissions_seeded,
             "email_sent": email_sent
         }
 

@@ -3,21 +3,21 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Item, Category, SubCategory, AuditLog
 from schemas.tenant_schemas import ItemCreate, ItemUpdate, ItemResponse
 from utils.permissions import require_items_view, require_items_create, require_items_edit, require_items_delete
 from utils.logger import log_api, log_error, log_audit
 
-DEFAULT_TENANT_DB = "arun"
+
 
 router = APIRouter(
     prefix="/items",
     tags=["Item Master"]
 )
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):

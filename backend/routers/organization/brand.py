@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Brand, AuditLog
 from schemas.tenant_schemas import (
     BrandCreate, BrandUpdate, BrandResponse
@@ -11,6 +11,9 @@ from utils.permissions import require_brand_view, require_brand_create, require_
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/brand", tags=["Brand"])
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -54,7 +57,7 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # CREATE BRAND
 # --------------------------
 @router.post("/", response_model=BrandResponse)
-def create_brand(data: BrandCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_create())):
+def create_brand(data: BrandCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_brand_create())):
     log_api("CREATE BRAND")
 
     try:
@@ -90,7 +93,7 @@ def create_brand(data: BrandCreate, request: Request, db: Session = Depends(get_
 # LIST BRANDS
 # --------------------------
 @router.get("/", response_model=list[BrandResponse])
-def list_brands(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_view())):
+def list_brands(db: Session = Depends(get_db), current_user: dict = Depends(require_brand_view())):
     return db.query(Brand).all()
 
 
@@ -98,7 +101,7 @@ def list_brands(db: Session = Depends(get_tenant_db), current_user: dict = Depen
 # GET BRAND
 # --------------------------
 @router.get("/{brand_id}", response_model=BrandResponse)
-def get_brand(brand_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_view())):
+def get_brand(brand_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_brand_view())):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if not brand:
         raise HTTPException(404, "Brand not found")
@@ -109,7 +112,7 @@ def get_brand(brand_id: int, db: Session = Depends(get_tenant_db), current_user:
 # UPDATE BRAND
 # --------------------------
 @router.put("/{brand_id}", response_model=BrandResponse)
-def update_brand(brand_id: int, data: BrandUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_edit())):
+def update_brand(brand_id: int, data: BrandUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_brand_edit())):
     log_api("UPDATE BRAND")
 
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
@@ -146,7 +149,7 @@ def update_brand(brand_id: int, data: BrandUpdate, request: Request, db: Session
 # DELETE BRAND
 # --------------------------
 @router.delete("/{brand_id}")
-def delete_brand(brand_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_brand_delete())):
+def delete_brand(brand_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_brand_delete())):
     log_api("DELETE BRAND")
 
     brand = db.query(Brand).filter(Brand.id == brand_id).first()

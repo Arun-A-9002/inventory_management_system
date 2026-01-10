@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import (
     Vendor, VendorQualification,
     VendorPerformance, VendorLeadTime, AuditLog
@@ -16,10 +16,10 @@ router = APIRouter(
     tags=["Vendor Management"]
 )
 
-DEFAULT_TENANT_DB = "arun"
 
-def get_tenant_session():
-    yield from get_tenant_db(DEFAULT_TENANT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -60,19 +60,109 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
-def get_vendors(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
+def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
     vendors = db.query(Vendor).all()
-    return vendors
+    # Return vendors with email field for frontend compatibility
+    return [{
+        "id": vendor.id,
+        "vendor_name": vendor.vendor_name,
+        "email": vendor.email or "",
+        "phone": vendor.phone,
+        "status": vendor.status,
+        "vendor_code": vendor.vendor_code
+    } for vendor in vendors]
 
-# ---------------- GET ACTIVE VENDORS ONLY ----------------
-@router.get("/active")
-def get_active_vendors(db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
-    vendors = db.query(Vendor).filter(Vendor.verification_status == "active").all()
-    return vendors
+# ---------------- CREATE TEST VENDOR ----------------
+@router.post("/create-test")
+def create_test_vendor(db: Session = Depends(get_db)):
+    """Create a test vendor with email for testing PO functionality"""
+    try:
+        # Check if test vendor already exists
+        existing = db.query(Vendor).filter(Vendor.email == "test@vendor.com").first()
+        if existing:
+            return {
+                "message": "Test vendor already exists",
+                "vendor": {
+                    "id": existing.id,
+                    "vendor_name": existing.vendor_name,
+                    "email": existing.email
+                }
+            }
+        
+        vendor_code = f"VND-{uuid.uuid4().hex[:6].upper()}"
+        
+        test_vendor = Vendor(
+            vendor_name="Test Vendor Ltd",
+            vendor_code=vendor_code,
+            contact_person="John Doe",
+            phone="9876543210",
+            email="test@vendor.com",
+            address="123 Test Street, Test City",
+            country="India",
+            state="Maharashtra",
+            city="Mumbai",
+            pan_number="ABCDE1234F",
+            gst_number="27ABCDE1234F1Z5",
+            ifsc_code="HDFC0000123",
+            account_number="12345678901234",
+            account_holder_name="Test Vendor Ltd",
+            branch_name="Test Branch",
+            verification_status="active",
+            status="active"
+        )
+        
+        db.add(test_vendor)
+        db.commit()
+        db.refresh(test_vendor)
+        
+        return {
+            "message": "Test vendor created successfully",
+            "vendor": {
+                "id": test_vendor.id,
+                "vendor_name": test_vendor.vendor_name,
+                "email": test_vendor.email,
+                "vendor_code": test_vendor.vendor_code
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Failed to create test vendor: {str(e)}")
+# ---------------- GET VENDORS FOR DROPDOWN ----------------
+@router.get("/dropdown")
+def get_vendors_dropdown(db: Session = Depends(get_db)):
+    """Get vendors for dropdown - no auth required"""
+    vendors = db.query(Vendor).filter(
+        Vendor.email.isnot(None),
+        Vendor.email != ""
+    ).all()
+    
+    return [{
+        "id": vendor.id,
+        "vendor_name": vendor.vendor_name,
+        "email": vendor.email,
+        "display_name": f"{vendor.vendor_name} ({vendor.email})"
+    } for vendor in vendors]
+
+@router.get("/with-email")
+def get_vendors_with_email(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
+    """Get vendors that have email addresses for PO sending"""
+    vendors = db.query(Vendor).filter(
+        Vendor.email.isnot(None),
+        Vendor.email != "",
+        Vendor.verification_status == "active"
+    ).all()
+    
+    return [{
+        "id": vendor.id,
+        "vendor_name": vendor.vendor_name,
+        "email": vendor.email,
+        "phone": vendor.phone,
+        "status": vendor.status
+    } for vendor in vendors]
 
 # ---------------- GET VENDOR BY NAME ----------------
 @router.get("/by-name/{vendor_name}")
-def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_view())):
+def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
     vendor = db.query(Vendor).filter(Vendor.vendor_name == vendor_name).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -80,7 +170,7 @@ def get_vendor_by_name(vendor_name: str, db: Session = Depends(get_tenant_sessio
 
 # ---------------- STEP 1: REGISTER VENDOR ----------------
 @router.post("/", response_model=VendorResponse)
-def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_create())):
+def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_create())):
     log_api("CREATE VENDOR")
     
     try:
@@ -123,19 +213,19 @@ def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(ge
 
 # ---------------- STEP 2: QUALIFICATION ----------------
 @router.get("/qualification")
-def get_qualifications(db: Session = Depends(get_tenant_session)):
+def get_qualifications(db: Session = Depends(get_db)):
     qualifications = db.query(VendorQualification).all()
     return qualifications
 
 @router.post("/qualification")
-def qualify_vendor(data: VendorQualificationCreate, db: Session = Depends(get_tenant_session)):
+def qualify_vendor(data: VendorQualificationCreate, db: Session = Depends(get_db)):
     qualification = VendorQualification(**data.dict())
     db.add(qualification)
     db.commit()
     return {"message": "Vendor qualification saved"}
 
 @router.put("/qualification/{qualification_id}")
-def update_qualification(qualification_id: int, data: VendorQualificationCreate, db: Session = Depends(get_tenant_session)):
+def update_qualification(qualification_id: int, data: VendorQualificationCreate, db: Session = Depends(get_db)):
     qualification = db.query(VendorQualification).filter(VendorQualification.id == qualification_id).first()
     if not qualification:
         raise HTTPException(status_code=404, detail="Qualification not found")
@@ -147,7 +237,7 @@ def update_qualification(qualification_id: int, data: VendorQualificationCreate,
     return {"message": "Qualification updated"}
 
 @router.delete("/qualification/{qualification_id}")
-def delete_qualification(qualification_id: int, db: Session = Depends(get_tenant_session)):
+def delete_qualification(qualification_id: int, db: Session = Depends(get_db)):
     qualification = db.query(VendorQualification).filter(VendorQualification.id == qualification_id).first()
     if not qualification:
         raise HTTPException(status_code=404, detail="Qualification not found")
@@ -160,19 +250,19 @@ def delete_qualification(qualification_id: int, db: Session = Depends(get_tenant
 
 # ---------------- STEP 4: PERFORMANCE ----------------
 @router.get("/performance")
-def get_performances(db: Session = Depends(get_tenant_session)):
+def get_performances(db: Session = Depends(get_db)):
     performances = db.query(VendorPerformance).all()
     return performances
 
 @router.post("/performance")
-def save_performance(data: VendorPerformanceCreate, db: Session = Depends(get_tenant_session)):
+def save_performance(data: VendorPerformanceCreate, db: Session = Depends(get_db)):
     performance = VendorPerformance(**data.dict())
     db.add(performance)
     db.commit()
     return {"message": "Vendor performance saved"}
 
 @router.put("/performance/{performance_id}")
-def update_performance(performance_id: int, data: VendorPerformanceCreate, db: Session = Depends(get_tenant_session)):
+def update_performance(performance_id: int, data: VendorPerformanceCreate, db: Session = Depends(get_db)):
     performance = db.query(VendorPerformance).filter(VendorPerformance.id == performance_id).first()
     if not performance:
         raise HTTPException(status_code=404, detail="Performance not found")
@@ -184,7 +274,7 @@ def update_performance(performance_id: int, data: VendorPerformanceCreate, db: S
     return {"message": "Performance updated"}
 
 @router.delete("/performance/{performance_id}")
-def delete_performance(performance_id: int, db: Session = Depends(get_tenant_session)):
+def delete_performance(performance_id: int, db: Session = Depends(get_db)):
     performance = db.query(VendorPerformance).filter(VendorPerformance.id == performance_id).first()
     if not performance:
         raise HTTPException(status_code=404, detail="Performance not found")
@@ -194,7 +284,7 @@ def delete_performance(performance_id: int, db: Session = Depends(get_tenant_ses
     return {"message": "Performance deleted"}
 
 @router.post("/lead-time")
-def save_lead_time(data: VendorLeadTimeCreate, db: Session = Depends(get_tenant_session)):
+def save_lead_time(data: VendorLeadTimeCreate, db: Session = Depends(get_db)):
     lead_time = VendorLeadTime(**data.dict())
     db.add(lead_time)
     db.commit()
@@ -202,7 +292,7 @@ def save_lead_time(data: VendorLeadTimeCreate, db: Session = Depends(get_tenant_
 
 # ---------------- MIGRATE VENDOR STATUS ----------------
 @router.post("/migrate-status")
-def migrate_vendor_status(db: Session = Depends(get_tenant_session)):
+def migrate_vendor_status(db: Session = Depends(get_db)):
     # Update old enum values to new ones
     vendors = db.query(Vendor).all()
     updated_count = 0
@@ -223,7 +313,7 @@ def migrate_vendor_status(db: Session = Depends(get_tenant_session)):
 
 # ---------------- UPDATE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/status")
-def update_vendor_status(vendor_id: int, status: str, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
+def update_vendor_status(vendor_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_status())):
     log_api("UPDATE VENDOR STATUS")
     
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -255,7 +345,7 @@ def update_vendor_status(vendor_id: int, status: str, request: Request, db: Sess
 
 # ---------------- TOGGLE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/toggle-status")
-def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_status())):
+def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_status())):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -269,7 +359,7 @@ def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_tenant_sessio
 
 # ---------------- UPDATE VENDOR ----------------
 @router.put("/{vendor_id}")
-def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_edit())):
+def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_edit())):
     log_api("UPDATE VENDOR")
     
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -313,7 +403,7 @@ def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Sess
 
 # ---------------- DELETE VENDOR ----------------
 @router.delete("/{vendor_id}")
-def delete_vendor(vendor_id: int, request: Request, db: Session = Depends(get_tenant_session), current_user: dict = Depends(require_vendors_delete())):
+def delete_vendor(vendor_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_delete())):
     log_api("DELETE VENDOR")
     
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -347,7 +437,7 @@ def delete_vendor(vendor_id: int, request: Request, db: Session = Depends(get_te
 
 # ---------------- GET VENDOR BANK DETAILS ----------------
 @router.get("/{vendor_id}/bank-details")
-def get_vendor_bank_details(vendor_id: int, db: Session = Depends(get_tenant_session)):
+def get_vendor_bank_details(vendor_id: int, db: Session = Depends(get_db)):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -363,7 +453,7 @@ def get_vendor_bank_details(vendor_id: int, db: Session = Depends(get_tenant_ses
 
 # ---------------- UPDATE VENDOR BANK DETAILS ----------------
 @router.put("/{vendor_id}/bank-details")
-def update_vendor_bank_details(vendor_id: int, bank_details: dict, db: Session = Depends(get_tenant_session)):
+def update_vendor_bank_details(vendor_id: int, bank_details: dict, db: Session = Depends(get_db)):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")

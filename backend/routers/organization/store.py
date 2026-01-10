@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 from models.tenant_models import Store, Branch, AuditLog
 from schemas.tenant_schemas import (
@@ -56,7 +59,7 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # CREATE STORE
 # --------------------------
 @router.post("/", response_model=StoreResponse)
-def create_store(data: StoreCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_create())):
+def create_store(data: StoreCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_store_create())):
     log_api("CREATE STORE")
 
     try:
@@ -101,7 +104,7 @@ def create_store(data: StoreCreate, request: Request, db: Session = Depends(get_
 # LIST ALL STORES
 # --------------------------
 @router.get("/", response_model=list[StoreResponse])
-def list_stores(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_view())):
+def list_stores(db: Session = Depends(get_db), current_user: dict = Depends(require_store_view())):
     return db.query(Store).options(joinedload(Store.branch)).all()
 
 
@@ -109,7 +112,7 @@ def list_stores(db: Session = Depends(get_tenant_db), current_user: dict = Depen
 # GET ONE STORE
 # --------------------------
 @router.get("/{store_id}", response_model=StoreResponse)
-def get_store(store_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_view())):
+def get_store(store_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_store_view())):
     store = db.query(Store).filter(Store.id == store_id).first()
     if not store:
         raise HTTPException(404, "Store not found")
@@ -120,7 +123,7 @@ def get_store(store_id: int, db: Session = Depends(get_tenant_db), current_user:
 # UPDATE STORE
 # --------------------------
 @router.put("/{store_id}", response_model=StoreResponse)
-def update_store(store_id: int, data: StoreUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_edit())):
+def update_store(store_id: int, data: StoreUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_store_edit())):
     log_api("UPDATE STORE")
 
     store = db.query(Store).filter(Store.id == store_id).first()
@@ -174,7 +177,7 @@ def update_store(store_id: int, data: StoreUpdate, request: Request, db: Session
 # DELETE STORE
 # --------------------------
 @router.delete("/{store_id}")
-def delete_store(store_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_store_delete())):
+def delete_store(store_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_store_delete())):
     log_api("DELETE STORE")
 
     store = db.query(Store).filter(Store.id == store_id).first()

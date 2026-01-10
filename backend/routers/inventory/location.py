@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import InventoryLocation, AuditLog
 from schemas.tenant_schemas import InventoryLocationCreate, InventoryLocationResponse
 from utils.permissions import (
@@ -11,10 +11,10 @@ from utils.permissions import (
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/inventory/locations", tags=["Inventory Locations"])
-DEFAULT_DB = "arun"
 
-def get_db():
-    yield from get_tenant_db(DEFAULT_DB)
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):

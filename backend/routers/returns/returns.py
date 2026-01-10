@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import ReturnHeader, ReturnItem, ReturnTypeEnum, ItemConditionEnum, AuditLog
 from datetime import datetime, date
 from typing import List
 
 router = APIRouter(prefix="/returns", tags=["Returns & Disposal"])
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -47,7 +50,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
     db.commit()
 
 @router.get("/")
-def list_returns(db: Session = Depends(get_tenant_db)):
+def list_returns(db: Session = Depends(get_db)):
     """Get all returns with existing invoice info"""
     from models.tenant_models import Billing
     
@@ -83,7 +86,7 @@ def list_returns(db: Session = Depends(get_tenant_db)):
     return result
 
 @router.post("/")
-def create_return(return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def create_return(return_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     """Create new return"""
     from models.tenant_models import Customer
     
@@ -172,7 +175,7 @@ def create_return(return_data: dict, request: Request, db: Session = Depends(get
     }
 
 @router.get("/{return_id}")
-def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
+def get_return_details(return_id: int, db: Session = Depends(get_db)):
     """Get return details with items"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -186,7 +189,7 @@ def get_return_details(return_id: int, db: Session = Depends(get_tenant_db)):
     }
 
 @router.get("/{return_id}/items")
-def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
+def get_return_items(return_id: int, db: Session = Depends(get_db)):
     """Get return items for a specific return with status, returned fields, and returned_qty"""
     from sqlalchemy import text
     
@@ -223,7 +226,7 @@ def get_return_items(return_id: int, db: Session = Depends(get_tenant_db)):
     return items
 
 @router.patch("/{return_id}/staff")
-def update_return_staff(return_id: int, staff_data: dict, db: Session = Depends(get_tenant_db)):
+def update_return_staff(return_id: int, staff_data: dict, db: Session = Depends(get_db)):
     """Update return staff details for different staff processing returns"""
     return_header = db.query(ReturnHeader).filter(ReturnHeader.id == return_id).first()
     if not return_header:
@@ -248,7 +251,7 @@ def update_return_staff(return_id: int, staff_data: dict, db: Session = Depends(
     }
 
 @router.patch("/{return_id}/status")
-def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def update_return_status(return_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     """Update return status and adjust inventory if approved"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview, Billing
     
@@ -340,7 +343,7 @@ def update_return_status(return_id: int, status: str, request: Request, db: Sess
     return {"message": "Return status updated successfully"}
 
 @router.put("/{return_id}/items/{item_id}")
-def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def update_return_item(return_id: int, item_id: int, item_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     """Update return item - ONLY updates invoice data, no stock changes"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockLedger, Stock
     from sqlalchemy import text
@@ -383,7 +386,7 @@ def update_return_item(return_id: int, item_id: int, item_data: dict, request: R
     return {"message": "Return item updated - invoice only, no stock changes"}
 
 @router.post("/{return_id}/process-return")
-def process_item_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = None):
+def process_item_return(return_id: int, return_data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = None):
     """Process item return - add stock back and update returned quantity"""
     from models.tenant_models import Batch, GRNItem, GRN, GRNStatus, StockOverview
     from sqlalchemy import text
@@ -468,7 +471,7 @@ def process_item_return(return_id: int, return_data: dict, request: Request, db:
     }
     
 @router.get("/refunds")
-def get_refund_billings(db: Session = Depends(get_tenant_db)):
+def get_refund_billings(db: Session = Depends(get_db)):
     """Get all billings with negative balance for refund processing"""
     from models.tenant_models import Billing
     

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
 
-from database import get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Category, AuditLog
 from schemas.tenant_schemas import (
     CategoryCreate, CategoryUpdate, CategoryResponse
@@ -11,6 +11,9 @@ from utils.permissions import require_category_view, require_category_create, re
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/category", tags=["Category"])
+
+def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
+    yield from get_tenant_db(tenant_db_name)
 
 # Helper function for audit logging
 def log_audit_trail(db: Session, current_user: dict, action: str, table_name: str, record_id: int = None, old_values: dict = None, new_values: dict = None, description: str = None, request: Request = None):
@@ -54,7 +57,7 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # CREATE CATEGORY
 # --------------------------
 @router.post("/", response_model=CategoryResponse)
-def create_category(data: CategoryCreate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_category_create())):
+def create_category(data: CategoryCreate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_category_create())):
     log_api("CREATE CATEGORY")
 
     try:
@@ -90,7 +93,7 @@ def create_category(data: CategoryCreate, request: Request, db: Session = Depend
 # LIST ALL CATEGORIES
 # --------------------------
 @router.get("/", response_model=list[CategoryResponse])
-def list_categories(db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_category_view())):
+def list_categories(db: Session = Depends(get_db), current_user: dict = Depends(require_category_view())):
     return db.query(Category).all()
 
 
@@ -98,7 +101,7 @@ def list_categories(db: Session = Depends(get_tenant_db), current_user: dict = D
 # GET ONE CATEGORY
 # --------------------------
 @router.get("/{category_id}", response_model=CategoryResponse)
-def get_category(category_id: int, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_category_view())):
+def get_category(category_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_category_view())):
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
         raise HTTPException(404, "Category not found")
@@ -109,7 +112,7 @@ def get_category(category_id: int, db: Session = Depends(get_tenant_db), current
 # UPDATE CATEGORY
 # --------------------------
 @router.put("/{category_id}", response_model=CategoryResponse)
-def update_category(category_id: int, data: CategoryUpdate, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_category_edit())):
+def update_category(category_id: int, data: CategoryUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_category_edit())):
     log_api("UPDATE CATEGORY")
 
     category = db.query(Category).filter(Category.id == category_id).first()
@@ -147,7 +150,7 @@ def update_category(category_id: int, data: CategoryUpdate, request: Request, db
 # DELETE CATEGORY
 # --------------------------
 @router.delete("/{category_id}")
-def delete_category(category_id: int, request: Request, db: Session = Depends(get_tenant_db), current_user: dict = Depends(require_category_delete())):
+def delete_category(category_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_category_delete())):
     log_api("DELETE CATEGORY")
 
     category = db.query(Category).filter(Category.id == category_id).first()
