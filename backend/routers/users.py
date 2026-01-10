@@ -8,9 +8,10 @@ import logging
 import json
 
 from database import get_current_tenant_db_name, get_tenant_db
-from models.tenant_models import User, Role, AuditLog
+from models.tenant_models import User, Role, AuditLog, UserSession
 from schemas.tenant_schemas import UserCreate, UserUpdate, UserResponse
 from utils.auth import hash_password, send_welcome_email, check_permission
+from utils.login_code_generator import generate_unique_login_code, generate_login_code_on_demand
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,17 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
 
 
 # ===========================================================
+# GENERATE LOGIN CODE ENDPOINT
+# ===========================================================
+@router.get("/generate-login-code")
+def generate_login_code(
+    current_user: dict = Depends(check_permission("users.create")),
+):
+    """Generate a new login code for preview in the form"""
+    return {"login_code": generate_login_code_on_demand()}
+
+
+# ===========================================================
 # CREATE USER
 # ===========================================================
 @router.post("/", response_model=UserResponse)
@@ -78,14 +90,20 @@ def create_user(
     # Generate password
     temp_password = payload.password or secrets.token_urlsafe(8)
     hashed_pw = hash_password(temp_password)
+    
+    # Generate unique login code
+    login_code = generate_unique_login_code(db)
 
     user = User(
         full_name=payload.full_name,
         email=payload.email,
         hashed_password=hashed_pw,
+        login_code=login_code,
         is_active=payload.is_active if payload.is_active is not None else True,
         is_doctor=payload.is_doctor if payload.is_doctor is not None else False,
         department_id=payload.department_id,
+        two_factor_enabled=payload.two_factor_enabled if payload.two_factor_enabled is not None else False,
+        multi_login_enabled=payload.multi_login_enabled if payload.multi_login_enabled is not None else False,
     )
 
     # Assign roles
@@ -115,12 +133,15 @@ def create_user(
         new_values={
             "full_name": user.full_name,
             "email": user.email,
+            "login_code": user.login_code,
             "is_active": user.is_active,
             "is_doctor": user.is_doctor,
             "department_id": user.department_id,
+            "two_factor_enabled": user.two_factor_enabled,
+            "multi_login_enabled": user.multi_login_enabled,
             "roles": role_names
         },
-        description=f"Created user {user.full_name} ({user.email})",
+        description=f"Created user {user.full_name} ({user.email}) with login code {user.login_code}",
         request=request
     )
 
@@ -175,6 +196,8 @@ def update_user(
         "is_active": user.is_active,
         "is_doctor": user.is_doctor,
         "department_id": user.department_id,
+        "two_factor_enabled": user.two_factor_enabled,
+        "multi_login_enabled": user.multi_login_enabled,
         "roles": [role.name for role in user.roles]
     }
 
@@ -191,7 +214,7 @@ def update_user(
         user.hashed_password = hash_password(updates["password"])
 
     # Normal fields
-    for field in ["full_name", "is_active", "is_doctor", "department_id"]:
+    for field in ["full_name", "is_active", "is_doctor", "department_id", "two_factor_enabled", "multi_login_enabled"]:
         if field in updates:
             setattr(user, field, updates[field])
 
@@ -210,6 +233,8 @@ def update_user(
         "is_active": user.is_active,
         "is_doctor": user.is_doctor,
         "department_id": user.department_id,
+        "two_factor_enabled": user.two_factor_enabled,
+        "multi_login_enabled": user.multi_login_enabled,
         "roles": [role.name for role in user.roles]
     }
     
@@ -247,9 +272,12 @@ def delete_user(
     user_details = {
         "full_name": user.full_name,
         "email": user.email,
+        "login_code": user.login_code,
         "is_active": user.is_active,
         "is_doctor": user.is_doctor,
         "department_id": user.department_id,
+        "two_factor_enabled": user.two_factor_enabled,
+        "multi_login_enabled": user.multi_login_enabled,
         "roles": [role.name for role in user.roles]
     }
 

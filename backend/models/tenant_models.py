@@ -69,8 +69,13 @@ class User(TenantBase):
     full_name = Column(String(191), nullable=False)
     email = Column(String(191), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
+    login_code = Column(String(20), unique=True, nullable=False, index=True)  # Auto-generated unique login code
     is_active = Column(Boolean, default=True)
     is_doctor = Column(Boolean, default=False)
+    
+    # New authentication features
+    two_factor_enabled = Column(Boolean, default=False)  # Enable/disable 2FA
+    multi_login_enabled = Column(Boolean, default=False)  # Enable/disable multi-login
 
     # department: single relationship to departments table (one-to-many)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
@@ -1250,6 +1255,24 @@ class ExternalTransferTransaction(TenantBase):
     transfer = relationship("ExternalTransfer")
     item = relationship("ExternalTransferItem")
 
+
+# ============================================================
+#                   USER SESSIONS (for multi-login tracking)
+# ============================================================
+class UserSession(TenantBase):
+    __tablename__ = "user_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_token = Column(String(128), unique=True, nullable=False)  # Hashed session token
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    login_time = Column(DateTime, server_default=func.now())
+    last_activity = Column(DateTime, server_default=func.now())
+    is_active = Column(Boolean, default=True)
+    
+    # Relationship
+    user = relationship("User")
 
 # ============================================================
 #                   AUDIT LOG

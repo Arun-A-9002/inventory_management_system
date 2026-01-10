@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 
 export default function Login() {
   const [tenantCode, setTenantCode] = useState("");
-  const [email, setEmail] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -10,6 +10,7 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(300);
+  const [userEmail, setUserEmail] = useState(""); // Store email for OTP verification
 
   // Start countdown when OTP is sent
   useEffect(() => {
@@ -39,8 +40,7 @@ export default function Login() {
   const validateForm = () => {
     const newErrors = {};
     if (!tenantCode.trim()) newErrors.tenantCode = "Hospital code is required";
-    if (!email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid";
+    if (!loginIdentifier.trim()) newErrors.loginIdentifier = "Login code or email is required";
     if (!password.trim()) newErrors.password = "Password is required";
     else if (password.length < 6) newErrors.password = "Password must be at least 6 characters";
     
@@ -51,7 +51,7 @@ export default function Login() {
   // -----------------------------------------
   // SEND OTP (STEP 1)
   // -----------------------------------------
-  const handleSendOTP = async () => {
+  const handleLogin = async () => {
     if (!validateForm()) return;
 
     setLoading(true);
@@ -60,7 +60,7 @@ export default function Login() {
       const res = await fetch("http://localhost:8000/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_code: tenantCode, email, password }),
+        body: JSON.stringify({ tenant_code: tenantCode, login_identifier: loginIdentifier, password }),
       });
 
       const data = await res.json();
@@ -72,8 +72,18 @@ export default function Login() {
       }
 
       setErrors({});
-      setOtpSent(true);
-      setTimer(300); // reset timer
+      
+      // Check if OTP is required
+      if (data.requires_otp) {
+        setOtpSent(true);
+        setTimer(300); // reset timer
+        // Store user email for OTP verification (will be provided by backend)
+        setUserEmail(data.email || "");
+      } else {
+        // Direct login success
+        localStorage.setItem("access_token", data.access_token);
+        window.location.href = "/app/dashboard";
+      }
 
     } catch (err) {
       setErrors({ general: "Server not reachable. Please try again." });
@@ -104,7 +114,7 @@ export default function Login() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_code: tenantCode, email, otp }),
+        body: JSON.stringify({ tenant_code: tenantCode, email: userEmail, otp }),
       });
 
       const data = await res.json();
@@ -211,22 +221,22 @@ export default function Login() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Email Address
+                  Login Code or Email
                 </label>
                 <input
-                  type="email"
-                  value={email}
+                  type="text"
+                  value={loginIdentifier}
                   onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+                    setLoginIdentifier(e.target.value);
+                    if (errors.loginIdentifier) setErrors(prev => ({ ...prev, loginIdentifier: '' }));
                   }}
-                  placeholder="Enter your email address"
+                  placeholder="Enter login code (AB123456) or email address"
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                    errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    errors.loginIdentifier ? 'border-red-300 bg-red-50' : 'border-slate-300'
                   }`}
                 />
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                {errors.loginIdentifier && (
+                  <p className="mt-1 text-sm text-red-600">{errors.loginIdentifier}</p>
                 )}
               </div>
 
@@ -262,11 +272,11 @@ export default function Login() {
 
               <button
                 type="button"
-                onClick={handleSendOTP}
+                onClick={handleLogin}
                 disabled={loading}
                 className="w-full py-3 px-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
-                {loading ? 'Sending verification code...' : 'Continue'}
+                {loading ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
           )}
@@ -322,7 +332,7 @@ export default function Login() {
                 <button
                   onClick={() => {
                     setOtp('');
-                    handleSendOTP();
+                    handleLogin();
                   }}
                   disabled={timer > 250}
                   className="text-sm text-blue-600 hover:text-blue-700 disabled:text-slate-400 disabled:cursor-not-allowed"

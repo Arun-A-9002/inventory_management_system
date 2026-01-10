@@ -74,6 +74,8 @@ class UserBase(BaseModel):
     is_active: bool | None = True
     is_doctor: bool | None = False
     department_id: int | None = None
+    two_factor_enabled: bool | None = False
+    multi_login_enabled: bool | None = False
 
 class UserCreate(UserBase):
     password: str
@@ -87,16 +89,21 @@ class UserUpdate(BaseModel):
     is_doctor: bool | None = None
     department_id: int | None = None
     role_ids: list[int] | None = None
+    two_factor_enabled: bool | None = None
+    multi_login_enabled: bool | None = None
 
 class UserResponse(BaseModel):
     id: int
     full_name: str
     email: str
+    login_code: str
     is_active: bool = True
     is_doctor: bool = False
     department_id: int | None = None
     department: DepartmentResponse | None = None
     roles: list[RoleResponse] = []
+    two_factor_enabled: bool = False
+    multi_login_enabled: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 # ============================================================

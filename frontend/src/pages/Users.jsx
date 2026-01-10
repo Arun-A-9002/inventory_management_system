@@ -17,8 +17,11 @@ export default function Users() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loginCode, setLoginCode] = useState("");
   const [departmentId, setDepartmentId] = useState(null);
   const [isActive, setIsActive] = useState(true);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [multiLoginEnabled, setMultiLoginEnabled] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
   const { toast, showToast, hideToast } = useToast();
@@ -48,6 +51,16 @@ export default function Users() {
     setSelectedRoles(copy);
   }
 
+  async function generateLoginCode() {
+    try {
+      const response = await api.get("/users/generate-login-code");
+      setLoginCode(response.data.login_code);
+    } catch (e) {
+      console.error("Failed to generate login code:", e);
+      showToast("Failed to generate login code", 'error');
+    }
+  }
+
   async function handleCreate() {
     if (!editingId && !hasPermission("users.create")) {
       showToast("Permission denied", 'error');
@@ -71,6 +84,8 @@ export default function Users() {
         department_id: departmentId,
         is_doctor: false,
         is_active: isActive,
+        two_factor_enabled: twoFactorEnabled,
+        multi_login_enabled: multiLoginEnabled,
         role_ids: Array.from(selectedRoles),
       };
 
@@ -92,8 +107,10 @@ export default function Users() {
   function closeModal() {
     setShowModal(false);
     setEditingId(null);
-    setFullName(""); setEmail(""); setPassword("");
-    setDepartmentId(null); setIsActive(true); setSelectedRoles(new Set());
+    setFullName(""); setEmail(""); setPassword(""); setLoginCode("");
+    setDepartmentId(null); setIsActive(true); 
+    setTwoFactorEnabled(false); setMultiLoginEnabled(false);
+    setSelectedRoles(new Set());
   }
 
   function startEdit(u) {
@@ -104,8 +121,11 @@ export default function Users() {
     setEditingId(u.id);
     setFullName(u.full_name);
     setEmail(u.email);
+    setLoginCode(u.login_code || "");
     setDepartmentId(u.department_id);
     setIsActive(!!u.is_active);
+    setTwoFactorEnabled(!!u.two_factor_enabled);
+    setMultiLoginEnabled(!!u.multi_login_enabled);
     setSelectedRoles(new Set((u.roles || []).map(r => r.id)));
     setShowModal(true);
   }
@@ -169,7 +189,11 @@ export default function Users() {
               </div>
               {hasPermission("users.create") && (
                 <button 
-                  onClick={() => setShowModal(true)} 
+                  onClick={() => {
+                    setShowModal(true);
+                    // Auto-generate login code when opening the modal
+                    generateLoginCode();
+                  }} 
                   className="flex items-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-200"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,6 +278,13 @@ export default function Users() {
                   
                   <div className="space-y-3">
                     <div>
+                      <span className="text-sm font-medium text-gray-500">Login Code:</span>
+                      <span className="ml-2 text-sm font-mono bg-gray-100 px-2 py-1 rounded text-gray-900">
+                        {user.login_code}
+                      </span>
+                    </div>
+                    
+                    <div>
                       <span className="text-sm font-medium text-gray-500">Department:</span>
                       <span className="ml-2 text-sm text-gray-900">
                         {user.department ? user.department.name : 'No department'}
@@ -261,11 +292,30 @@ export default function Users() {
                     </div>
                     
                     <div>
+                      <span className="text-sm font-medium text-gray-500">Authentication:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {user.two_factor_enabled && (
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                            2FA Enabled
+                          </span>
+                        )}
+                        {user.multi_login_enabled && (
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            Multi-Login
+                          </span>
+                        )}
+                        {!user.two_factor_enabled && !user.multi_login_enabled && (
+                          <span className="text-xs text-gray-500">Standard login</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
                       <span className="text-sm font-medium text-gray-500">Roles:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(user.roles || []).length > 0 ? (
                           user.roles.map(role => (
-                            <span key={role.id} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            <span key={role.id} className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
                               {role.name}
                             </span>
                           ))
@@ -357,6 +407,33 @@ export default function Users() {
                 )}
                 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Login Code *</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      value={loginCode} 
+                      onChange={e => setLoginCode(e.target.value.toUpperCase())} 
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent" 
+                      placeholder="Auto-generated code"
+                      readOnly={editingId ? true : false}
+                    />
+                    {!editingId && (
+                      <button
+                        type="button"
+                        onClick={generateLoginCode}
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                        title="Generate new login code"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Unique code for user login (e.g., AB123456)</p>
+                </div>
+                
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
                   <select 
                     value={departmentId || ''} 
@@ -379,6 +456,38 @@ export default function Users() {
                       className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
                     />
                     <span className="ml-2 text-sm font-medium text-gray-700">Active User</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Authentication Settings */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Authentication Settings</h4>
+                <div className="space-y-3">
+                  <label className="flex items-start">
+                    <input 
+                      type="checkbox" 
+                      checked={twoFactorEnabled} 
+                      onChange={e => setTwoFactorEnabled(e.target.checked)} 
+                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <div className="ml-3">
+                      <div className="text-sm font-medium text-gray-900">Two-Factor Authentication</div>
+                      <div className="text-xs text-gray-500">Require OTP verification for login</div>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start">
+                    <input 
+                      type="checkbox" 
+                      checked={multiLoginEnabled} 
+                      onChange={e => setMultiLoginEnabled(e.target.checked)} 
+                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <div className="ml-3">
+                      <div className="text-sm font-medium text-gray-900">Multi-Login</div>
+                      <div className="text-xs text-gray-500">Allow multiple simultaneous logins</div>
+                    </div>
                   </label>
                 </div>
               </div>

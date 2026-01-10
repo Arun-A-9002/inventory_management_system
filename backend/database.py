@@ -100,6 +100,10 @@ def get_master_db():
 # -------------------------------------------------------
 TENANT_ENGINES = {}
 TENANT_SESSIONS = {}
+TENANT_MIGRATIONS_DONE = set()  # Track which tenants have had migrations run
+
+import threading
+MIGRATION_LOCK = threading.Lock()
 
 
 def get_tenant_engine(db_name: str):
@@ -148,8 +152,12 @@ def get_tenant_db(tenant_db_name: str):
         from models.tenant_models import TenantBase
         TenantBase.metadata.create_all(bind=engine)
         
-        # 4️⃣ Add missing columns to existing tables
-        ensure_missing_columns(engine)
+        # 4️⃣ Add missing columns to existing tables (only once per tenant)
+        if tenant_db_name not in TENANT_MIGRATIONS_DONE:
+            with MIGRATION_LOCK:
+                if tenant_db_name not in TENANT_MIGRATIONS_DONE:
+                    ensure_missing_columns(engine)
+                    TENANT_MIGRATIONS_DONE.add(tenant_db_name)
 
         # 5️⃣ Return DB session
         SessionLocal = get_tenant_sessionmaker(tenant_db_name)
