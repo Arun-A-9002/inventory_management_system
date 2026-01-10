@@ -1075,6 +1075,28 @@ class VendorPayment(TenantBase):
     
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+    
+    # Relationship to payment history
+    payment_history = relationship("VendorPaymentHistory", back_populates="vendor_payment")
+
+
+class VendorPaymentHistory(TenantBase):
+    __tablename__ = "vendor_payment_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_payment_id = Column(Integer, ForeignKey("vendor_payments.id"), nullable=False)
+    grn_number = Column(String(50), nullable=False)
+    vendor_name = Column(String(150), nullable=False)
+    payment_amount = Column(DECIMAL(10, 2), nullable=False)
+    payment_method = Column(String(50), default="Cash")  # Cash, Bank Transfer, Cheque, UPI
+    reference_number = Column(String(100), nullable=True)
+    remarks = Column(Text, nullable=True)
+    payment_date = Column(Date, nullable=False)
+    
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationship
+    vendor_payment = relationship("VendorPayment", back_populates="payment_history")
 
 
 

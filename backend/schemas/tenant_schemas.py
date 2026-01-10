@@ -1044,3 +1044,28 @@ class ExternalTransferTransactionResponse(BaseModel):
     return_staff_email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+# ============================================================
+#                   VENDOR PAYMENT HISTORY SCHEMAS
+# ============================================================
+class VendorPaymentHistoryCreate(BaseModel):
+    grn_number: str
+    vendor_name: str
+    payment_amount: float
+    payment_method: str = "Cash"
+    reference_number: Optional[str] = None
+    remarks: Optional[str] = None
+    payment_date: date
+
+class VendorPaymentHistoryResponse(BaseModel):
+    id: int
+    grn_number: str
+    vendor_name: str
+    payment_amount: float
+    payment_method: str
+    reference_number: Optional[str] = None
+    remarks: Optional[str] = None
+    payment_date: date
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

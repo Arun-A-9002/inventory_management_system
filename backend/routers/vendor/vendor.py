@@ -10,11 +10,29 @@ from schemas.tenant_schemas import *
 from utils.permissions import require_vendors_view, require_vendors_create, require_vendors_edit, require_vendors_delete, require_vendors_status
 from utils.logger import log_api, log_error, log_audit
 import uuid
+from functools import lru_cache
+from datetime import datetime, timedelta
 
 router = APIRouter(
     prefix="/vendors",
     tags=["Vendor Management"]
 )
+
+# Simple cache for vendor data
+vendor_cache = {
+    "data": None,
+    "timestamp": None,
+    "ttl": 300  # 5 minutes cache
+}
+
+def is_cache_valid():
+    if vendor_cache["data"] is None or vendor_cache["timestamp"] is None:
+        return False
+    return (datetime.now() - vendor_cache["timestamp"]).seconds < vendor_cache["ttl"]
+
+def clear_vendor_cache():
+    vendor_cache["data"] = None
+    vendor_cache["timestamp"] = None
 
 
 
@@ -61,15 +79,50 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
 def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
+    # Check cache first
+    if is_cache_valid():
+        return vendor_cache["data"]
+    
     vendors = db.query(Vendor).all()
-    # Return vendors with email field for frontend compatibility
+    # Return vendors with all fields for frontend compatibility
+    result = [{
+        "id": vendor.id,
+        "vendor_name": vendor.vendor_name,
+        "vendor_code": vendor.vendor_code,
+        "contact_person": vendor.contact_person,
+        "email": vendor.email or "",
+        "phone": vendor.phone,
+        "address": vendor.address,
+        "city": vendor.city,
+        "state": vendor.state,
+        "country": vendor.country,
+        "pan_number": vendor.pan_number,
+        "gst_number": vendor.gst_number,
+        "ifsc_code": vendor.ifsc_code,
+        "account_number": vendor.account_number,
+        "account_holder_name": vendor.account_holder_name,
+        "branch_name": vendor.branch_name,
+        "status": vendor.status
+    } for vendor in vendors]
+    
+    # Cache the result
+    vendor_cache["data"] = result
+    vendor_cache["timestamp"] = datetime.now()
+    
+    return result
+
+# ---------------- GET VENDORS BASIC (LIGHTWEIGHT) ----------------
+@router.get("/basic")
+def get_vendors_basic(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
+    """Lightweight endpoint for basic vendor info only"""
+    vendors = db.query(Vendor.id, Vendor.vendor_name, Vendor.vendor_code, Vendor.email, Vendor.phone, Vendor.status).all()
     return [{
         "id": vendor.id,
         "vendor_name": vendor.vendor_name,
+        "vendor_code": vendor.vendor_code,
         "email": vendor.email or "",
         "phone": vendor.phone,
-        "status": vendor.status,
-        "vendor_code": vendor.vendor_code
+        "status": vendor.status
     } for vendor in vendors]
 
 # ---------------- CREATE TEST VENDOR ----------------
@@ -203,6 +256,9 @@ def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(ge
             description=f"Created vendor {vendor.vendor_name} ({vendor.vendor_code})",
             request=request
         )
+        
+        # Clear cache after creating vendor
+        clear_vendor_cache()
         
         log_audit(f"Vendor created → {vendor.vendor_name}")
         return vendor
@@ -340,6 +396,9 @@ def update_vendor_status(vendor_id: int, status: str, request: Request, db: Sess
         request=request
     )
     
+    # Clear cache after status update
+    clear_vendor_cache()
+    
     log_audit(f"Vendor status updated → {vendor.vendor_name}: {status}")
     return {"message": "Vendor status updated successfully", "status": vendor.status}
 
@@ -355,6 +414,10 @@ def toggle_vendor_status(vendor_id: int, db: Session = Depends(get_db), current_
     vendor.status = new_status
     db.commit()
     db.refresh(vendor)
+    
+    # Clear cache after status toggle
+    clear_vendor_cache()
+    
     return {"message": f"Vendor status changed to {new_status}", "status": vendor.status}
 
 # ---------------- UPDATE VENDOR ----------------
@@ -398,6 +461,9 @@ def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Sess
         request=request
     )
     
+    # Clear cache after update
+    clear_vendor_cache()
+    
     log_audit(f"Vendor updated → {vendor.vendor_name}")
     return vendor
 
@@ -431,6 +497,9 @@ def delete_vendor(vendor_id: int, request: Request, db: Session = Depends(get_db
         description=f"Deleted vendor {vendor_details['vendor_name']}",
         request=request
     )
+    
+    # Clear cache after delete
+    clear_vendor_cache()
     
     log_audit(f"Vendor deleted → {vendor_id}")
     return {"message": "Vendor deleted successfully"}

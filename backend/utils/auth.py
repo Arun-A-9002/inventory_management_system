@@ -225,7 +225,7 @@ def _parse_bearer_token(header_value: str) -> Optional[str]:
 
 def get_current_user(Authorization: str = Header(None)) -> dict:
     """
-    Extract JWT, validate, and return payload with full permissions.
+    Extract JWT, validate, and return payload with permissions from token.
     Raises 401 if token missing/invalid.
     """
 
@@ -248,65 +248,14 @@ def get_current_user(Authorization: str = Header(None)) -> dict:
     payload.setdefault("permissions", [])
     payload.setdefault("role", payload.get("role", "user"))
 
-    # TENANT USER: refresh permissions from tenant DB (safe fetch)
-    if payload.get("user_type") == "tenant_user":
-        tenant_db = None
-        try:
-            from database import get_tenant_db
-            from models.tenant_models import User
-
-            # Get the tenant database name from the token
-            tenant_db_name = payload.get("tenant_db")
-            if not tenant_db_name:
-                raise HTTPException(401, "No tenant database specified in token")
-            tenant_db_gen = get_tenant_db(tenant_db_name)
-            tenant_db = next(tenant_db_gen)
-
-            # sub may be string; convert safely
-            try:
-                user_id = int(payload.get("sub"))
-            except Exception:
-                user_id = None
-
-            if user_id is not None:
-                db_user = tenant_db.query(User).filter(User.id == user_id).first()
-            else:
-                db_user = None
-
-            if db_user:
-                permissions = []
-                for role in db_user.roles:
-                    for perm in role.permissions:
-                        permissions.append(perm.name)
-
-                payload["permissions"] = list(set(permissions))
-                payload["role"] = "user"
-            else:
-                payload["permissions"] = []
-                payload["role"] = "user"
-
-        except Exception as e:
-            log_error(e, location="get_current_user tenant_user load")
-            # On error, do not escalate to 500 here — mark as unauthenticated
-            raise HTTPException(401, "Unable to load user permissions")
-
-        finally:
-            # Close tenant DB session if we obtained one
-            try:
-                if tenant_db is not None:
-                    tenant_db.close()
-            except Exception:
-                pass
-
-    else:
-        # ADMIN or master user token: respect any permissions already present on token.
-        # If none provided, default to wildcard (full access)
-        if payload.get("permissions"):
-            # keep given permissions
-            pass
-        else:
+    # Use permissions from token directly - no DB query needed
+    # Permissions are already set during login and stored in JWT
+    if not payload.get("permissions"):
+        # If no permissions in token, default based on role
+        if payload.get("role") == "admin":
             payload["permissions"] = ["*"]
-        payload["role"] = payload.get("role", "admin")
+        else:
+            payload["permissions"] = []
 
     return payload
 

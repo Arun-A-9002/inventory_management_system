@@ -1,16 +1,11 @@
 import { useState, useEffect } from "react";
 import api from "../../api";
 import { hasPermission } from "../../utils/permissions";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
 
 // Payment Form Component
-function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
-  // Calculate total due amount for the vendor
-  const totalDueAmount = filteredGrnList.reduce((total, grnItem) => {
-    const paidAmount = payments[grnItem.id] || 0;
-    const outstanding = Math.max(0, (grnItem.total_amount || 0) - paidAmount);
-    return total + outstanding;
-  }, 0);
-
+function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments, showToast }) {
   const [paymentData, setPaymentData] = useState({
     date: new Date().toISOString().split('T')[0],
     method: 'Cash',
@@ -28,7 +23,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
     account_holder_name: '',
     branch_name: ''
   });
-  const [loading, setLoading] = useState(false);
   
   // Pre-fill amount with outstanding amount when component mounts or grn changes
   useEffect(() => {
@@ -45,7 +39,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
 
   const fetchVendorBankDetails = async () => {
     try {
-      setLoading(true);
       const vendorRes = await api.get(`/vendors/by-name/${encodeURIComponent(grn.vendor_name)}`);
       const bankRes = await api.get(`/vendors/${vendorRes.data.id}/bank-details`);
       
@@ -66,8 +59,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
       console.error('Failed to fetch vendor bank details:', err);
       setShowBankDetails(true);
       setEditingBankDetails(true);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -84,7 +75,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
 
   const saveBankDetails = async () => {
     try {
-      setLoading(true);
       const vendorRes = await api.get(`/vendors/by-name/${encodeURIComponent(grn.vendor_name)}`);
       await api.put(`/vendors/${vendorRes.data.id}/bank-details`, bankForm);
       
@@ -92,8 +82,6 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
       setEditingBankDetails(false);
     } catch (err) {
       console.error('Failed to save bank details:', err);
-    } finally {
-      setLoading(false);
     }
   };
   
@@ -105,13 +93,13 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
 
   const handleSave = async () => {
     if (paymentAmount <= 0) {
-      alert('Please enter a valid payment amount');
+      showToast('Please enter a valid payment amount', 'error');
       return;
     }
     
     if (paymentData.method === 'Bank Transfer') {
       if (!bankForm.ifsc_code || !bankForm.account_number || !bankForm.account_holder_name) {
-        alert('Please fill all required bank details');
+        showToast('Please fill all required bank details', 'error');
         return;
       }
       
@@ -120,7 +108,7 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
       }
     }
     
-    onSave(grn.id, paymentAmount, 0);
+    onSave(grn.id, paymentAmount, paymentData.method, paymentData.reference, paymentData.remarks);
   };
 
   return (
@@ -304,6 +292,8 @@ function PaymentForm({ grn, onSave, onCancel, filteredGrnList, payments }) {
           Save Payment
         </button>
       </div>
+      
+
     </div>
   );
 }
@@ -315,20 +305,16 @@ export default function SupplierLedger() {
   const [selectedVendor, setSelectedVendor] = useState('');
   const [loading, setLoading] = useState(false);
   const [viewModal, setViewModal] = useState({ isOpen: false, grn: null });
-  const [printModal, setPrintModal] = useState({ isOpen: false, grn: null });
   const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
   const [paymentModal, setPaymentModal] = useState({ isOpen: false, grn: null });
   const [payments, setPayments] = useState({});
-  const [totalAdvance, setTotalAdvance] = useState(0);
-  const [usedAdvances, setUsedAdvances] = useState({});
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [showAuditLogs, setShowAuditLogs] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState({});
+  const { toast, showToast, hideToast } = useToast();
 
   useEffect(() => {
     if (hasPermission("vendor_ledger.view")) {
       fetchGRNList();
       fetchVendors();
-      fetchAuditLogs();
     }
   }, []);
 
@@ -372,31 +358,17 @@ export default function SupplierLedger() {
     }
   };
 
-  const fetchAuditLogs = async () => {
-    try {
-      const res = await api.get('/payments/audit-logs');
-      setAuditLogs(res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch audit logs:', err);
-    }
-  };
+
 
   const fetchPaymentsForGRNs = async (grnList) => {
     try {
       const paymentMap = {};
-      let advanceTotal = 0;
       
       for (const grn of grnList) {
         try {
           const res = await api.get(`/payments/${grn.grn_number}`);
           const paidAmount = res.data.total_paid || 0;
           paymentMap[grn.id] = paidAmount;
-          
-          // Calculate advance (overpayment)
-          const outstanding = (grn.total_amount || 0) - paidAmount;
-          if (outstanding < 0) {
-            advanceTotal += Math.abs(outstanding);
-          }
         } catch (err) {
           console.error(`Failed to fetch payment for GRN ${grn.grn_number}:`, err);
           paymentMap[grn.id] = 0;
@@ -404,40 +376,54 @@ export default function SupplierLedger() {
       }
       
       setPayments(paymentMap);
-      setTotalAdvance(advanceTotal);
     } catch (err) {
       console.error('Failed to fetch payments:', err);
     }
   };
 
   // Calculate total advance amount for filtered/selected vendor
-  const totalAdvanceAmount = (filteredGrnList.length > 0 ? filteredGrnList : grnList).reduce((total, grn) => {
-    const paidAmount = payments[grn.id] || 0;
-    const outstanding = (grn.total_amount || 0) - paidAmount;
-    if (outstanding < 0) {
-      return total + Math.abs(outstanding);
-    }
-    return total;
-  }, 0) - (usedAdvances[selectedVendor] || 0);
+  // const totalAdvanceAmount = (filteredGrnList.length > 0 ? filteredGrnList : grnList).reduce((total, grn) => {
+  //   const paidAmount = payments[grn.id] || 0;
+  //   const outstanding = (grn.total_amount || 0) - paidAmount;
+  //   if (outstanding < 0) {
+  //     return total + Math.abs(outstanding);
+  //   }
+  //   return total;
+  // }, 0) - (usedAdvances[selectedVendor] || 0);
 
-  const handleViewGRN = (grn) => {
+  const fetchPaymentHistory = async (grnNumber) => {
+    try {
+      const res = await api.get(`/payments/history/${grnNumber}`);
+      return res.data.payment_history || [];
+    } catch (err) {
+      console.error('Failed to fetch payment history:', err);
+      return [];
+    }
+  };
+
+  const handleViewGRN = async (grn) => {
     if (!hasPermission("vendor_ledger.view")) {
-      alert("Permission denied");
+      showToast("Permission denied", 'error');
       return;
     }
+    
+    // Fetch payment history for this GRN
+    const history = await fetchPaymentHistory(grn.grn_number);
+    setPaymentHistory(prev => ({ ...prev, [grn.grn_number]: history }));
+    
     setViewModal({ isOpen: true, grn });
   };
 
   const handlePrintGRN = async (grn) => {
     if (!hasPermission("vendor_ledger.print")) {
-      alert("Permission denied");
+      showToast("Permission denied", 'error');
       return;
     }
     try {
       const res = await api.get(`/payments/ledger/print/${grn.grn_number}`);
       
       if (res.data.error) {
-        alert(`Error: ${res.data.error}`);
+        showToast(`Error: ${res.data.error}`, 'error');
         return;
       }
       
@@ -456,39 +442,49 @@ export default function SupplierLedger() {
           printWindow.close();
         }, 500);
       };
+      
+      showToast('Print dialog opened successfully', 'success');
     } catch (err) {
       console.error('Failed to print:', err);
-      alert('Failed to print vendor ledger');
+      showToast('Failed to print vendor ledger', 'error');
     }
   };
 
 
 
-  const handleInvoiceGRN = async (grn) => {
-    if (!hasPermission("vendor_ledger.invoice_view")) {
-      alert("Permission denied");
-      return;
-    }
-    try {
-      const res = await api.get(`/grn/${grn.id}`);
-      setInvoiceModal({ isOpen: true, grn: res.data });
-    } catch (err) {
-      console.error('Failed to fetch GRN details for invoice:', err);
-      setInvoiceModal({ isOpen: true, grn });
-    }
-  };
+  // const handleInvoiceGRN = async (grn) => {
+  //   if (!hasPermission("vendor_ledger.invoice_view")) {
+  //     showToast("Permission denied", 'error');
+  //     return;
+  //   }
+  //   try {
+  //     const res = await api.get(`/grn/${grn.id}`);
+  //     setInvoiceModal({ isOpen: true, grn: res.data });
+  //   } catch (err) {
+  //     console.error('Failed to fetch GRN details for invoice:', err);
+  //     setInvoiceModal({ isOpen: true, grn });
+  //   }
+  // };
 
   const handlePayment = (grn) => {
     if (!hasPermission("vendor_ledger.pay")) {
-      alert("Permission denied");
+      showToast("Permission denied", 'error');
       return;
     }
     setPaymentModal({ isOpen: true, grn });
   };
 
-  const savePayment = async (grnId, amount) => {
+  const savePayment = async (grnId, amount, paymentMethod, reference, remarks) => {
     try {
-      const response = await api.post(`/payments?grn_id=${grnId}&amount=${parseFloat(amount)}`);
+      const params = new URLSearchParams({
+        grn_id: grnId,
+        amount: parseFloat(amount),
+        payment_method: paymentMethod || 'Cash',
+        reference: reference || '',
+        remarks: remarks || ''
+      });
+      
+      const response = await api.post(`/payments?${params.toString()}`);
       
       // Only update local state if API call was successful
       if (response.status === 200 || response.status === 201) {
@@ -502,13 +498,13 @@ export default function SupplierLedger() {
         setTimeout(() => fetchPaymentsForGRNs(updatedGrnList), 100);
         
         setPaymentModal({ isOpen: false, grn: null });
-        fetchAuditLogs(); // Refresh audit logs after payment
+        showToast(`Payment of ₹${parseFloat(amount).toFixed(2)} saved successfully`, 'success');
       } else {
         throw new Error('Payment API call failed with status: ' + response.status);
       }
     } catch (err) {
       console.error('Failed to save payment:', err);
-      alert('Failed to save payment: ' + (err.response?.data?.detail || err.message));
+      showToast('Failed to save payment: ' + (err.response?.data?.detail || err.message), 'error');
       
       // Refetch payments to ensure data consistency
       if (filteredGrnList.length > 0) {
@@ -550,31 +546,20 @@ export default function SupplierLedger() {
             <h1 className="text-2xl font-semibold mb-2">Vendor Ledger</h1>
             <p className="text-gray-600">Track vendor transactions and outstanding amounts</p>
           </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowAuditLogs(!showAuditLogs)}
-                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
+              <select
+                value={selectedVendor}
+                onChange={(e) => setSelectedVendor(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {showAuditLogs ? 'Hide' : 'Show'} Payment History
-              </button>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
-                <select
-                  value={selectedVendor}
-                  onChange={(e) => setSelectedVendor(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">All Vendors</option>
-                  {vendors.map(vendor => (
-                    <option key={vendor.id} value={vendor.email}>
-                      {vendor.vendor_name} ({vendor.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <option value="">All Vendors</option>
+                {vendors.map(vendor => (
+                  <option key={vendor.id} value={vendor.email}>
+                    {vendor.vendor_name} ({vendor.email})
+                  </option>
+                ))}
+              </select>
             </div>
         </div>
       </div>
@@ -714,67 +699,7 @@ export default function SupplierLedger() {
         </div>
       </div>
 
-      {/* Audit Logs Section */}
-      {showAuditLogs && (
-        <div className="bg-white rounded-lg shadow-sm border mt-6">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">Payment History & Audit Logs</h2>
-            <p className="text-sm text-gray-600">Recent payment transactions and system activities</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-4 font-medium text-gray-700">Timestamp</th>
-                  <th className="text-left p-4 font-medium text-gray-700">User</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Action</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Module</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="text-center py-8 text-gray-500">
-                      No payment history found
-                    </td>
-                  </tr>
-                ) : (
-                  auditLogs
-                    .filter(log => !selectedVendor || log.description?.includes(selectedVendor))
-                    .map((log) => (
-                    <tr key={log.id} className="border-t hover:bg-gray-50">
-                      <td className="p-4">
-                        <div className="text-sm">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-medium text-sm">{log.user_name || 'System'}</div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          log.action === 'FULL_PAYMENT' ? 'bg-green-100 text-green-800' : 
-                          log.action === 'PARTIAL_PAYMENT' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-blue-100 text-blue-800'
-                        }`}>
-                          {log.action.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-sm text-gray-600">{log.module}</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-sm text-gray-800">{log.description}</div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+
 
       {/* Payment Modal */}
       {paymentModal.isOpen && (
@@ -792,12 +717,13 @@ export default function SupplierLedger() {
             
             <PaymentForm 
               grn={paymentModal.grn}
-              onSave={(grnId, amount) => {
-                savePayment(grnId, amount);
+              onSave={(grnId, amount, method, reference, remarks) => {
+                savePayment(grnId, amount, method, reference, remarks);
               }}
               onCancel={() => setPaymentModal({ isOpen: false, grn: null })}
               filteredGrnList={filteredGrnList}
               payments={payments}
+              showToast={showToast}
             />
           </div>
         </div>
@@ -879,12 +805,46 @@ export default function SupplierLedger() {
                       {/* Payment History */}
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <div className="text-sm font-semibold text-gray-700 mb-2">Payment History</div>
-                        <div className="text-gray-500">
-                          {paidAmount > 0 ? 
-                            `Payment of ₹${paidAmount.toFixed(2)} recorded for this vendor.` :
-                            'No payments found for this vendor.'
+                        {(() => {
+                          const history = paymentHistory[viewModal.grn.grn_number] || [];
+                          if (history.length > 0) {
+                            return (
+                              <div className="space-y-2">
+                                {history.map((payment, idx) => (
+                                  <div key={idx} className="flex justify-between items-center py-2 px-3 bg-white rounded border">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-green-600">₹{payment.payment_amount.toFixed(2)}</div>
+                                      <div className="text-xs text-gray-500">{payment.payment_date}</div>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                      <div className="text-sm">{payment.payment_method}</div>
+                                      {payment.reference_number && (
+                                        <div className="text-xs text-gray-500">Ref: {payment.reference_number}</div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                      {payment.remarks && (
+                                        <div className="text-xs text-gray-600">{payment.remarks}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                                <div className="text-xs text-gray-500 mt-2">
+                                  Total {history.length} payment{history.length !== 1 ? 's' : ''} made
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="text-gray-500">
+                                {paidAmount > 0 ? 
+                                  `Payment of ₹${paidAmount.toFixed(2)} recorded for this vendor.` :
+                                  'No payments found for this vendor.'
+                                }
+                              </div>
+                            );
                           }
-                        </div>
+                        })()}
                       </div>
                     </>
                   );
@@ -1087,6 +1047,13 @@ export default function SupplierLedger() {
           </div>
         </div>
       )}
+      
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }

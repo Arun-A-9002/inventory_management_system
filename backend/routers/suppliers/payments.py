@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 import json
 from database import get_current_tenant_db_name, get_tenant_db
-from models.tenant_models import VendorPayment, GRN, AuditLog, Vendor
+from models.tenant_models import VendorPayment, VendorPaymentHistory, GRN, AuditLog, Vendor
 from utils.permissions import require_vendor_ledger_view, require_vendor_ledger_pay, require_vendor_ledger_print
 from datetime import date
 from decimal import Decimal
@@ -52,7 +52,7 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
     db.commit()
 
 @router.post("/")
-async def create_payment(grn_id: int, amount: float, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendor_ledger_pay())):
+async def create_payment(grn_id: int, amount: float, payment_method: str = "Cash", reference: str = "", remarks: str = "", request: Request = None, db: Session = Depends(get_db), current_user: dict = Depends(require_vendor_ledger_pay())):
     try:
         # Get GRN details
         grn = db.query(GRN).filter(GRN.id == grn_id).first()
@@ -79,6 +79,7 @@ async def create_payment(grn_id: int, amount: float, request: Request, db: Sessi
                 payment_date=date.today()
             )
             db.add(payment)
+            db.flush()  # Get the payment ID
         else:
             # Update existing payment
             current_paid = Decimal(str(payment.paid_amount)) if payment.paid_amount else Decimal('0')
@@ -86,6 +87,19 @@ async def create_payment(grn_id: int, amount: float, request: Request, db: Sessi
             payment.outstanding_amount = total_amount - payment.paid_amount
             payment.payment_status = "paid" if payment.paid_amount >= total_amount else "partial"
             payment.payment_date = date.today()
+        
+        # Create payment history record
+        payment_history = VendorPaymentHistory(
+            vendor_payment_id=payment.id,
+            grn_number=grn.grn_number,
+            vendor_name=grn.vendor_name,
+            payment_amount=amount_decimal,
+            payment_method=payment_method,
+            reference_number=reference if reference else None,
+            remarks=remarks if remarks else None,
+            payment_date=date.today()
+        )
+        db.add(payment_history)
         
         db.commit()
         
@@ -104,11 +118,13 @@ async def create_payment(grn_id: int, amount: float, request: Request, db: Sessi
                 "grn_number": grn.grn_number,
                 "vendor_name": grn.vendor_name,
                 "payment_amount": float(amount_decimal),
+                "payment_method": payment_method,
+                "reference_number": reference,
                 "total_paid": float(payment.paid_amount),
                 "outstanding": float(payment.outstanding_amount),
                 "payment_status": payment.payment_status
             },
-            description=f"Payment of ₹{amount} made for GRN {grn.grn_number} to vendor {grn.vendor_name}. Status: {payment.payment_status}",
+            description=f"Payment of ₹{amount} made for GRN {grn.grn_number} to vendor {grn.vendor_name}. Method: {payment_method}. Status: {payment.payment_status}",
             request=request
         )
         
@@ -166,8 +182,11 @@ async def print_vendor_ledger_details(grn_number: str, request: Request, db: Ses
         # Get vendor details
         vendor = db.query(Vendor).filter(Vendor.email == grn.vendor_name).first()
         
-        # Get payment details
+        # Get payment details and history
         payment = db.query(VendorPayment).filter(VendorPayment.grn_number == grn_number).first()
+        payment_history = db.query(VendorPaymentHistory).filter(
+            VendorPaymentHistory.grn_number == grn_number
+        ).order_by(VendorPaymentHistory.payment_date.desc()).all()
         
         # Calculate payment details
         total_amount = float(grn.total_amount) if grn.total_amount else 0.0
@@ -198,6 +217,7 @@ async def print_vendor_ledger_details(grn_number: str, request: Request, db: Ses
                 "payment_status": payment_status,
                 "payment_date": payment.payment_date.strftime("%d/%m/%Y") if payment and payment.payment_date else ""
             },
+            payment_history=payment_history,
             company_data=company_data
         )
         
@@ -219,7 +239,7 @@ async def print_vendor_ledger_details(grn_number: str, request: Request, db: Ses
         print(f"Print vendor ledger error: {e}")
         return {"error": str(e)}
 
-def generate_vendor_ledger_html(grn, vendor, payment_details, company_data):
+def generate_vendor_ledger_html(grn, vendor, payment_details, payment_history, company_data):
     """Generate HTML content for vendor ledger with proper header format"""
     
     # Company details with fallback
@@ -232,6 +252,45 @@ def generate_vendor_ledger_html(grn, vendor, payment_details, company_data):
     # Get logo as base64
     logo_html = get_logo_html(company_data.get('logo_path') if company_data else None)
     
+    # Generate payment history HTML
+    payment_history_html = ""
+    if payment_history:
+        history_rows = ""
+        for idx, history in enumerate(payment_history, 1):
+            history_rows += f"""
+                <tr>
+                    <td class="text-center">{idx}</td>
+                    <td class="text-center">{history.payment_date.strftime('%d/%m/%Y') if history.payment_date else ''}</td>
+                    <td class="text-right">₹{float(history.payment_amount):.2f}</td>
+                    <td class="text-center">{history.payment_method}</td>
+                </tr>
+            """
+        
+        payment_history_html = f"""
+        <div class="section">
+            <div class="section-title">Payment History</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="text-center">S.No</th>
+                        <th class="text-center">Date</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-center">Method</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {history_rows}
+                </tbody>
+            </table>
+        </div>
+        """
+    else:
+        payment_history_html = """
+        <div class="section">
+            <div class="section-title">Payment History</div>
+            <p class="text-gray-500">No payment history found for this GRN.</p>
+        </div>
+        """
     # Get items from GRN
     items_html = ""
     if hasattr(grn, 'items') and grn.items:
@@ -351,6 +410,8 @@ def generate_vendor_ledger_html(grn, vendor, payment_details, company_data):
     
     {items_html}
     
+    {payment_history_html}
+    
     <div class="totals-section">
         <table class="totals-table">
             <tr><td>Subtotal:</td><td class="text-right">₹{payment_details['total_amount']:.2f}</td></tr>
@@ -459,4 +520,29 @@ async def get_payments(grn_number: str, request: Request, db: Session = Depends(
     except Exception as e:
         print(f"Payment fetch error: {e}")
         return {"total_paid": 0.0, "outstanding": 0.0, "status": "unpaid"}
+
+@router.get("/history/{grn_number}")
+async def get_payment_history(grn_number: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendor_ledger_view())):
+    try:
+        # Get payment history for the GRN
+        payment_history = db.query(VendorPaymentHistory).filter(
+            VendorPaymentHistory.grn_number == grn_number
+        ).order_by(VendorPaymentHistory.payment_date.desc()).all()
+        
+        history_data = []
+        for history in payment_history:
+            history_data.append({
+                "id": history.id,
+                "payment_amount": float(history.payment_amount),
+                "payment_method": history.payment_method,
+                "reference_number": history.reference_number,
+                "remarks": history.remarks,
+                "payment_date": history.payment_date.strftime("%d/%m/%Y") if history.payment_date else "",
+                "created_at": history.created_at.strftime("%d/%m/%Y %H:%M") if history.created_at else ""
+            })
+        
+        return {"payment_history": history_data}
+    except Exception as e:
+        print(f"Payment history fetch error: {e}")
+        return {"payment_history": []}
 

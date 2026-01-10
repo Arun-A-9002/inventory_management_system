@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../../api";
 import { getCountries, getStates, getCities } from "../../utils/locationData";
 import Toast from "../../components/Toast";
@@ -12,64 +12,18 @@ export default function Vendor() {
   const [editingId, setEditingId] = useState(null);
   const { toast, showToast, hideToast } = useToast();
   
-  // QUALIFICATION STATES - COMMENTED FOR FUTURE USE
-  // const [qualificationForm, setQualificationForm] = useState({
-  //   vendor_id: "",
-  //   approval_status: "Pending",
-  //   category: "",
-  //   risk_category: "Low",
-  //   audit_status: "Pending",
-  //   notes: ""
-  // });
-  // const [editingQualification, setEditingQualification] = useState(null);
-  // const [qualifications, setQualifications] = useState([]);
-  
-  // PERFORMANCE STATES - COMMENTED FOR FUTURE USE
-  // const [performanceForm, setPerformanceForm] = useState({
-  //   vendor_id: "",
-  //   delivery_quality: 4,
-  //   delivery_timeliness: 4,
-  //   response_time: 4,
-  //   pricing_competitiveness: 5,
-  //   compliance: 4,
-  //   comments: ""
-  // });
-  // const [editingPerformance, setEditingPerformance] = useState(null);
-  // const [performances, setPerformances] = useState([]);
-  
-  const [showVendorModal, setShowVendorModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState(null);
-
-  // STAR RATING COMPONENT - COMMENTED FOR FUTURE USE
-  // const StarRating = ({ rating, onRatingChange, label }) => {
-  //   return (
-  //     <div>
-  //       <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
-  //       <div className="flex gap-1">
-  //         {[1, 2, 3, 4, 5].map((star) => (
-  //           <button
-  //             key={star}
-  //             type="button"
-  //             onClick={() => onRatingChange(star)}
-  //             className={`text-2xl transition-colors hover:text-yellow-400 ${
-  //               star <= rating ? "text-yellow-400" : "text-gray-300"
-  //             }`}
-  //           >
-  //             ★
-  //           </button>
-  //         ))}
-  //       </div>
-  //     </div>
-  //   );
-  // };
-  
-  // TABS CONFIGURATION - COMMENTED FOR FUTURE USE
-  // const tabs = [
-  //   { id: "Registration", name: "Vendor Registration", icon: "👥" },
-  //   { id: "Qualification", name: "Qualification (AVL)", icon: "✅" },
-  //   { id: "Performance", name: "Performance Tracking", icon: "📊" }
-  // ];
+  const loadVendors = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/vendors/");
+      setVendors(res.data || []);
+    } catch (err) {
+      console.error("Error loading vendors:", err);
+      showToast("Failed to load vendors", 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   const [vendorForm, setVendorForm] = useState({
     vendor_name: "",
@@ -88,26 +42,15 @@ export default function Vendor() {
     account_holder_name: "",
     branch_name: ""
   });
+  const [showVendorModal, setShowVendorModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState(null);
 
   useEffect(() => {
     if (hasPermission("vendors.view")) {
       loadVendors();
     }
-  }, []);
-
-  const loadVendors = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/vendors/");
-      console.log("Raw vendor data:", res.data[0]); // Debug first vendor
-      setVendors(res.data || []);
-    } catch (err) {
-      console.error("Error loading vendors:", err);
-      showToast("Failed to load vendors", 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [loadVendors]);
 
   const [availableStates, setAvailableStates] = useState([]);
   const [availableCities, setAvailableCities] = useState([]);
@@ -220,21 +163,21 @@ export default function Vendor() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!hasPermission("vendors.delete")) {
-      showToast("Permission denied", 'error');
-      return;
-    }
-    if (!window.confirm("Delete this vendor?")) return;
-    try {
-      await api.delete(`/vendors/${id}`);
-      showToast("Vendor deleted successfully", 'success');
-      loadVendors();
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to delete vendor", 'error');
-    }
-  };
+  // const handleDelete = async (id) => {
+  //   if (!hasPermission("vendors.delete")) {
+  //     showToast("Permission denied", 'error');
+  //     return;
+  //   }
+  //   if (!window.confirm("Delete this vendor?")) return;
+  //   try {
+  //     await api.delete(`/vendors/${id}`);
+  //     showToast("Vendor deleted successfully", 'success');
+  //     loadVendors();
+  //   } catch (err) {
+  //     console.error(err);
+  //     showToast("Failed to delete vendor", 'error');
+  //   }
+  // };
 
   const updateVendorStatus = async (vendorId, newStatus) => {
     if (!hasPermission("vendors.status")) {
@@ -457,9 +400,6 @@ export default function Vendor() {
                 </button>
                 )}
               </div>
-            </div>
-            <div className="mb-2 text-sm text-slate-600">
-              Debug: vendors.length = {vendors.length}, loading = {loading.toString()}
             </div>
             
             <div className="overflow-x-auto">
