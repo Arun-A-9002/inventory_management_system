@@ -16,11 +16,8 @@ export function hasPermission(permission) {
     // Decode the JWT token to get the payload
     const payload = JSON.parse(atob(token.split('.')[1]));
     
-    // Debug: log payload to see structure
-    console.log('JWT Payload:', payload);
-    
     // Check multiple admin fields
-    if (payload.is_admin === true || payload.admin === true || payload.role === 'admin' || payload.email === 'admin@example.com') {
+    if (payload.is_admin === true || payload.admin === true || payload.role === 'admin' || payload.user_type === 'admin') {
       return true;
     }
     
@@ -52,6 +49,12 @@ export function getUserPermissions() {
     }
 
     const payload = JSON.parse(atob(token.split('.')[1]));
+    
+    // Admin users have all permissions
+    if (payload.is_admin === true || payload.admin === true || payload.role === 'admin' || payload.user_type === 'admin') {
+      return ['*'];
+    }
+    
     return payload.permissions || [];
   } catch (error) {
     console.error('Error getting user permissions:', error);
@@ -65,6 +68,10 @@ export function getUserPermissions() {
  * @returns {boolean} - True if user has at least one permission
  */
 export function hasAnyPermission(permissions) {
+  if (!permissions || permissions.length === 0) {
+    return true; // If no permissions required, allow access
+  }
+  
   return permissions.some(permission => hasPermission(permission));
 }
 
@@ -74,6 +81,10 @@ export function hasAnyPermission(permissions) {
  * @returns {boolean} - True if user has all permissions
  */
 export function hasAllPermissions(permissions) {
+  if (!permissions || permissions.length === 0) {
+    return true; // If no permissions required, allow access
+  }
+  
   return permissions.every(permission => hasPermission(permission));
 }
 
@@ -92,5 +103,25 @@ export function getCurrentUser() {
   } catch (error) {
     console.error('Error getting current user:', error);
     return null;
+  }
+}
+
+/**
+ * Check if current user is admin
+ * @returns {boolean} - True if user is admin
+ */
+export function isAdmin() {
+  try {
+    const user = getCurrentUser();
+    if (!user) return false;
+    
+    return user.is_admin === true || 
+           user.admin === true || 
+           user.role === 'admin' || 
+           user.user_type === 'admin' ||
+           (user.permissions && user.permissions.includes('*'));
+  } catch (error) {
+    console.error('Error checking admin status:', error);
+    return false;
   }
 }

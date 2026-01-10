@@ -300,8 +300,32 @@ def logout(response: Response, request: Request, db: Session = Depends(get_maste
 
 
 # --------------------------
-# GET CURRENT USER PROFILE
+# GET USER PERMISSIONS
 # --------------------------
+@router.get("/permissions")
+def get_user_permissions(current_user = Depends(get_current_user)):
+    """Get current user permissions for sidebar visibility."""
+    log_api(f"PERMISSIONS REQUEST → {current_user.get('email')}")
+    
+    try:
+        permissions = current_user.get("permissions", [])
+        user_type = current_user.get("user_type", "admin")
+        role = current_user.get("role", "user")
+        
+        # Admin users have all permissions
+        if user_type == "admin" or role == "admin":
+            permissions = ["*"]  # Wildcard for all permissions
+        
+        return {
+            "permissions": permissions,
+            "user_type": user_type,
+            "role": role,
+            "is_admin": user_type == "admin" or role == "admin"
+        }
+        
+    except Exception as e:
+        log_error(e, location="Permissions Endpoint")
+        raise HTTPException(500, "Internal server error")
 @router.get("/profile")
 def get_profile(current_user = Depends(get_current_user)):
     """Get current user profile with permissions."""
