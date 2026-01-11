@@ -250,7 +250,7 @@ export default function Company() {
                           />
                           {editForm.logo_path && (
                             <div className="mt-2">
-                              <img src={`http://localhost:8000/company/${editForm.logo_path}`} alt="Current Logo" className="h-16 w-16 object-cover rounded" />
+                              <img src={`${api.defaults.baseURL}/company/${editForm.logo_path}`} alt="Current Logo" className="h-16 w-16 object-cover rounded" />
                             </div>
                           )}
                           {editForm.logoFile && (
@@ -348,7 +348,7 @@ export default function Company() {
                           </td>
                           <td className="px-4 py-4 text-center">
                             {c.logo_path ? (
-                              <img src={`http://localhost:8000/company/${c.logo_path}`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
+                              <img src={`${api.defaults.baseURL}/company/${c.logo_path}`} alt="Logo" className="h-8 w-8 object-cover rounded mx-auto" />
                             ) : (
                               <div className="h-8 w-8 bg-gray-100 rounded mx-auto"></div>
                             )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle, Building, MapPin, User, Eye, EyeOff, ArrowRight, ArrowLeft, X } from "lucide-react";
+import api from "../api";
 
 /* ---------- Toast Notification Component ---------- */
 const Toast = ({ message, type = "error", onClose }) => (
@@ -416,10 +417,10 @@ export default function Register() {
   // Check if tenant code already exists
   const checkTenantCodeAvailability = async (tenantCode) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/check-tenant/${tenantCode}`);
-      const data = await res.json();
+      const res = await api.get(`/api/check-tenant/${tenantCode}`);
+      const data = res.data;
       
-      if (res.ok && data.exists) {
+      if (data.exists) {
         showToast(`Tenant code "${tenantCode}" is already registered. Please choose a different code.`);
         setErrors((prev) => ({ ...prev, tenant_code: "This tenant code is already taken" }));
       }
@@ -457,44 +458,8 @@ export default function Register() {
     e.preventDefault();
 
     try {
-      const res = await fetch("http://localhost:8000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        let errorData;
-        
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { detail: errorText || "Unable to process registration request" };
-        }
-        
-        // Handle specific error cases
-        if (res.status === 400 && errorText.includes("Admin email already exists")) {
-          showToast(`The admin email "${form.admin_email}" is already registered. Please use a different email address.`);
-        } else if (res.status === 409 && errorText.includes("Tenant code already exists")) {
-          showToast(`Tenant code "${form.tenant_code}" is already registered. Please choose a different code.`);
-        } else if (errorData.detail) {
-          showToast(errorData.detail);
-        } else if (errorData.message) {
-          showToast(errorData.message);
-        } else {
-          // Handle validation errors
-          if (errorData.errors && Array.isArray(errorData.errors)) {
-            const errorMessages = errorData.errors.map(err => err.msg || err.message).join(', ');
-            showToast(errorMessages);
-          } else {
-            showToast("Please check your information and try again");
-          }
-        }
-        return;
-      }
+      const res = await api.post("/api/register", form);
+      const data = res.data;
 
       const emailStatus = data.email_sent ? 
         "\n\nA confirmation email has been sent to your admin email address." : 
@@ -509,11 +474,35 @@ export default function Register() {
       localStorage.removeItem("org_register_form");
     } catch (error) {
       console.error('Registration error:', error);
-      setPopup({
-        show: true,
-        type: "error",
-        message: "Unable to connect to the server. Please check your connection and try again.",
-      });
+      
+      if (error.response) {
+        const errorData = error.response.data;
+        
+        // Handle specific error cases
+        if (error.response.status === 400 && errorData.detail?.includes("Admin email already exists")) {
+          showToast(`The admin email "${form.admin_email}" is already registered. Please use a different email address.`);
+        } else if (error.response.status === 409 && errorData.detail?.includes("Tenant code already exists")) {
+          showToast(`Tenant code "${form.tenant_code}" is already registered. Please choose a different code.`);
+        } else if (errorData.detail) {
+          showToast(errorData.detail);
+        } else if (errorData.message) {
+          showToast(errorData.message);
+        } else {
+          // Handle validation errors
+          if (errorData.errors && Array.isArray(errorData.errors)) {
+            const errorMessages = errorData.errors.map(err => err.msg || err.message).join(', ');
+            showToast(errorMessages);
+          } else {
+            showToast("Please check your information and try again");
+          }
+        }
+      } else {
+        setPopup({
+          show: true,
+          type: "error",
+          message: "Unable to connect to the server. Please check your connection and try again.",
+        });
+      }
     }
   };
 

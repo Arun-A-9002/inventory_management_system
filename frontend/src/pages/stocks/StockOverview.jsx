@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-
-const API_BASE_URL = "http://localhost:8000";
+import api from "../../api";
 
 export default function StockOverview() {
   const [stockData, setStockData] = useState([]);
@@ -28,7 +26,7 @@ export default function StockOverview() {
   const fetchStockData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/stock-overview/`);
+      const response = await api.get('/stock-overview/');
       console.log('Stock data received:', response.data);
       setStockData(response.data);
     } catch (err) {
@@ -112,7 +110,7 @@ export default function StockOverview() {
     
     try {
       // Call dispense-batch endpoint to completely remove the batch
-      const response = await axios.post(`${API_BASE_URL}/consumption/dispense-batch`, {
+      const response = await api.post('/consumption/dispense-batch', {
         item_name: item.item_name,
         quantity: selectedBatch.qty, // Dispense entire batch
         batch_no: selectedBatch.batch_no,
@@ -160,7 +158,7 @@ export default function StockOverview() {
     }
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/stock-overview/dispense/${item.id}?batch_index=${targetBatchIndex}&quantity=${quantity}`);
+      const response = await api.post(`/stock-overview/dispense/${item.id}?batch_index=${targetBatchIndex}&quantity=${quantity}`);
       
       setDispenseQuantities(prev => ({ ...prev, [item.id]: '' }));
       fetchStockData();

@@ -473,7 +473,7 @@ export default function Billing() {
               </>
             )}
             <button
-              onClick={() => window.open(`http://localhost:8000/billing/invoice/${selectedBilling.id}`, '_blank')}
+              onClick={() => window.open(`${api.defaults.baseURL}/billing/invoice/${selectedBilling.id}`, '_blank')}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,7 +482,7 @@ export default function Billing() {
               Print
             </button>
             <button
-              onClick={() => window.open(`http://localhost:8000/billing/invoice/${selectedBilling.id}`, '_blank')}
+              onClick={() => window.open(`${api.defaults.baseURL}/billing/invoice/${selectedBilling.id}`, '_blank')}
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -763,7 +763,7 @@ export default function Billing() {
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button
-                        onClick={() => window.open(`http://localhost:8000/billing/invoice/${billing.id}`, '_blank')}
+                        onClick={() => window.open(`${api.defaults.baseURL}/billing/invoice/${billing.id}`, '_blank')}
                         className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                         title="Print Invoice"
                       >
