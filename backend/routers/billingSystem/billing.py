@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from database import get_tenant_db
-from models.tenant_models import Billing, GRN, BillingStatus, ReturnBilling, ReturnHeader, ReturnBillingPayment, ReturnItem, Item
+from models.tenant_models import Billing, GRN, BillingStatus, ReturnBilling, ReturnHeader, ReturnBillingPayment, ReturnItem, Item, AuditLog
 from schemas.tenant_schemas import BillingCreate, BillingResponse, ReturnBillingCreate, ReturnBillingResponse
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import date, datetime
+from utils.audit import log_audit as log_database_audit, get_user_info
+import json
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -515,6 +517,7 @@ def process_refund_payment(
 def update_payment(
     billing_id: int,
     payment_data: PaymentUpdate,
+    request: Request,
     db: Session = Depends(get_tenant_db)
 ):
     """Update payment for a billing record"""
@@ -529,6 +532,13 @@ def update_payment(
     if payment_data.paid_amount > float(billing.net_amount):
         raise HTTPException(status_code=400, detail="Payment amount cannot exceed net amount")
     
+    # Store old values for audit
+    old_values = {
+        "paid_amount": float(billing.paid_amount),
+        "balance_amount": float(billing.balance_amount),
+        "status": billing.status.value
+    }
+    
     # Update payment details with proper Decimal conversion
     billing.paid_amount = Decimal(str(payment_data.paid_amount))
     billing.balance_amount = billing.net_amount - billing.paid_amount
@@ -538,6 +548,26 @@ def update_payment(
     try:
         db.commit()
         db.refresh(billing)
+        
+        # Database audit log for payment update
+        log_database_audit(
+            db=db,
+            request=request,
+            user_id=None,
+            user_name="System",
+            action="UPDATE_PAYMENT",
+            table_name="billing",
+            record_id=billing.id,
+            old_values=old_values,
+            new_values={
+                "paid_amount": float(billing.paid_amount),
+                "balance_amount": float(billing.balance_amount),
+                "status": billing.status.value
+            },
+            module="BILLING",
+            description=f"Payment updated for billing ID {billing_id}: ₹{payment_data.paid_amount}"
+        )
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -588,6 +618,7 @@ def revert_payment(
 def update_return_payment(
     billing_id: int,
     payment_data: dict,
+    request: Request,
     db: Session = Depends(get_tenant_db)
 ):
     """Update payment for a return billing record and store payment transaction"""
@@ -611,6 +642,13 @@ def update_return_payment(
     if paid_amount > net_amount:
         paid_amount = net_amount
     
+    # Store old values for audit
+    old_values = {
+        "paid_amount": float(billing.paid_amount),
+        "balance_amount": float(billing.balance_amount),
+        "status": billing.status.value
+    }
+    
     # Store payment transaction record
     payment_record = ReturnBillingPayment(
         billing_id=billing_id,
@@ -633,6 +671,28 @@ def update_return_payment(
         db.commit()
         db.refresh(billing)
         db.refresh(payment_record)
+        
+        # Database audit log for return payment
+        log_database_audit(
+            db=db,
+            request=request,
+            user_id=None,
+            user_name="System",
+            action="RETURN_PAYMENT",
+            table_name="return_billing",
+            record_id=billing.id,
+            old_values=old_values,
+            new_values={
+                "paid_amount": float(billing.paid_amount),
+                "balance_amount": float(billing.balance_amount),
+                "status": billing.status.value,
+                "payment_mode": payment_mode,
+                "payment_amount": paid_amount
+            },
+            module="BILLING",
+            description=f"Return payment processed for billing ID {billing_id}: ₹{paid_amount} via {payment_mode}"
+        )
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -2048,6 +2108,7 @@ def save_item_edit_values(
 def process_refund(
     billing_id: int,
     refund_data: dict,
+    request: Request,
     db: Session = Depends(get_tenant_db)
 ):
     """Process customer refund for a billing record"""
@@ -2069,6 +2130,13 @@ def process_refund(
         # Log the received data for debugging
         print(f"Invalid refund data received: {refund_data}")
         raise HTTPException(status_code=400, detail=f"Refund amount must be greater than 0. Received: {refund_amount}")
+    
+    # Store old values for audit
+    old_values = {
+        "paid_amount": float(billing.paid_amount),
+        "balance_amount": float(billing.balance_amount),
+        "status": billing.status.value
+    }
     
     # Check if this is a negative balance scenario (customer owes money back)
     current_balance = float(billing.balance_amount)
@@ -2107,6 +2175,27 @@ def process_refund(
     
     db.commit()
     db.refresh(billing)
+    
+    # Database audit log for refund
+    log_database_audit(
+        db=db,
+        request=request,
+        user_id=None,
+        user_name="System",
+        action="PROCESS_REFUND",
+        table_name="return_billing",
+        record_id=billing.id,
+        old_values=old_values,
+        new_values={
+            "paid_amount": float(billing.paid_amount),
+            "balance_amount": float(billing.balance_amount),
+            "status": billing.status.value,
+            "refund_amount": refund_amount,
+            "refund_reason": refund_reason
+        },
+        module="BILLING",
+        description=f"Refund processed for billing ID {billing_id}: ₹{refund_amount} - {refund_reason}"
+    )
     
     return {
         "message": "Refund processed successfully",

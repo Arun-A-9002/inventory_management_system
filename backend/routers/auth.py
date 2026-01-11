@@ -23,6 +23,7 @@ from utils.auth import (
 
 # Logging
 from utils.logger import log_error, log_audit, log_api
+from utils.audit import log_audit as log_database_audit, get_user_info
 
 router = APIRouter(tags=["Authentication"], prefix="/auth")
 
@@ -42,7 +43,7 @@ class LoginEmailModel(BaseModel):
 
 
 @router.post("/login")
-def login(req: LoginModel, db: Session = Depends(get_master_db)):
+def login(req: LoginModel, request: Request, db: Session = Depends(get_master_db)):
     log_api(f"LOGIN ATTEMPT → {req.login_identifier} with tenant code {req.tenant_code}")
     
     try:
@@ -91,6 +92,21 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                     # Send OTP for 2FA users
                     otp = generate_otp(tenant_user.email)
                     send_otp_email(tenant_user.email, otp)
+                    
+                    # Database audit log for OTP sent
+                    log_database_audit(
+                        db=tenant_db,
+                        request=request,
+                        user_id=tenant_user.id,
+                        user_name=tenant_user.full_name,
+                        action="OTP_SENT",
+                        table_name="users",
+                        record_id=tenant_user.id,
+                        new_values={"email": tenant_user.email, "two_factor_enabled": True},
+                        module="AUTHENTICATION",
+                        description=f"OTP sent to 2FA user {tenant_user.email}"
+                    )
+                    
                     tenant_db.close()
                     log_audit(f"OTP SENT TO 2FA USER {tenant_user.email} (identifier: {req.login_identifier}) in tenant {req.tenant_code}")
                     return {"message": "OTP sent to email", "requires_otp": True, "email": tenant_user.email}
@@ -129,11 +145,29 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                     user_session = UserSession(
                         user_id=tenant_user.id,
                         session_token=session_hash,
-                        ip_address=None,  # Can be extracted from request if needed
-                        user_agent=None   # Can be extracted from request if needed
+                        ip_address=request.client.host if request.client else None,
+                        user_agent=request.headers.get('user-agent')
                     )
                     tenant_db.add(user_session)
                     tenant_db.commit()
+                    
+                    # Database audit log for successful login
+                    log_database_audit(
+                        db=tenant_db,
+                        request=request,
+                        user_id=tenant_user.id,
+                        user_name=tenant_user.full_name,
+                        action="LOGIN_SUCCESS",
+                        table_name="users",
+                        record_id=tenant_user.id,
+                        new_values={
+                            "login_identifier": req.login_identifier,
+                            "tenant_code": req.tenant_code,
+                            "session_created": True
+                        },
+                        module="AUTHENTICATION",
+                        description=f"Direct login successful for {tenant_user.email}"
+                    )
                     
                     access_token = create_access_token({
                         "sub": str(tenant_user.id),
@@ -151,6 +185,35 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                     tenant_db.close()
                     log_audit(f"DIRECT LOGIN SUCCESS → {tenant_user.email} (identifier: {req.login_identifier}) for tenant {req.tenant_code}")
                     return {"access_token": access_token, "token_type": "bearer", "requires_otp": False}
+            
+            # Database audit log for failed login attempt
+            if tenant_user:
+                log_database_audit(
+                    db=tenant_db,
+                    request=request,
+                    user_id=tenant_user.id,
+                    user_name=tenant_user.full_name,
+                    action="LOGIN_FAILED",
+                    table_name="users",
+                    record_id=tenant_user.id,
+                    new_values={"login_identifier": req.login_identifier, "reason": "Invalid password"},
+                    module="AUTHENTICATION",
+                    description=f"Login failed - invalid password for {req.login_identifier}"
+                )
+            else:
+                # Log failed attempt for non-existent user
+                log_database_audit(
+                    db=tenant_db,
+                    request=request,
+                    user_id=None,
+                    user_name="Unknown",
+                    action="LOGIN_FAILED",
+                    table_name="users",
+                    record_id=None,
+                    new_values={"login_identifier": req.login_identifier, "reason": "User not found"},
+                    module="AUTHENTICATION",
+                    description=f"Login failed - user not found: {req.login_identifier}"
+                )
             
             tenant_db.close()
         except Exception as e:
@@ -435,6 +498,23 @@ def logout(response: Response, request: Request, db: Session = Depends(get_maste
                     if session:
                         session.is_active = False
                         tenant_db.commit()
+                        
+                        # Database audit log for logout
+                        user_id, user_name = get_user_info(current_user)
+                        log_database_audit(
+                            db=tenant_db,
+                            request=request,
+                            user_id=user_id,
+                            user_name=user_name,
+                            action="LOGOUT",
+                            table_name="user_sessions",
+                            record_id=session.id,
+                            old_values={"is_active": True},
+                            new_values={"is_active": False},
+                            module="AUTHENTICATION",
+                            description=f"User logged out: {current_user.get('email')}"
+                        )
+                        
                         log_audit(f"SESSION DEACTIVATED for user {current_user.get('email')}")
                     
                     tenant_db.close()

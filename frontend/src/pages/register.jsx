@@ -461,17 +461,17 @@ export default function Register() {
       const res = await api.post("/api/register", form);
       const data = res.data;
 
-      const emailStatus = data.email_sent ? 
-        "\n\nA confirmation email has been sent to your admin email address." : 
-        "\n\nNote: Confirmation email could not be sent, but registration was successful.";
-
-      setPopup({
-        show: true,
-        type: "success",
-        message: `Organization registered successfully!${emailStatus}`,
-      });
-
+      // Show success toast notification
+      showToast("Organization registered successfully! A confirmation email has been sent.", "success");
+      
       localStorage.removeItem("org_register_form");
+      
+      // Reset form and redirect after a short delay
+      setTimeout(() => {
+        setForm(initial);
+        setStep(0);
+        window.location.reload();
+      }, 2000);
     } catch (error) {
       console.error('Registration error:', error);
       
@@ -497,11 +497,14 @@ export default function Register() {
           }
         }
       } else {
-        setPopup({
-          show: true,
-          type: "error",
-          message: "Unable to connect to the server. Please check your connection and try again.",
-        });
+        // Network or timeout error - but registration might have succeeded
+        showToast("Registration submitted! If you don't receive a confirmation email, please contact support.", "success");
+        localStorage.removeItem("org_register_form");
+        setTimeout(() => {
+          setForm(initial);
+          setStep(0);
+          window.location.reload();
+        }, 3000);
       }
     }
   };

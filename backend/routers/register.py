@@ -1,6 +1,6 @@
 # backend/routers/register.py
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 from schemas.register_schema import RegisterModel
 from models.register_models import Tenant
@@ -11,12 +11,14 @@ from database import (
 import hashlib
 import re
 import traceback
+import json
 
 # Tenant model base (for creating tenant tables)
 from models.tenant_models import TenantBase
 
 # Logging
 from utils.logger import log_error, log_audit, log_api
+from utils.audit import log_audit as log_database_audit
 
 # Email utility
 from utils.email_service_old import send_registration_email
@@ -35,7 +37,7 @@ def to_db_name(name: str):
 
 # ------------------ REGISTER API ----------------------
 @router.post("/register")
-def register(data: RegisterModel, db: Session = Depends(get_master_db)):
+def register(data: RegisterModel, request: Request, db: Session = Depends(get_master_db)):
     log_api("POST /register → Incoming registration request")
 
     try:
@@ -134,6 +136,35 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         db.commit()
         db.refresh(tenant)
         log_audit(f"Tenant saved in master DB with ID: {tenant.id}")
+        
+        # Database audit log for tenant registration
+        try:
+            # Create a temporary tenant database session for audit logging
+            from database import get_tenant_db
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db_session = next(tenant_db_gen)
+            
+            log_database_audit(
+                db=tenant_db_session,
+                request=request,
+                user_id=None,
+                user_name="System",
+                action="REGISTER",
+                table_name="tenants",
+                record_id=tenant.id,
+                new_values={
+                    "organization_name": tenant.organization_name,
+                    "tenant_code": tenant.tenant_code,
+                    "admin_email": tenant.admin_email,
+                    "status": tenant.status
+                },
+                module="REGISTRATION",
+                description=f"New tenant registered: {tenant.organization_name} ({tenant.tenant_code})"
+            )
+            tenant_db_session.close()
+        except Exception as audit_error:
+            log_error(audit_error, "Failed to create audit log for tenant registration")
+        
         # Get the database name for further processing
         db_name = tenant.database_name
 
@@ -169,6 +200,7 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         # -----------------------------------------------------
         from models.tenant_models import User, Department
         from sqlalchemy.orm import sessionmaker
+        from utils.login_code_generator import generate_unique_login_code
         
         TenantSession = sessionmaker(bind=tenant_engine)
         tenant_db = TenantSession()
@@ -187,20 +219,24 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
                 tenant_db.refresh(default_dept)
                 log_audit(f"Default department created in tenant DB: {db_name}")
             
+            # Generate unique login code for admin user
+            admin_login_code = generate_unique_login_code(tenant_db)
+            
             # Create admin user with proper password hashing
             from utils.auth import hash_password
             
             admin_user = User(
                 full_name=data.admin_name,
                 email=data.admin_email,
-                hashed_password=hash_password(data.password),  # Use the same hashing as tenant users
+                hashed_password=hash_password(data.password),
+                login_code=admin_login_code,
                 is_active=True,
                 department_id=default_dept.id
             )
             tenant_db.add(admin_user)
             tenant_db.commit()
             tenant_db.refresh(admin_user)
-            log_audit(f"Admin user created in tenant DB: {db_name} with ID: {admin_user.id}")
+            log_audit(f"Admin user created in tenant DB: {db_name} with ID: {admin_user.id} and login code: {admin_login_code}")
             
         except Exception as e:
             tenant_db.rollback()
@@ -221,12 +257,16 @@ def register(data: RegisterModel, db: Session = Depends(get_master_db)):
         else:
             log_error(Exception("Email sending failed"), f"Failed to send registration email to {data.admin_email}")
 
+        # Final audit log for successful registration
+        log_audit(f"Registration completed successfully for {tenant.organization_name}")
+        
         return {
             "message": "Organization registered successfully",
             "id": tenant.id,
             "database_name": db_name,
             "permissions_seeded": permissions_seeded,
-            "email_sent": email_sent
+            "email_sent": email_sent,
+            "admin_login_code": admin_login_code
         }
 
     except HTTPException:
