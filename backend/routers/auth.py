@@ -46,8 +46,8 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
     log_api(f"LOGIN ATTEMPT → {req.login_identifier} with tenant code {req.tenant_code}")
     
     try:
-        # First find the tenant by tenant_code
-        tenant = db.query(Tenant).filter(Tenant.tenant_code == req.tenant_code).first()
+        # First find the tenant by tenant_code (case insensitive)
+        tenant = db.query(Tenant).filter(Tenant.tenant_code.ilike(req.tenant_code)).first()
         
         if not tenant:
             log_error(Exception("Invalid tenant code"), location="Login Check")
@@ -96,18 +96,20 @@ def login(req: LoginModel, db: Session = Depends(get_master_db)):
                     return {"message": "OTP sent to email", "requires_otp": True, "email": tenant_user.email}
                 else:
                     # Direct login without OTP
-                    # Check multi-login settings
+                    # Clear any existing sessions if multi-login is disabled
                     if not tenant_user.multi_login_enabled:
-                        # Check for existing active sessions
+                        # Deactivate existing sessions instead of blocking login
                         existing_sessions = tenant_db.query(UserSession).filter(
                             UserSession.user_id == tenant_user.id,
                             UserSession.is_active == True
                         ).all()
                         
+                        for session in existing_sessions:
+                            session.is_active = False
+                        
                         if existing_sessions:
-                            tenant_db.close()
-                            log_audit(f"LOGIN BLOCKED - User {tenant_user.email} already logged in on another device")
-                            raise HTTPException(400, "You are already logged in on another device. Please logout from the other device first or contact your administrator to enable multi-login.")
+                            tenant_db.commit()
+                            log_audit(f"Deactivated {len(existing_sessions)} existing sessions for user {tenant_user.email}")
                     
                     # Get user permissions
                     permissions = []

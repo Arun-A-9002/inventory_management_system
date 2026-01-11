@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import api from "../api";
 
 export default function Login() {
   const [tenantCode, setTenantCode] = useState("");
@@ -58,16 +57,16 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await api.post("/auth/login", {
-        tenant_code: tenantCode,
-        login_identifier: loginIdentifier,
-        password
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_code: tenantCode, login_identifier: loginIdentifier, password }),
       });
 
-      const data = res.data;
+      const data = await res.json();
 
-      if (!data) {
-        setErrors({ general: "Invalid credentials" });
+      if (!res.ok) {
+        setErrors({ general: data.detail || "Invalid credentials" });
         setLoading(false);
         return;
       }
@@ -87,7 +86,7 @@ export default function Login() {
       }
 
     } catch (err) {
-      setErrors({ general: err.response?.data?.detail || "Server not reachable. Please try again." });
+      setErrors({ general: "Server not reachable. Please try again." });
       console.error(err);
     }
 
@@ -111,16 +110,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await api.post("/auth/verify", {
-        tenant_code: tenantCode,
-        email: userEmail,
-        otp
+      const res = await fetch("http://localhost:8000/auth/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_code: tenantCode, email: userEmail, otp }),
       });
 
-      const data = res.data;
+      const data = await res.json();
 
-      if (!data) {
-        setErrors({ otp: "OTP verification failed" });
+      if (!res.ok) {
+        setErrors({ otp: data.detail || "OTP verification failed" });
         setLoading(false);
         return;
       }
@@ -132,7 +132,7 @@ export default function Login() {
       window.location.href = "/app/dashboard";
 
     } catch (err) {
-      setErrors({ otp: err.response?.data?.detail || "Server error. Please try again." });
+      setErrors({ otp: "Server error. Please try again." });
       console.error(err);
     }
 
