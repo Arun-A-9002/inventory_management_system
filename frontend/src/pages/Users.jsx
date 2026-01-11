@@ -176,14 +176,14 @@ export default function Users() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="px-6 py-6">
-          <div className="flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">User Management</h1>
-              <p className="text-gray-600 mt-1">Manage system users, roles, and access permissions</p>
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">User Management</h1>
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage system users, roles, and access permissions</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="bg-gray-100 px-4 py-2 rounded-lg">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+              <div className="bg-gray-100 px-4 py-2 rounded-lg text-center sm:text-left">
                 <span className="text-sm font-medium text-gray-600">Total Users</span>
                 <span className="ml-2 text-lg font-bold text-gray-900">{users.length}</span>
               </div>
@@ -194,7 +194,7 @@ export default function Users() {
                     // Auto-generate login code when opening the modal
                     generateLoginCode();
                   }} 
-                  className="flex items-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-200"
+                  className="flex items-center justify-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-200 text-sm"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -207,11 +207,11 @@ export default function Users() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -221,20 +221,20 @@ export default function Users() {
                   placeholder="Search users..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="pl-10 pr-4 py-2 w-full sm:w-auto border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm"
                 />
               </div>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
               </select>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 text-center sm:text-right">
               Showing {filteredUsers.length} of {users.length} users
             </div>
           </div>
@@ -253,21 +253,21 @@ export default function Users() {
             <p className="text-gray-600">Try adjusting your search or filter criteria</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredUsers.map(user => (
               <div key={user.id} className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow duration-200">
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-lg flex-shrink-0">
                         {user.full_name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="ml-3">
-                        <h3 className="text-lg font-semibold text-gray-900">{user.full_name}</h3>
-                        <p className="text-sm text-gray-600">{user.email}</p>
+                      <div className="ml-3 min-w-0 flex-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{user.full_name}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 truncate">{user.email}</p>
                       </div>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ml-2 ${
                       user.is_active 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
@@ -359,14 +359,14 @@ export default function Users() {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
                   {editingId ? 'Edit User' : 'Add New User'}
                 </h3>
                 <button 
                   onClick={closeModal}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -374,14 +374,14 @@ export default function Users() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
                   <input 
                     type="text"
                     value={fullName} 
                     onChange={e => setFullName(e.target.value)} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
                     placeholder="Enter full name"
                   />
                 </div>
@@ -392,7 +392,7 @@ export default function Users() {
                     type="email"
                     value={email} 
                     onChange={e => setEmail(e.target.value)} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
                     placeholder="Enter email address"
                   />
                 </div>
@@ -404,7 +404,7 @@ export default function Users() {
                       type="password"
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent" 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
                       placeholder="Enter password"
                     />
                   </div>
@@ -417,7 +417,7 @@ export default function Users() {
                       type="text"
                       value={loginCode} 
                       onChange={e => setLoginCode(e.target.value.toUpperCase())} 
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent" 
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
                       placeholder="Auto-generated code"
                       readOnly={editingId ? true : false}
                     />
@@ -425,7 +425,7 @@ export default function Users() {
                       <button
                         type="button"
                         onClick={generateLoginCode}
-                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex-shrink-0"
                         title="Generate new login code"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -442,7 +442,7 @@ export default function Users() {
                   <select 
                     value={departmentId || ''} 
                     onChange={e => setDepartmentId(e.target.value ? Number(e.target.value) : null)} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm"
                   >
                     <option value="">Select department</option>
                     {departments.map(d => (
@@ -473,7 +473,7 @@ export default function Users() {
                       type="checkbox" 
                       checked={twoFactorEnabled} 
                       onChange={e => setTwoFactorEnabled(e.target.checked)} 
-                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 flex-shrink-0"
                     />
                     <div className="ml-3">
                       <div className="text-sm font-medium text-gray-900">Two-Factor Authentication</div>
@@ -486,7 +486,7 @@ export default function Users() {
                       type="checkbox" 
                       checked={multiLoginEnabled} 
                       onChange={e => setMultiLoginEnabled(e.target.checked)} 
-                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                      className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 flex-shrink-0"
                     />
                     <div className="ml-3">
                       <div className="text-sm font-medium text-gray-900">Multi-Login</div>
@@ -503,19 +503,19 @@ export default function Users() {
                   Roles ({roles.length} available)
                 </label>
                 <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 bg-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {roles.map(role => (
                       <label key={role.id} className="flex items-start p-2 rounded hover:bg-white transition-colors">
                         <input 
                           type="checkbox" 
                           checked={selectedRoles.has(role.id)} 
                           onChange={() => toggleRole(role.id)} 
-                          className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                          className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 flex-shrink-0"
                         />
-                        <div className="ml-3">
+                        <div className="ml-3 min-w-0">
                           <div className="text-sm font-medium text-gray-900">{role.name}</div>
                           {role.description && (
-                            <div className="text-xs text-gray-500">{role.description}</div>
+                            <div className="text-xs text-gray-500 break-words">{role.description}</div>
                           )}
                         </div>
                       </label>
@@ -524,7 +524,7 @@ export default function Users() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-3">
                 <button 
                   onClick={closeModal} 
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"

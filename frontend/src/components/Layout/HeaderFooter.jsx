@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import api from "../../api";
 
-export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onToggleDispensedSidebar }) {
+export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onToggleDispensedSidebar, onToggleMobileSidebar }) {
   const [userInfo, setUserInfo] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -132,23 +132,35 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
 
   if (type === "header") {
     return (
-      <header className="bg-gradient-to-r from-slate-50 to-gray-100 backdrop-blur-xl border-b border-gray-200/50 px-8 py-4 flex justify-between items-center shadow-sm">
+      <header className="bg-gradient-to-r from-slate-50 to-gray-100 backdrop-blur-xl border-b border-gray-200/50 px-3 sm:px-6 lg:px-8 py-4 flex justify-between items-center shadow-sm">
+        {/* Mobile Menu Button */}
+        <button 
+          onClick={onToggleMobileSidebar}
+          className="lg:hidden w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg mr-3"
+        >
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        
         {/* Company Logo/Name */}
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-            {companyName}
+          <div className="hidden sm:block">
+            <h1 className="text-lg sm:text-2xl font-semibold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+              {companyName}
+            </h1>
             <p className="text-xs text-gray-500 font-medium">Inventory Management System</p>
-          </h1>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          {/* Real-time Clock */}
-          <div className="bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200/50 shadow-sm">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Real-time Clock - Hidden on mobile */}
+          <div className="hidden md:block bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200/50 shadow-sm">
             <div className="flex items-center space-x-2">
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -163,30 +175,30 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
             </div>
           </div>
 
-          {/* Sync Button */}
+          {/* Sync Button - Responsive */}
           <button 
             onClick={handleSync}
             disabled={isSyncing}
-            className="flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl border border-blue-300 hover:from-blue-600 hover:to-blue-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 group"
+            className="flex items-center px-2 sm:px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl border border-blue-300 hover:from-blue-600 hover:to-blue-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 group"
           >
-            <svg className={`w-4 h-4 mr-2 transition-transform duration-200 ${isSyncing ? 'animate-spin' : 'group-hover:rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`w-4 h-4 sm:mr-2 transition-transform duration-200 ${isSyncing ? 'animate-spin' : 'group-hover:rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span className="text-sm font-medium">
+            <span className="hidden sm:inline text-sm font-medium">
               {isSyncing ? 'Syncing...' : 'Sync'}
             </span>
           </button>
 
-          {/* Refresh Button */}
+          {/* Refresh Button - Responsive */}
           <button 
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center px-4 py-2.5 bg-white/70 backdrop-blur-sm text-gray-700 rounded-xl border border-gray-200/50 hover:bg-white/90 hover:shadow-md transition-all duration-200 disabled:opacity-50 group"
+            className="flex items-center px-2 sm:px-4 py-2.5 bg-white/70 backdrop-blur-sm text-gray-700 rounded-xl border border-gray-200/50 hover:bg-white/90 hover:shadow-md transition-all duration-200 disabled:opacity-50 group"
           >
-            <svg className={`w-4 h-4 mr-2 transition-transform duration-200 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`w-4 h-4 sm:mr-2 transition-transform duration-200 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span className="text-sm font-medium">
+            <span className="hidden sm:inline text-sm font-medium">
               {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </span>
           </button>
@@ -198,13 +210,13 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200/50 shadow-sm hover:bg-white/90 transition-all duration-200"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 sm:space-x-3">
                   <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-xs font-semibold text-white">
                       {userInfo.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div className="text-right">
+                  <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-800">
                       {userInfo.name}
                     </p>
@@ -220,7 +232,7 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
               
               {/* Dropdown Menu */}
               {isDropdownOpen && createPortal(
-                <div className="fixed right-8 w-48 bg-white rounded-xl border border-gray-200 shadow-xl py-2" style={{zIndex: 99999, top: '80px'}}>
+                <div className="fixed right-3 sm:right-8 w-48 bg-white rounded-xl border border-gray-200 shadow-xl py-2" style={{zIndex: 99999, top: '80px'}}>
                   <div className="px-4 py-2 border-b border-gray-200">
                     <p className="text-sm font-semibold text-gray-800">{userInfo.name}</p>
                     <p className="text-xs text-gray-500">{userInfo.email}</p>
@@ -248,20 +260,20 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
   return (
     <footer className="bg-gray-800 text-white py-2">
       <div className="container mx-auto px-4 text-center">
-        <div className="flex flex-wrap justify-center items-center gap-4 text-xs">
+        <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-4 text-xs">
           <span className="font-semibold">Powered by NUTRYAH DIGITAL HEALTH</span>
-          <span>|</span>
-          <span>Support: Mobile: +91 96266 99001</span>
-          <span>|</span>
-          <span>Email: support@nutryah.com</span>
-          <span>|</span>
+          <span className="hidden sm:inline">|</span>
+          <span className="hidden sm:inline">Support: Mobile: +91 96266 99001</span>
+          <span className="hidden sm:inline">|</span>
+          <span className="hidden md:inline">Email: support@nutryah.com</span>
+          <span className="hidden md:inline">|</span>
           <a href="http://www.nutryah.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-300">
             Website: www.nutryah.com
           </a>
-          <span>|</span>
-          <a href="#" className="hover:text-blue-300">Privacy Policy</a>
-          <span>|</span>
-          <a href="#" className="hover:text-blue-300">Terms & Conditions</a>
+          <span className="hidden lg:inline">|</span>
+          <a href="#" className="hidden lg:inline hover:text-blue-300">Privacy Policy</a>
+          <span className="hidden lg:inline">|</span>
+          <a href="#" className="hidden lg:inline hover:text-blue-300">Terms & Conditions</a>
         </div>
       </div>
     </footer>

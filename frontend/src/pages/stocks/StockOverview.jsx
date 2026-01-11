@@ -216,31 +216,31 @@ export default function StockOverview() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Expired Items Modal */}
       {showExpiredModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
             <div className="flex items-center mb-4">
-              <svg className="w-8 h-8 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <h2 className="text-xl font-bold text-red-800">Expired Items Alert!</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-red-800">Expired Items Alert!</h2>
             </div>
-            <p className="text-gray-700 mb-4">
+            <p className="text-gray-700 mb-4 text-sm sm:text-base">
               You have {stockData.filter(item => getExpiredBatches(item.batches).length > 0).length} items with expired batches. 
               Please dispense expired items first before continuing other work.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
               <button
                 onClick={() => setShowExpiredModal(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm"
               >
                 Later
               </button>
               <button
                 onClick={() => setShowExpiredModal(false)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
               >
                 Dispense Now
               </button>
@@ -248,72 +248,73 @@ export default function StockOverview() {
           </div>
         </div>
       )}
-      <h1 className="text-2xl font-bold mb-6">Stock Overview</h1>
+      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Stock Overview</h1>
       
       {/* Dashboard Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Items</p>
-              <p className="text-2xl font-bold text-blue-800">{stockData.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-blue-600 truncate">Total Items</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-800">{stockData.length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-green-600">Good Stock</p>
-              <p className="text-2xl font-bold text-green-800">{stockData.filter(item => item.available_qty > item.min_stock).length}</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-green-600 truncate">Good Stock</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-800">{stockData.filter(item => item.available_qty > item.min_stock).length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-yellow-600">Low Stock Alerts</p>
-              <p className="text-2xl font-bold text-yellow-800">{stockData.filter(item => item.available_qty <= item.min_stock).length}</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-yellow-600 truncate">Low Stock</p>
+              <p className="text-lg sm:text-2xl font-bold text-yellow-800">{stockData.filter(item => item.available_qty <= item.min_stock).length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-red-600">Expiry Alerts</p>
-              <p className="text-2xl font-bold text-red-800">{stockData.filter(item => getExpiredBatches(item.batches).length > 0).length}</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-red-600 truncate">Expired</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-800">{stockData.filter(item => getExpiredBatches(item.batches).length > 0).length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 sm:p-4 col-span-2 sm:col-span-1">
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-purple-600">Add New</p>
-              <p className="text-2xl font-bold text-purple-800">+</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-purple-600 truncate">Add New</p>
+              <p className="text-lg sm:text-2xl font-bold text-purple-800">+</p>
             </div>
           </div>
         </div>
       </div>
       
-      <div className="overflow-x-auto">
+      {/* Desktop Table */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200 rounded-lg">
           <thead className="bg-gray-50">
             <tr>
@@ -463,6 +464,134 @@ export default function StockOverview() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="lg:hidden space-y-4">
+        {stockData.map((item) => {
+          const selectedBatch = getSelectedBatch(item);
+          const displayQty = getDisplayQuantity(item);
+          const expiredBatches = getExpiredBatches(item.batches);
+          const expiredQty = getTotalExpiredQty(item.batches);
+          const hasExpiredBatches = expiredBatches.length > 0;
+          const stockStatus = displayQty <= item.min_stock ? "Low Stock" : "Good";
+          const status = hasExpiredBatches ? "Expired" : stockStatus;
+          const batchStatus = selectedBatch && isExpired(selectedBatch.expiry_date) ? "Expired" : status;
+          
+          return (
+            <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900 truncate">{item.item_name}</h3>
+                  <p className="text-sm text-gray-500">{item.item_code}</p>
+                </div>
+                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                  status === "Expired" || batchStatus === "Expired"
+                    ? "text-red-600 bg-red-100" 
+                    : getStatusColor(displayQty, item.min_stock)
+                }`}>
+                  {status === "Expired" ? "Expired" : batchStatus}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                <div>
+                  <span className="text-gray-500">Location:</span>
+                  <div className="font-medium">{item.location}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500">Available:</span>
+                  <div className="font-medium">{displayQty} / {item.min_stock}</div>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Expired Batches:</span>
+                  {hasExpiredBatches ? (
+                    <div className="text-red-600 text-xs mt-1">
+                      <div className="font-medium">{expiredBatches.length} batch(es) - {expiredQty} units</div>
+                      {expiredBatches.map((batch, idx) => (
+                        <div key={idx}>{batch.batch_no}: {batch.qty} units</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-green-600 text-xs">No expired batches</div>
+                  )}
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Batch:</span>
+                  {item.batches && item.batches.length > 0 ? (
+                    <select 
+                      className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                      value={selectedBatches[item.id] ?? ""}
+                      onChange={(e) => handleBatchChange(item.id, e.target.value)}
+                    >
+                      <option value="">
+                        {item.batches.length > 1 ? `All Batches - ${item.location}` : `${item.batches[0]?.batch_no} - ${item.batches[0]?.location || item.location}`}
+                      </option>
+                      {item.batches.length > 1 && item.batches.map((batch, index) => (
+                        <option key={index} value={index}>
+                          {batch.batch_no} - {batch.location || item.location}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-gray-500 text-xs">—</div>
+                  )}
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Expiry:</span>
+                  <div className="text-xs mt-1">
+                    {selectedBatch && selectedBatch.expiry_date ? (
+                      <>
+                        <div>Expiry: {selectedBatch.expiry_date}</div>
+                        {selectedBatch.mfg_date && (
+                          <div className="text-gray-500">Mfg: {selectedBatch.mfg_date}</div>
+                        )}
+                      </>
+                    ) : item.batches && item.batches.length > 0 && item.batches[0]?.expiry_date ? (
+                      <>
+                        <div>Expiry: {item.batches[0].expiry_date}</div>
+                        {item.batches[0].mfg_date && (
+                          <div className="text-gray-500">Mfg: {item.batches[0].mfg_date}</div>
+                        )}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-gray-100">
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  className="flex-1 border rounded px-3 py-2 text-sm"
+                  value={dispenseQuantities[item.id] || ''}
+                  onChange={(e) => handleDispenseQuantityChange(item.id, e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDispense(item)}
+                    className="flex-1 sm:flex-none bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm"
+                    disabled={(!selectedBatches[item.id] && selectedBatches[item.id] !== 0)}
+                  >
+                    Dispense
+                  </button>
+                  {hasExpiredBatches && (
+                    <button
+                      onClick={() => handleDispenseExpired(item)}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-xs font-medium"
+                      disabled={!dispenseQuantities[item.id]}
+                      title={`Dispense from ${expiredBatches.length} expired batch(es)`}
+                    >
+                      ⚠️ Expired
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

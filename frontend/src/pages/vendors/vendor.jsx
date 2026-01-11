@@ -341,17 +341,17 @@ export default function Vendor() {
   // };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       {/* HEADER */}
       <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 p-6 text-white shadow-md">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 p-4 sm:p-6 text-white shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="text-sm uppercase opacity-80">Vendor Management</div>
-              <h1 className="text-3xl font-semibold mt-2">Vendor Registration</h1>
-              <p className="mt-2 opacity-90">Register and manage your vendors and suppliers.</p>
+              <h1 className="text-2xl sm:text-3xl font-semibold mt-2">Vendor Registration</h1>
+              <p className="mt-2 opacity-90 text-sm sm:text-base">Register and manage your vendors and suppliers.</p>
             </div>
-            <div className="text-right">
+            <div className="text-center sm:text-right">
               <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
                 <span className="text-sm font-medium">Vendors</span>
                 <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">{vendors.length}</div>
@@ -387,8 +387,8 @@ export default function Vendor() {
       <div className="grid grid-cols-12 gap-6">
         {/* VENDORS LIST */}
         <div className="col-span-12">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
               <h3 className="text-lg font-semibold">Registered Vendors</h3>
               <div className="flex gap-2">
                 {hasPermission("vendors.create") && (
@@ -402,7 +402,8 @@ export default function Vendor() {
               </div>
             </div>
             
-            <div className="overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="min-w-full border border-gray-300">
                 <thead>
                   <tr className="bg-gray-50">
@@ -530,6 +531,106 @@ export default function Vendor() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Cards */}
+            <div className="lg:hidden">
+              {loading ? (
+                <div className="text-center py-6">Loading...</div>
+              ) : vendors.length === 0 ? (
+                <div className="text-center py-6 text-slate-500">No vendors found</div>
+              ) : (
+                <div className="space-y-4">
+                  {vendors.map((vendor, idx) => (
+                    <div key={vendor.id} className="bg-gray-50 rounded-lg p-4 border">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-gray-900 truncate">{vendor.vendor_name}</h4>
+                          <p className="text-sm text-gray-500">{vendor.vendor_code}</p>
+                        </div>
+                        <span className={`ml-2 px-2 py-1 text-xs rounded-full flex-shrink-0 ${
+                          (vendor.status === "active" || !vendor.status)
+                            ? "bg-green-100 text-green-800" 
+                            : "bg-red-100 text-red-800"
+                        }`}>
+                          {(vendor.status === "active" || !vendor.status) ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-500">Contact:</span>
+                          <div className="font-medium">{vendor.contact_person}</div>
+                          <div className="text-xs text-gray-500">{vendor.phone} • {vendor.email}</div>
+                        </div>
+                        
+                        <div>
+                          <span className="text-gray-500">Location:</span>
+                          <div className="font-medium">{vendor.city}, {vendor.state}</div>
+                          <div className="text-xs text-gray-500">{vendor.country}</div>
+                        </div>
+                        
+                        <div>
+                          <span className="text-gray-500">Bank Details:</span>
+                          {vendor.account_holder_name ? (
+                            <div className="text-xs space-y-1">
+                              <div className="font-medium">{vendor.account_holder_name}</div>
+                              {vendor.account_number && <div>A/c: {vendor.account_number}</div>}
+                              {vendor.ifsc_code && <div>IFSC: {vendor.ifsc_code}</div>}
+                              {vendor.branch_name && <div className="text-gray-500">{vendor.branch_name}</div>}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-400">Not provided</div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end space-x-2 mt-4 pt-3 border-t border-gray-200">
+                        <button 
+                          onClick={() => {
+                            setSelectedVendor(vendor);
+                            setShowViewModal(true);
+                          }} 
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        {hasPermission("vendors.edit") && (
+                        <button 
+                          onClick={() => handleEdit(vendor)} 
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Edit Vendor"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        )}
+                        {hasPermission("vendors.delete") && (
+                        <button
+                          onClick={() => {
+                            const newStatus = (vendor.status === "active" || !vendor.status) ? "inactive" : "active";
+                            updateVendorStatus(vendor.id, newStatus === "active" ? "Active" : "Inactive");
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            (vendor.status === "active" || !vendor.status)
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title={(vendor.status === "active" || !vendor.status) ? "Click to Deactivate" : "Click to Activate"}
+                        >
+                          {(vendor.status === "active" || !vendor.status) ? 'Deactivate' : 'Activate'}
+                        </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             
             <div className="mt-4 text-sm text-slate-500">Showing {vendors.length} vendor{vendors.length !== 1 ? "s" : ""}.</div>
           </div>
@@ -574,13 +675,13 @@ export default function Vendor() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Phone *</label>
                   <input 
                     value={vendorForm.phone}
                     onChange={(e)=>setVendorForm({...vendorForm,phone:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                     placeholder="Phone number"
                   />
                 </div>
@@ -591,7 +692,7 @@ export default function Vendor() {
                     type="email"
                     value={vendorForm.email}
                     onChange={(e)=>setVendorForm({...vendorForm,email:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                     placeholder="Email address"
                   />
                 </div>
@@ -608,13 +709,13 @@ export default function Vendor() {
                 />
               </div>
               
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
                   <select 
                     value={vendorForm.country}
                     onChange={(e) => handleCountryChange(e.target.value)}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                   >
                     <option value="">Select Country</option>
                     {getCountries().map(country => (
@@ -629,7 +730,7 @@ export default function Vendor() {
                     value={vendorForm.state}
                     onChange={(e) => handleStateChange(e.target.value)}
                     disabled={!vendorForm.country}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 text-sm"
                   >
                     <option value="">Select State</option>
                     {availableStates.map(state => (
@@ -644,7 +745,7 @@ export default function Vendor() {
                     value={vendorForm.city}
                     onChange={(e) => setVendorForm({...vendorForm, city: e.target.value})}
                     disabled={!vendorForm.state}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 text-sm"
                   >
                     <option value="">Select City</option>
                     {availableCities.map(city => (
@@ -654,13 +755,13 @@ export default function Vendor() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">PAN Number</label>
                   <input 
                     value={vendorForm.pan_number}
                     onChange={(e)=>setVendorForm({...vendorForm,pan_number:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                     placeholder="PAN Number"
                   />
                 </div>
@@ -670,7 +771,7 @@ export default function Vendor() {
                   <input 
                     value={vendorForm.gst_number}
                     onChange={(e)=>setVendorForm({...vendorForm,gst_number:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                     placeholder="GST Number"
                   />
                 </div>
@@ -680,13 +781,13 @@ export default function Vendor() {
               <div className="border-t pt-4 mt-4">
                 <h3 className="text-lg font-medium text-slate-700 mb-3">Bank Details</h3>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">IFSC Code</label>
                     <input 
                       value={vendorForm.ifsc_code}
                       onChange={(e)=>setVendorForm({...vendorForm,ifsc_code:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                       placeholder="IFSC Code"
                     />
                   </div>
@@ -696,19 +797,19 @@ export default function Vendor() {
                     <input 
                       value={vendorForm.account_number}
                       onChange={(e)=>setVendorForm({...vendorForm,account_number:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                       placeholder="Account Number"
                     />
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Name</label>
                     <input 
                       value={vendorForm.account_holder_name}
                       onChange={(e)=>setVendorForm({...vendorForm,account_holder_name:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                       placeholder="Account Holder Name"
                     />
                   </div>
@@ -718,7 +819,7 @@ export default function Vendor() {
                     <input 
                       value={vendorForm.branch_name}
                       onChange={(e)=>setVendorForm({...vendorForm,branch_name:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                       placeholder="Branch Name"
                     />
                   </div>
@@ -727,13 +828,13 @@ export default function Vendor() {
             </div>
 
             {/* Modal Action Buttons */}
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button 
                 onClick={async () => {
                   await registerVendor();
                   setShowVendorModal(false);
                 }} 
-                className="flex-1 rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700 transition-colors"
+                className="flex-1 rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700 transition-colors text-sm"
               >
                 Register Vendor
               </button>
@@ -742,7 +843,7 @@ export default function Vendor() {
                   setShowVendorModal(false);
                   resetForm();
                 }} 
-                className="rounded-full border border-gray-300 px-6 py-2 hover:bg-gray-50 transition-colors"
+                className="rounded-full border border-gray-300 px-6 py-2 hover:bg-gray-50 transition-colors text-sm"
               >
                 Cancel
               </button>

@@ -166,11 +166,11 @@ export default function Brand() {
         </div>
       </div>
 
-      <div className="px-6 py-6">
-        <div className="grid grid-cols-12 gap-6">
+      <div className="px-4 sm:px-6 py-4 sm:py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
           
           {/* Left Panel - Create Form */}
-          <div className="col-span-12 lg:col-span-4">
+          <div className="lg:col-span-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-6">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center space-x-3">
@@ -264,7 +264,7 @@ export default function Brand() {
           </div>
 
           {/* Right Panel - Brand List */}
-          <div className="col-span-12 lg:col-span-8">
+          <div className="lg:col-span-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
               
               {/* Table Header */}
@@ -293,8 +293,8 @@ export default function Brand() {
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-hidden">
+              {/* Desktop Table */}
+              <div className="hidden lg:block overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -395,6 +395,100 @@ export default function Brand() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile Cards */}
+              <div className="lg:hidden">
+                {loading ? (
+                  <div className="text-center py-6">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mx-auto"></div>
+                  </div>
+                ) : filteredBrands.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400">No brands found</div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredBrands.map((brand, idx) => (
+                      <div key={brand.id} className="bg-gray-50 rounded-lg p-4 border">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center flex-1 min-w-0">
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                              <span className="text-purple-600 font-semibold text-sm">{brand.brand_name.charAt(0)}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-semibold text-gray-900 truncate">{brand.brand_name}</h4>
+                              <p className="text-xs text-gray-500">ID: {brand.id}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-500">Manufacturer:</span>
+                            <div className="font-medium">{brand.manufacturer_name || "-"}</div>
+                          </div>
+                          
+                          <div>
+                            <span className="text-gray-500">Contact Info:</span>
+                            <div className="space-y-1 mt-1">
+                              {brand.contact_number && (
+                                <div className="flex items-center text-xs text-gray-600">
+                                  <svg className="w-3 h-3 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                  </svg>
+                                  <span className="truncate">{brand.contact_number}</span>
+                                </div>
+                              )}
+                              {brand.email && (
+                                <div className="flex items-center text-xs text-gray-600">
+                                  <svg className="w-3 h-3 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="truncate">{brand.email}</span>
+                                </div>
+                              )}
+                              {brand.website && (
+                                <div className="flex items-center text-xs text-blue-600">
+                                  <svg className="w-3 h-3 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9m0 9c-5 0-9-4-9-9s4-9 9-9" />
+                                  </svg>
+                                  <span className="truncate">{brand.website}</span>
+                                </div>
+                              )}
+                              {!brand.contact_number && !brand.email && !brand.website && (
+                                <div className="text-xs text-gray-400">No contact info</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-end space-x-2 mt-4 pt-3 border-t border-gray-200">
+                          {hasPermission("brand.edit") && (
+                            <button 
+                              onClick={() => startEdit(brand)}
+                              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              title="Edit Brand"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
+                          {hasPermission("brand.delete") && (
+                            <button 
+                              onClick={() => handleDelete(brand.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Brand"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -402,8 +496,8 @@ export default function Brand() {
 
       {/* Edit Modal */}
       {editingId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center space-x-3 mb-6">
               <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                 <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -413,7 +507,7 @@ export default function Brand() {
               <h2 className="text-lg font-semibold text-gray-900">Edit Brand</h2>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Brand Name <span className="text-red-500">*</span>
@@ -452,7 +546,7 @@ export default function Brand() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
                 <input
                   type="url"

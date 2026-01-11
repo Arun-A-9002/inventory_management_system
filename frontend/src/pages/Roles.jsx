@@ -200,17 +200,17 @@ export default function Roles() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-600 to-sky-500 p-6 text-white shadow-md">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl bg-gradient-to-r from-emerald-600 to-sky-500 p-4 sm:p-6 text-white shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="text-sm uppercase opacity-80">User Management</div>
-              <h1 className="text-3xl font-semibold mt-2">Roles</h1>
-              <p className="mt-2 opacity-90">Group permissions into named roles and assign them to users.</p>
+              <h1 className="text-2xl sm:text-3xl font-semibold mt-2">Roles</h1>
+              <p className="mt-2 opacity-90 text-sm sm:text-base">Group permissions into named roles and assign them to users.</p>
             </div>
-            <div className="text-right">
-              <div className="flex items-center gap-4">
+            <div className="text-center sm:text-right">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
                 <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
                   <span className="text-sm font-medium">Roles</span>
                   <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">{roles.length}</div>
@@ -221,7 +221,8 @@ export default function Roles() {
                     className="bg-white text-emerald-600 px-4 py-2 rounded-full font-medium hover:bg-white/90 transition-colors flex items-center gap-2"
                   >
                     <span className="text-lg">+</span>
-                    Create Role
+                    <span className="hidden sm:inline">Create Role</span>
+                    <span className="sm:hidden">Create</span>
                   </button>
                 )}
               </div>
@@ -231,21 +232,22 @@ export default function Roles() {
       </div>
 
       {/* Role List */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border">
-        <div className="flex items-start justify-between">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold">Role list</h3>
             <p className="text-sm text-slate-500">Overview of roles and attached permissions.</p>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center border rounded-full px-3 py-1">
-              <input placeholder="Search by role name / description" value={query} onChange={(e)=>setQuery(e.target.value)} className="bg-transparent outline-none px-2 text-sm" />
+            <div className="flex items-center border rounded-full px-3 py-1 w-full sm:w-auto">
+              <input placeholder="Search by role name / description" value={query} onChange={(e)=>setQuery(e.target.value)} className="bg-transparent outline-none px-2 text-sm w-full" />
             </div>
           </div>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="mt-6 hidden lg:block overflow-x-auto">
           <table className="min-w-full table-auto">
             <thead>
               <tr className="text-sm text-slate-500 border-b">
@@ -280,6 +282,48 @@ export default function Roles() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="lg:hidden mt-6 space-y-4">
+          {loading ? (
+            <div className="text-center py-6">Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-6 text-slate-500">No roles found</div>
+          ) : (
+            filtered.map((r, idx) => (
+              <div key={r.id} className="bg-gray-50 rounded-lg p-4 border">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-slate-900 truncate">{r.name}</h4>
+                    <p className="text-sm text-slate-500 mt-1">{r.description || "No description"}</p>
+                  </div>
+                  <span className="inline-block bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-medium ml-2 flex-shrink-0">
+                    {r.permissions?.length || 0} perms
+                  </span>
+                </div>
+                
+                <div className="flex gap-2 pt-3 border-t border-gray-200">
+                  {hasPermission("roles.update") && (
+                    <button 
+                      onClick={()=>startEdit(r)} 
+                      className="flex-1 rounded-full px-3 py-2 bg-slate-900 text-white text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {hasPermission("roles.delete") && (
+                    <button 
+                      onClick={()=>handleDelete(r.id)} 
+                      className="flex-1 rounded-full px-3 py-2 bg-red-500 text-white text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="mt-4 text-sm text-slate-500">Showing {filtered.length} role{filtered.length!==1 ? "s": ""}.</div>
@@ -458,7 +502,7 @@ export default function Roles() {
             </div>
 
             {/* Action Buttons */}
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
               <button 
                 onClick={closeModal} 
                 className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"

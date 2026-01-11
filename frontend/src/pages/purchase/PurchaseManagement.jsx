@@ -886,17 +886,17 @@ export default function PurchaseManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       {/* HEADER */}
       <div className="mb-6">
-        <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-500 p-6 text-white shadow-md">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-500 p-4 sm:p-6 text-white shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="text-sm uppercase opacity-80">Purchase Management</div>
-              <h1 className="text-3xl font-semibold mt-2">Purchase Operations</h1>
-              <p className="mt-2 opacity-90">Manage purchase requests, orders, quotations and tracking.</p>
+              <h1 className="text-2xl sm:text-3xl font-semibold mt-2">Purchase Operations</h1>
+              <p className="mt-2 opacity-90 text-sm sm:text-base">Manage purchase requests, orders, quotations and tracking.</p>
             </div>
-            <div className="text-right">
+            <div className="text-center sm:text-right">
               <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
                 <span className="text-sm font-medium">Active Module</span>
                 <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">Purchase</div>
@@ -930,9 +930,9 @@ export default function PurchaseManagement() {
 
       {/* TAB CONTENT */}
       {activeTab === "PR" && (
-        <div className="grid grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           {/* LEFT SIDE - FORM */}
-          <div className="col-span-2 bg-white rounded-2xl p-6 shadow-sm border">
+          <div className="xl:col-span-2 bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
             {hasPermission("purchase_request.create") || hasPermission("purchase_request.edit") ? (
               <>
                 <h2 className="text-xl font-semibold mb-4">Create Purchase Request</h2>
@@ -1134,7 +1134,7 @@ export default function PurchaseManagement() {
       </div>
 
           {/* RIGHT SIDE - PR LIST */}
-          <div className="col-span-3 bg-white rounded-2xl p-6 shadow-sm border">
+          <div className="xl:col-span-3 bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
             {hasPermission("purchase_request.view") ? (
               <>
                 <div className="flex items-center justify-between mb-4">

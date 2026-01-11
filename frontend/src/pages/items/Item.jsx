@@ -515,29 +515,30 @@ const downloadQR = () => {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
       {/* Items List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Items List</h2>
               <p className="text-sm text-gray-500 mt-1">All inventory items with their specifications and stock details.</p>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
               {hasPermission("masterdata.setup") && (
               <button
                 onClick={() => window.location.href = '/app/organization/master-data'}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
               >
                 <span>⚙️</span>
-                <span>Master Data Setup</span>
+                <span className="hidden sm:inline">Master Data Setup</span>
+                <span className="sm:hidden">Setup</span>
               </button>
               )}
               <button
                 onClick={() => setShowCreateModal(true)}
                 disabled={!hasPermission("items.create")}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
               >
                 <span>+</span>
                 <span>Create Item</span>
@@ -548,7 +549,7 @@ const downloadQR = () => {
                   placeholder="Search items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="pl-10 pr-4 py-2 w-full sm:w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
               </div>
@@ -556,7 +557,8 @@ const downloadQR = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -649,16 +651,103 @@ const downloadQR = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Cards */}
+        <div className="lg:hidden">
+          {loading ? (
+            <div className="p-6 text-center text-gray-500">Loading...</div>
+          ) : filteredItems.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">No items found</div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredItems.map((item, idx) => (
+                <div key={item.id} className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
+                      <p className="text-sm text-gray-500 font-mono">{item.item_code}</p>
+                      {item.description && (
+                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">{item.description}</p>
+                      )}
+                    </div>
+                    <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                      item.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                    }`}>
+                      {item.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Category:</span>
+                      <div className="font-medium">{getCategoryName(item.category_id)}</div>
+                      {getSubCategoryName(item.sub_category_id) && (
+                        <div className="text-xs text-gray-500">{getSubCategoryName(item.sub_category_id)}</div>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Brand:</span>
+                      <div className="font-medium">{item.brand || "-"}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Stock Levels:</span>
+                      <div className="text-xs space-y-1">
+                        <div>Min: {item.min_stock}</div>
+                        <div>Max: {item.max_stock}</div>
+                        <div className="text-orange-600">Safety: {item.safety_stock || 0}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Pricing:</span>
+                      <div className="text-xs space-y-1">
+                        <div className="text-green-600 font-medium">₹{item.fixing_price || 0}</div>
+                        <div className="text-blue-600">MRP: ₹{item.mrp || 0}</div>
+                        <div className="text-orange-600">Tax: {item.tax || 0}%</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                    {hasPermission("items.edit") && (
+                    <button
+                      onClick={() => handleEdit(item)}
+                      className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                      title="Edit Item"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    )}
+                    {hasPermission("items.delete") && (
+                    <button
+                      onClick={() => handleDeactivate(item.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        item.is_active 
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                      title={item.is_active ? "Click to Deactivate" : "Click to Activate"}
+                    >
+                      {item.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto m-4">
-            <div className="p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">{editingId ? "Edit Item" : "Create New Item"}</h2>
+                <h2 className="text-lg sm:text-xl font-semibold">{editingId ? "Edit Item" : "Create New Item"}</h2>
                 <button 
                   onClick={resetForm}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 p-1"
                 >
                   ✕
                 </button>
@@ -666,7 +755,7 @@ const downloadQR = () => {
               
               {/* Basic Information */}
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Item Name *</label>
                     <input 
@@ -674,7 +763,7 @@ const downloadQR = () => {
                       placeholder="Enter item name" 
                       value={form.name} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -685,7 +774,7 @@ const downloadQR = () => {
                       placeholder="Enter unique item code" 
                       value={form.item_code} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                 </div>
@@ -698,22 +787,22 @@ const downloadQR = () => {
                     value={form.description} 
                     onChange={handleChange}
                     rows={3}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                   />
                 </div>
               </div>
 
               {/* Classification */}
               <div className="mt-6">
-                <h3 className="text-lg font-medium mb-3">Classification</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <h3 className="text-base sm:text-lg font-medium mb-3">Classification</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                     <select 
                       name="category" 
                       value={form.category} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Category</option>
                       {categories.map(cat => (
@@ -731,7 +820,7 @@ const downloadQR = () => {
                       name="sub_category" 
                       value={form.sub_category} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       disabled={!form.category}
                     >
                       <option value="">Select Sub Category</option>
@@ -750,7 +839,7 @@ const downloadQR = () => {
                       name="brand" 
                       value={form.brand} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Brand</option>
                       {brands.map(brand => (
@@ -766,7 +855,7 @@ const downloadQR = () => {
                       placeholder="Manufacturer name" 
                       value={form.manufacturer} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                 </div>
@@ -774,15 +863,15 @@ const downloadQR = () => {
 
               {/* Inventory Settings */}
               <div className="mt-6">
-                <h3 className="text-lg font-medium mb-3">Inventory Settings</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <h3 className="text-base sm:text-lg font-medium mb-3">Inventory Settings</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Item Type *</label>
                     <select 
                       name="item_type" 
                       value={form.item_type} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Item Type</option>
                       <option value="consumable">Consumable</option>
@@ -798,7 +887,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.min_stock} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -810,7 +899,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.max_stock} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -822,7 +911,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.safety_stock} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -835,7 +924,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.fixing_price} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -848,7 +937,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.mrp} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                   
@@ -861,7 +950,7 @@ const downloadQR = () => {
                       placeholder="0" 
                       value={form.tax} 
                       onChange={handleChange}
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     />
                   </div>
                 </div>
@@ -869,8 +958,8 @@ const downloadQR = () => {
 
               {/* Additional Settings */}
               <div className="mt-6">
-                <h3 className="text-lg font-medium mb-3">Additional Settings</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <h3 className="text-base sm:text-lg font-medium mb-3">Additional Settings</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <label className="flex items-center gap-2">
                     <input 
                       type="checkbox" 
@@ -895,7 +984,7 @@ const downloadQR = () => {
                 </div>
                 
                 {form.has_expiry && (
-                  <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Manufacture Date</label>
                       <input 
@@ -903,7 +992,7 @@ const downloadQR = () => {
                         name="manufacture_date" 
                         value={form.manufacture_date} 
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       />
                     </div>
                     <div>
@@ -913,14 +1002,14 @@ const downloadQR = () => {
                         name="expiry_date" 
                         value={form.expiry_date} 
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       />
                     </div>
                   </div>
                 )}
                 
                 {form.has_warranty && (
-                  <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Period</label>
                       <input 
@@ -930,7 +1019,7 @@ const downloadQR = () => {
                         min="0"
                         value={form.warranty_period} 
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       />
                     </div>
                     <div>
@@ -939,7 +1028,7 @@ const downloadQR = () => {
                         name="warranty_period_type" 
                         value={form.warranty_period_type} 
                         onChange={handleChange}
-                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       >
                         <option value="years">Years</option>
                         <option value="months">Months</option>
@@ -951,25 +1040,25 @@ const downloadQR = () => {
 
               {/* Identification */}
               <div className="mt-6">
-                <h3 className="text-lg font-medium mb-3">Identification</h3>
+                <h3 className="text-base sm:text-lg font-medium mb-3">Identification</h3>
 
-                <div className="flex gap-3 mb-4">
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <button
                     onClick={generateBarcode}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
                   >
                     Create Barcode
                   </button>
 
                   <button
                     onClick={generateQR}
-                    className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+                    className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 text-sm"
                   >
                     Create QR Code
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {generatedBarcode && (
                     <div className="border rounded-xl p-4 text-center bg-slate-50">
                       <div id="barcodeCanvas" style={{minHeight: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
@@ -1017,16 +1106,16 @@ const downloadQR = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-6 flex gap-3 justify-end">
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
                 <button 
                   onClick={resetForm} 
-                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleSubmit} 
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
                 >
                   {editingId ? "Update Item" : "Create Item"}
                 </button>

@@ -10,6 +10,7 @@ export default function MainLayout() {
   const [companyDetails, setCompanyDetails] = useState(null);
   const [isDispensedSidebarOpen, setIsDispensedSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const location = useLocation();
 
   const fetchPendingCount = async () => {
@@ -60,15 +61,33 @@ export default function MainLayout() {
 
   return (
     <div className="flex h-screen bg-gray-100 invisible-scrollbar">
-      <Sidebar companyDetails={companyDetails} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
+      {/* Mobile Sidebar Overlay */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+      
+      {/* Sidebar - Hidden on mobile, shown as overlay when open */}
+      <div className={`${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative z-50 lg:z-auto transition-transform duration-300 ease-in-out lg:transition-none`}>
+        <Sidebar 
+          companyDetails={companyDetails} 
+          isCollapsed={isSidebarCollapsed} 
+          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
+        />
+      </div>
+      
       <div className="flex flex-col flex-1 min-h-screen overflow-y-auto">
         <HeaderFooter 
           type="header" 
           onRefresh={handleRefresh}
           pendingCount={pendingCount}
           onToggleDispensedSidebar={() => setIsDispensedSidebarOpen(true)}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <Outlet />
         </main>
         <HeaderFooter type="footer" />

@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import api from "../../api";
 import { canViewSidebarItem } from "../../utils/sidebarPermissions";
 
-export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
+export default function Sidebar({ companyDetails, isCollapsed, onToggle, onMobileClose }) {
   const location = useLocation();
   const [openMenus, setOpenMenus] = useState({});
   const [companyName, setCompanyName] = useState('NUTRYAH');
@@ -73,6 +73,7 @@ export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
                 <Link
                   key={subItem.path}
                   to={subItem.path}
+                  onClick={onMobileClose}
                   className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-300 group ${
                     location.pathname === subItem.path
                       ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105"
@@ -95,6 +96,7 @@ export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
           <Link
             key={item.name}
             to={item.path || '#'}
+            onClick={onMobileClose}
             className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
               isActive
                 ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105"
@@ -268,6 +270,16 @@ export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
   return (
     <>
       <div className={`${isCollapsed ? 'w-16' : 'w-72'} bg-white/95 backdrop-blur-xl border-r border-gray-200/30 min-h-screen overflow-hidden shadow-2xl transition-all duration-300 ease-in-out relative`}>
+        {/* Mobile Close Button */}
+        <button 
+          onClick={onMobileClose}
+          className="lg:hidden absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center z-10"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        
         {/* Company Header with Toggle Button */}
         <div className={`${isCollapsed ? 'p-4' : 'p-6'} border-b border-gray-200/50 transition-all duration-300`}>
           <div className="flex items-center justify-between">
@@ -282,10 +294,10 @@ export default function Sidebar({ companyDetails, isCollapsed, onToggle }) {
               )}
             </div>
             
-            {/* Toggle Button */}
+            {/* Toggle Button - Hidden on mobile */}
             <button 
               onClick={onToggle}
-              className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:scale-110"
+              className="hidden lg:flex w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 items-center justify-center group hover:scale-110"
               title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             >
               <svg className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
