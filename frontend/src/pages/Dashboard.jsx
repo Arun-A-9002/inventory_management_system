@@ -204,29 +204,29 @@ export default function Dashboard() {
             </div>
             {/* Alerts Section */}
             {(stats.lowStockItems > 0 || stats.expiredItems > 0) && (
-              <div className="space-y-3">
+              <div className="flex gap-3">
                 {stats.lowStockItems > 0 && (
-                  <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-2xl p-4 shadow-lg">
+                  <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-lg p-2 shadow-sm">
                     <div className="flex items-center">
-                      <svg className="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-yellow-600 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
                       <div>
-                        <p className="font-semibold">Low Stock Alert</p>
-                        <p className="text-sm opacity-75">{stats.lowStockItems} items require attention</p>
+                        <p className="font-semibold text-xs">Low Stock Alert</p>
+                        <p className="text-xs opacity-75">{stats.lowStockItems} items require attention</p>
                       </div>
                     </div>
                   </div>
                 )}
                 {stats.expiredItems > 0 && (
-                  <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/50 text-red-800 rounded-2xl p-4 shadow-lg">
+                  <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/50 text-red-800 rounded-lg p-2 shadow-sm">
                     <div className="flex items-center">
-                      <svg className="w-5 h-5 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 text-red-600 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div>
-                        <p className="font-semibold">Expired Stock Alert</p>
-                        <p className="text-sm opacity-75">{stats.expiredItems} items have expired batches</p>
+                        <p className="font-semibold text-xs">Expired Stock Alert</p>
+                        <p className="text-xs opacity-75">{stats.expiredItems} items have expired batches</p>
                       </div>
                     </div>
                   </div>
@@ -335,13 +335,6 @@ export default function Dashboard() {
               link="/app/stocks"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
               color="from-purple-500 to-purple-600"
-            />
-            <QuickActionCard
-              title="Generate Invoice"
-              description="Create customer invoice"
-              link="/app/billing"
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-              color="from-red-500 to-red-600"
             />
             <QuickActionCard
               title="Vendor Payments"

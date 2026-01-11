@@ -61,14 +61,14 @@ export default function MainLayout() {
   return (
     <div className="flex h-screen bg-gray-100 invisible-scrollbar">
       <Sidebar companyDetails={companyDetails} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
-      <div className="flex flex-col flex-1 h-full">
+      <div className="flex flex-col flex-1 min-h-screen overflow-y-auto">
         <HeaderFooter 
           type="header" 
           onRefresh={handleRefresh}
           pendingCount={pendingCount}
           onToggleDispensedSidebar={() => setIsDispensedSidebarOpen(true)}
         />
-        <main className="flex-1 p-6 overflow-y-scroll-invisible">
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
         <HeaderFooter type="footer" />

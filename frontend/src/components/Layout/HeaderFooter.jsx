@@ -246,8 +246,24 @@ export default function HeaderFooter({ type, onRefresh, pendingCount = 0, onTogg
   }
 
   return (
-    <footer className="bg-white shadow px-6 py-3 text-center text-gray-500">
-      © 2026 {companyName} — Inventory Management System
+    <footer className="bg-gray-800 text-white py-2">
+      <div className="container mx-auto px-4 text-center">
+        <div className="flex flex-wrap justify-center items-center gap-4 text-xs">
+          <span className="font-semibold">Powered by NUTRYAH DIGITAL HEALTH</span>
+          <span>|</span>
+          <span>Support: Mobile: +91 96266 99001</span>
+          <span>|</span>
+          <span>Email: support@nutryah.com</span>
+          <span>|</span>
+          <a href="http://www.nutryah.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-300">
+            Website: www.nutryah.com
+          </a>
+          <span>|</span>
+          <a href="#" className="hover:text-blue-300">Privacy Policy</a>
+          <span>|</span>
+          <a href="#" className="hover:text-blue-300">Terms & Conditions</a>
+        </div>
+      </div>
     </footer>
   );
 }
