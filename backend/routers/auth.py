@@ -47,51 +47,61 @@ def login(req: LoginModel, request: Request, db: Session = Depends(get_master_db
     log_api(f"LOGIN ATTEMPT → {req.login_identifier} with tenant code {req.tenant_code}")
     
     try:
-        # First find the tenant by tenant_code (case insensitive)
+        # First find the tenant by tenant_code
         tenant = db.query(Tenant).filter(Tenant.tenant_code.ilike(req.tenant_code)).first()
         
         if not tenant:
             log_error(Exception("Invalid tenant code"), location="Login Check")
             raise HTTPException(400, "Invalid tenant code")
         
-        # Check tenant users in the specific tenant database using login_identifier (email or login_code)
+        # Check if this is an admin login (email matches admin_email)
+        if '@' in req.login_identifier and tenant.admin_email == req.login_identifier:
+            # Admin login
+            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
+            if hashed_pw == tenant.password_hash:
+                # Admin always requires OTP
+                otp = generate_otp(req.login_identifier)
+                send_otp_email(req.login_identifier, otp)
+                log_audit(f"OTP SENT TO ADMIN {req.login_identifier} for tenant {req.tenant_code}")
+                return {"message": "OTP sent to email", "requires_otp": True, "email": req.login_identifier}
+            else:
+                log_error(Exception("Invalid admin password"), location="Admin Login Check")
+                raise HTTPException(400, "Invalid credentials")
+        
+        # Regular user login - check tenant database
         from database import get_tenant_db
         from models.tenant_models import User, UserSession
         from utils.auth import verify_password
-        import hashlib
         import secrets
         
         try:
             tenant_db_gen = get_tenant_db(tenant.database_name)
             tenant_db = next(tenant_db_gen)
             
-            # Try to find user by login_code first, then by email
-            tenant_user = None
-            
-            # Check if it's an email format
+            # Check if it's an email format or login code
             if '@' in req.login_identifier:
+                # Search by email
                 tenant_user = tenant_db.query(User).filter(User.email == req.login_identifier).first()
                 log_api(f"Searching by email: {req.login_identifier} - Found: {tenant_user is not None}")
             else:
-                # Assume it's a login code
+                # Search by login code
                 tenant_user = tenant_db.query(User).filter(User.login_code == req.login_identifier.upper()).first()
                 log_api(f"Searching by login_code: {req.login_identifier.upper()} - Found: {tenant_user is not None}")
-                
-                # Debug: Let's see what login codes exist in the database
-                all_users = tenant_db.query(User).all()
-                existing_codes = [u.login_code for u in all_users]
-                log_api(f"Existing login codes in DB: {existing_codes}")
             
             if tenant_user and verify_password(req.password, tenant_user.hashed_password):
                 if not tenant_user.is_active:
                     tenant_db.close()
                     raise HTTPException(400, "Account is inactive")
                 
+                # Store user email before potential session issues
+                user_email = tenant_user.email
+                user_two_factor = tenant_user.two_factor_enabled
+                
                 # Check if two-factor authentication is enabled
-                if tenant_user.two_factor_enabled:
+                if user_two_factor:
                     # Send OTP for 2FA users
-                    otp = generate_otp(tenant_user.email)
-                    send_otp_email(tenant_user.email, otp)
+                    otp = generate_otp(user_email)
+                    send_otp_email(user_email, otp)
                     
                     # Database audit log for OTP sent
                     log_database_audit(
@@ -102,14 +112,14 @@ def login(req: LoginModel, request: Request, db: Session = Depends(get_master_db
                         action="OTP_SENT",
                         table_name="users",
                         record_id=tenant_user.id,
-                        new_values={"email": tenant_user.email, "two_factor_enabled": True},
+                        new_values={"email": user_email, "two_factor_enabled": True},
                         module="AUTHENTICATION",
-                        description=f"OTP sent to 2FA user {tenant_user.email}"
+                        description=f"OTP sent to 2FA user {user_email}"
                     )
                     
                     tenant_db.close()
-                    log_audit(f"OTP SENT TO 2FA USER {tenant_user.email} (identifier: {req.login_identifier}) in tenant {req.tenant_code}")
-                    return {"message": "OTP sent to email", "requires_otp": True, "email": tenant_user.email}
+                    log_audit(f"OTP SENT TO 2FA USER {user_email} (identifier: {req.login_identifier}) in tenant {req.tenant_code}")
+                    return {"message": "OTP sent to email", "requires_otp": True, "email": user_email}
                 else:
                     # Direct login without OTP
                     # Clear any existing sessions if multi-login is disabled
@@ -234,26 +244,25 @@ def admin_login(req: LoginEmailModel, db: Session = Depends(get_master_db)):
     log_api(f"ADMIN LOGIN ATTEMPT → {req.email} with tenant code {req.tenant_code}")
     
     try:
-        # First find the tenant by tenant_code
-        tenant = db.query(Tenant).filter(Tenant.tenant_code == req.tenant_code).first()
+        # First find the tenant by tenant_code AND admin_email (both must match)
+        tenant = db.query(Tenant).filter(
+            Tenant.tenant_code.ilike(req.tenant_code),
+            Tenant.admin_email == req.email
+        ).first()
         
         if not tenant:
-            log_error(Exception("Invalid tenant code"), location="Admin Login Check")
-            raise HTTPException(400, "Invalid tenant code")
+            log_error(Exception(f"Invalid tenant code or admin email: {req.tenant_code}, {req.email}"), location="Admin Login Check")
+            raise HTTPException(400, "Invalid tenant code or email")
         
-        # Check if this is an admin login (admin_email matches)
-        if tenant.admin_email == req.email:
-            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
-            if hashed_pw == tenant.password_hash:
-                otp = generate_otp(req.email)
-                send_otp_email(req.email, otp)
-                log_audit(f"OTP SENT TO ADMIN {req.email} for tenant {req.tenant_code}")
-                return {"message": "OTP sent to email", "requires_otp": True}
-            else:
-                log_error(Exception("Invalid admin password"), location="Admin Login Check")
-                raise HTTPException(400, "Invalid email or password")
+        # Verify password
+        hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
+        if hashed_pw == tenant.password_hash:
+            otp = generate_otp(req.email)
+            send_otp_email(req.email, otp)
+            log_audit(f"OTP SENT TO ADMIN {req.email} for tenant {req.tenant_code}")
+            return {"message": "OTP sent to email", "requires_otp": True}
         else:
-            log_error(Exception("Invalid admin email"), location="Admin Login Check")
+            log_error(Exception("Invalid admin password"), location="Admin Login Check")
             raise HTTPException(400, "Invalid email or password")
         
     except HTTPException:
@@ -283,15 +292,14 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             log_error(Exception("Invalid OTP"), location="OTP Verify")
             raise HTTPException(400, "Invalid or expired OTP")
 
-        # Find the tenant by tenant_code
-        tenant = db.query(Tenant).filter(Tenant.tenant_code == req.tenant_code).first()
+        # Find the tenant by tenant_code AND admin_email (both must match for admin login)
+        tenant = db.query(Tenant).filter(
+            Tenant.tenant_code.ilike(req.tenant_code),
+            Tenant.admin_email == req.email
+        ).first()
         
-        if not tenant:
-            log_error(Exception("Invalid tenant code"), location="OTP Verify")
-            raise HTTPException(400, "Invalid tenant code")
-
-        # Check if this is an admin login
-        if tenant.admin_email == req.email:
+        # If this is an admin login (both tenant_code and email match)
+        if tenant:
             access_token = create_access_token({
                 "sub": str(tenant.id),
                 "tenant_id": tenant.id,
@@ -321,6 +329,13 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
 
             log_audit(f"ADMIN LOGIN SUCCESS → {req.email} for tenant {req.tenant_code}")
             return {"access_token": access_token, "token_type": "bearer"}
+        
+        # If not admin login, find tenant by tenant_code only for regular user login
+        tenant = db.query(Tenant).filter(Tenant.tenant_code.ilike(req.tenant_code)).first()
+        
+        if not tenant:
+            log_error(Exception("Invalid tenant code"), location="OTP Verify")
+            raise HTTPException(400, "Invalid tenant code")
         
         # Check tenant users in the specific tenant database
         from database import get_tenant_db

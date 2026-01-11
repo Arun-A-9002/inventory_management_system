@@ -57,6 +57,7 @@ export default function Login() {
     setLoading(true);
 
     try {
+      // Always use the regular login endpoint - it will handle both admin and user login
       const res = await fetch("http://localhost:8000/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,8 +78,8 @@ export default function Login() {
       if (data.requires_otp) {
         setOtpSent(true);
         setTimer(300); // reset timer
-        // Store user email for OTP verification (will be provided by backend)
-        setUserEmail(data.email || "");
+        // Store user email for OTP verification
+        setUserEmail(data.email || loginIdentifier);
       } else {
         // Direct login success
         localStorage.setItem("access_token", data.access_token);

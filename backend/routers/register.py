@@ -198,7 +198,7 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
         # -----------------------------------------------------
         # STEP 4 → Create admin user in tenant DB
         # -----------------------------------------------------
-        from models.tenant_models import User, Department
+        from models.tenant_models import User, Department, Role, Permission
         from sqlalchemy.orm import sessionmaker
         from utils.login_code_generator import generate_unique_login_code
         
@@ -219,6 +219,24 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
                 tenant_db.refresh(default_dept)
                 log_audit(f"Default department created in tenant DB: {db_name}")
             
+            # Create Admin role if not exists
+            admin_role = tenant_db.query(Role).filter(Role.name == "Admin").first()
+            if not admin_role:
+                admin_role = Role(
+                    name="Admin",
+                    description="Administrator with full access",
+                    is_active=True
+                )
+                tenant_db.add(admin_role)
+                tenant_db.commit()
+                tenant_db.refresh(admin_role)
+                
+                # Assign all permissions to Admin role
+                all_permissions = tenant_db.query(Permission).all()
+                admin_role.permissions = all_permissions
+                tenant_db.commit()
+                log_audit(f"Admin role created with {len(all_permissions)} permissions in tenant DB: {db_name}")
+            
             # Generate unique login code for admin user
             admin_login_code = generate_unique_login_code(tenant_db)
             
@@ -236,6 +254,12 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
             tenant_db.add(admin_user)
             tenant_db.commit()
             tenant_db.refresh(admin_user)
+            
+            # Assign admin role to the user
+            admin_user.roles.append(admin_role)
+            tenant_db.commit()
+            log_audit(f"Admin role assigned to user: {admin_user.id}")
+            
             log_audit(f"Admin user created in tenant DB: {db_name} with ID: {admin_user.id} and login code: {admin_login_code}")
             
         except Exception as e:
