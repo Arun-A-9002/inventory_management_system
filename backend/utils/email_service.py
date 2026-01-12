@@ -162,3 +162,61 @@ def send_deadline_alert(staff_email: str, staff_name: str, transfer_no: str,
     except Exception as e:
         print(f"Failed to send email to {staff_email}: {e}")
         return False
+
+def send_registration_email(admin_email: str, organization_name: str, admin_name: str):
+    """Send registration confirmation email"""
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        print("Email credentials not configured")
+        return False
+    
+    try:
+        subject = f"Welcome to NUTRYAH IMS - {organization_name} Registration Confirmed"
+        
+        body = f"""
+        <html>
+        <body>
+            <h2>Welcome to NUTRYAH Inventory Management System!</h2>
+            
+            <p>Dear {admin_name},</p>
+            
+            <p>Congratulations! Your organization <strong>{organization_name}</strong> has been successfully registered with NUTRYAH IMS.</p>
+            
+            <h3>What's Next?</h3>
+            <ul>
+                <li>You can now log in to your dashboard</li>
+                <li>Set up your inventory structure</li>
+                <li>Add users and assign roles</li>
+                <li>Start managing your inventory efficiently</li>
+            </ul>
+            
+            <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+            
+            <p>Best regards,<br>
+            NUTRYAH IMS Team</p>
+            
+            <hr>
+            <small>This is an automated message. Please do not reply to this email.</small>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart()
+        msg['From'] = FROM_EMAIL
+        msg['To'] = admin_email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(FROM_EMAIL, admin_email, text)
+        server.quit()
+        
+        print(f"Registration email sent to {admin_email}")
+        return True
+        
+    except Exception as e:
+        print(f"Failed to send registration email to {admin_email}: {e}")
+        return False

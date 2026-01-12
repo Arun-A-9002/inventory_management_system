@@ -10,6 +10,7 @@ from typing import List
 import json
 
 router = APIRouter(prefix="/stocks", tags=["Stock Management"])
+stock_overview_router = APIRouter(prefix="/stock-overview", tags=["Stock Overview"])
 
 
 def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
@@ -33,12 +34,18 @@ def list_stock(db: Session = Depends(get_db), current_user: dict = Depends(requi
         # Get all batches for this item
         all_batches = []
         total_qty = 0
+        locations = set()
         
         for grn_item in approved_grn_items:
+            # Get GRN for location
+            grn = db.query(GRN).filter(GRN.id == grn_item.grn_id).first()
+            if grn and grn.store:
+                locations.add(grn.store)
+            
             batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
             for batch in batches:
                 batch_info = {
-                    "batch_no": batch.batch_no,
+                    "batch_no": batch.batch_no or "N/A",
                     "qty": batch.qty,
                     "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
                     "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None
@@ -46,13 +53,11 @@ def list_stock(db: Session = Depends(get_db), current_user: dict = Depends(requi
                 all_batches.append(batch_info)
                 total_qty += batch.qty
         
-        # Get location from the latest approved GRN
-        latest_grn = db.query(GRN).join(GRNItem).filter(
-            GRNItem.item_name == item.name,
-            GRN.status == GRNStatus.approved
-        ).order_by(GRN.grn_date.desc()).first()
-        
-        location = latest_grn.store if latest_grn else "Main Store"
+        # Determine primary location
+        if locations:
+            location = ", ".join(sorted(locations))
+        else:
+            location = "Main Store"
         
         stock_data = {
             "id": item.id,
@@ -66,6 +71,12 @@ def list_stock(db: Session = Depends(get_db), current_user: dict = Depends(requi
         result.append(stock_data)
     
     return result
+
+# Add stock overview endpoint for frontend compatibility
+@router.get("/overview")
+def get_stock_overview(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
+    """Get stock overview - same as list_stock but with different endpoint"""
+    return list_stock(db, current_user)
 
 # ---------------- MIGRATION ----------------
 @router.post("/migrate")
@@ -827,7 +838,128 @@ def get_stock_audit_logs(item_name: str, db: Session = Depends(get_db), current_
     return result
 
 # Update dispense endpoint with audit logging
-@router.post("/dispense-with-audit")
+@router.get("/real-time-overview")
+def get_real_time_stock_overview(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
+    """Get real-time stock overview with calculations"""
+    try:
+        # Get all active items from item master
+        items = db.query(Item).filter(Item.is_active == True).all()
+        
+        result = []
+        total_items = len(items)
+        total_quantity = 0
+        low_stock_count = 0
+        location_summary = {}
+        
+        for item in items:
+            # Get all batches for this item from approved GRNs
+            from models.tenant_models import GRN, GRNStatus
+            approved_grn_items = db.query(GRNItem).join(GRN).filter(
+                GRNItem.item_name == item.name,
+                GRN.status == GRNStatus.approved
+            ).all()
+            
+            # Calculate total quantity
+            item_total_qty = 0
+            for grn_item in approved_grn_items:
+                batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
+                for batch in batches:
+                    item_total_qty += batch.qty
+            
+            total_quantity += item_total_qty
+            
+            # Check for low stock
+            if item.min_stock and item_total_qty <= item.min_stock:
+                low_stock_count += 1
+            
+            # Get location from the latest approved GRN
+            latest_grn = db.query(GRN).join(GRNItem).filter(
+                GRNItem.item_name == item.name,
+                GRN.status == GRNStatus.approved
+            ).order_by(GRN.grn_date.desc()).first()
+            
+            location = latest_grn.store if latest_grn else "Main Store"
+            
+            # Update location summary
+            if location not in location_summary:
+                location_summary[location] = {"count": 0, "quantity": 0}
+            location_summary[location]["count"] += 1
+            location_summary[location]["quantity"] += item_total_qty
+            
+            result.append({
+                "item_name": item.name,
+                "available_qty": item_total_qty,
+                "min_stock": item.min_stock or 0,
+                "location": location,
+                "shortage": max(0, (item.min_stock or 0) - item_total_qty)
+            })
+        
+        # Get low stock items
+        low_stock_items = [item for item in result if item["shortage"] > 0]
+        
+        return {
+            "summary": {
+                "total_items": total_items,
+                "total_quantity": total_quantity,
+                "low_stock_count": low_stock_count,
+                "locations": len(location_summary),
+                "last_updated": datetime.now().isoformat()
+            },
+            "by_location": location_summary,
+            "low_stock_items": low_stock_items
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error getting real-time overview: {str(e)}")
+
+@router.get("/reorder-suggestions")
+def get_reorder_suggestions(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
+    """Get items that need reordering based on stock levels"""
+    try:
+        # Get all active items
+        items = db.query(Item).filter(Item.is_active == True).all()
+        
+        suggestions = []
+        for item in items:
+            # Calculate current stock from approved GRNs
+            from models.tenant_models import GRN, GRNStatus
+            approved_grn_items = db.query(GRNItem).join(GRN).filter(
+                GRNItem.item_name == item.name,
+                GRN.status == GRNStatus.approved
+            ).all()
+            
+            current_qty = 0
+            for grn_item in approved_grn_items:
+                batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
+                current_qty += sum(batch.qty for batch in batches)
+            
+            # Check if reorder is needed
+            if item.min_stock and current_qty <= item.min_stock:
+                # Calculate suggested order quantity (bring to 2x min stock)
+                suggested_qty = (item.min_stock * 2) - current_qty
+                
+                suggestions.append({
+                    "item_name": item.name,
+                    "item_code": item.item_code,
+                    "current_stock": current_qty,
+                    "min_stock": item.min_stock,
+                    "suggested_order_qty": max(suggested_qty, item.min_stock),
+                    "priority": "High" if current_qty == 0 else "Medium"
+                })
+        
+        # Sort by priority and shortage
+        suggestions.sort(key=lambda x: (x["priority"] == "High", x["current_stock"]))
+        
+        return {
+            "total_suggestions": len(suggestions),
+            "high_priority": len([s for s in suggestions if s["priority"] == "High"]),
+            "suggestions": suggestions
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error getting reorder suggestions: {str(e)}")
+
+
 def dispense_with_audit(data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_dispense())):
     """Dispense expired stock with audit logging"""
     from models.tenant_models import DisposalTransaction, ItemConditionEnum, DisposalMethodEnum
@@ -891,3 +1023,298 @@ def dispense_with_audit(data: dict, request: Request, db: Session = Depends(get_
     db.commit()
     
     return {"message": f"Expired batch {batch_no} marked for disposal"}
+
+# Stock Overview Router for frontend compatibility
+@stock_overview_router.get("/")
+def get_stock_overview_list(db: Session = Depends(get_db)):
+    """Get stock overview for frontend - same as list_stock but formatted for stock overview"""
+    from models.tenant_models import GRN, GRNStatus
+    from datetime import datetime, timedelta
+    
+    # Get all active items from item master
+    items = db.query(Item).filter(Item.is_active == True).all()
+    
+    result = []
+    for item in items:
+        # Get all batches for this item from approved GRNs
+        approved_grn_items = db.query(GRNItem).join(GRN).filter(
+            GRNItem.item_name == item.name,
+            GRN.status == GRNStatus.approved
+        ).all()
+        
+        # Get all batches for this item
+        all_batches = []
+        total_qty = 0
+        earliest_expiry = None
+        latest_warranty_end = None
+        locations = set()
+        
+        for grn_item in approved_grn_items:
+            # Get GRN for location
+            grn = db.query(GRN).filter(GRN.id == grn_item.grn_id).first()
+            if grn and grn.store:
+                locations.add(grn.store)
+            
+            batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
+            for batch in batches:
+                # Track earliest expiry date
+                if batch.expiry_date:
+                    if not earliest_expiry or batch.expiry_date < earliest_expiry:
+                        earliest_expiry = batch.expiry_date
+                
+                # Calculate warranty end date if item has warranty
+                warranty_end = None
+                if item.has_warranty and item.warranty_period and batch.warranty_end_date:
+                    warranty_end = batch.warranty_end_date
+                elif item.has_warranty and item.warranty_period and batch.mfg_date:
+                    # Calculate warranty end from manufacturing date
+                    if item.warranty_period_type == "years":
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 365)
+                    else:  # months
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 30)
+                
+                if warranty_end:
+                    if not latest_warranty_end or warranty_end > latest_warranty_end:
+                        latest_warranty_end = warranty_end
+                
+                batch_info = {
+                    "batch_no": batch.batch_no or "N/A",
+                    "qty": batch.qty,
+                    "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
+                    "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
+                    "warranty_end": warranty_end.strftime("%d/%m/%Y") if warranty_end else None,
+                    "location": grn.store if grn else "Main Store"
+                }
+                all_batches.append(batch_info)
+                total_qty += batch.qty
+        
+        # Determine primary location
+        if locations:
+            location = ", ".join(sorted(locations))
+        else:
+            location = "Main Store"
+        
+        # Format warranty information
+        warranty_display = "—"
+        if item.has_warranty and latest_warranty_end:
+            warranty_display = latest_warranty_end.strftime("%d/%m/%Y")
+        elif item.has_warranty and item.warranty_period:
+            warranty_display = f"{item.warranty_period} {item.warranty_period_type}"
+        
+        # Format expiry date
+        expiry_display = "—"
+        if earliest_expiry:
+            expiry_display = earliest_expiry.strftime("%d/%m/%Y")
+        
+        stock_data = {
+            "id": item.id,
+            "item_name": item.name,
+            "item_code": item.item_code,
+            "location": location,
+            "available_qty": int(total_qty),
+            "min_stock": item.min_stock or 0,
+            "warranty": warranty_display,
+            "expiry_date": expiry_display,
+            "batch_no": all_batches[0]["batch_no"] if all_batches else "—",
+            "status": "Good" if total_qty > (item.min_stock or 0) else "Low Stock",
+            "batches": all_batches
+        }
+        result.append(stock_data)
+    
+    return result
+
+@stock_overview_router.get("/by-location/{location}")
+def get_stock_by_location(location: str, db: Session = Depends(get_db)):
+    """Get stock overview filtered by location"""
+    from models.tenant_models import GRN, GRNStatus
+    from urllib.parse import unquote
+    from datetime import timedelta
+    
+    # Decode the location parameter
+    location = unquote(location)
+    
+    # Get all active items from item master
+    items = db.query(Item).filter(Item.is_active == True).all()
+    
+    result = []
+    for item in items:
+        # Get all batches for this item from approved GRNs at the specified location
+        approved_grn_items = db.query(GRNItem).join(GRN).filter(
+            GRNItem.item_name == item.name,
+            GRN.status == GRNStatus.approved,
+            GRN.store.ilike(f"%{location}%")  # Use flexible matching
+        ).all()
+        
+        # If no items found with flexible matching, skip this item
+        if not approved_grn_items:
+            continue
+        
+        # Get all batches for this item at this location
+        all_batches = []
+        total_qty = 0
+        earliest_expiry = None
+        latest_warranty_end = None
+        
+        for grn_item in approved_grn_items:
+            batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
+            for batch in batches:
+                # Track earliest expiry date
+                if batch.expiry_date:
+                    if not earliest_expiry or batch.expiry_date < earliest_expiry:
+                        earliest_expiry = batch.expiry_date
+                
+                # Calculate warranty end date if item has warranty
+                warranty_end = None
+                if item.has_warranty and item.warranty_period and batch.warranty_end_date:
+                    warranty_end = batch.warranty_end_date
+                elif item.has_warranty and item.warranty_period and batch.mfg_date:
+                    # Calculate warranty end from manufacturing date
+                    if item.warranty_period_type == "years":
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 365)
+                    else:  # months
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 30)
+                
+                if warranty_end:
+                    if not latest_warranty_end or warranty_end > latest_warranty_end:
+                        latest_warranty_end = warranty_end
+                
+                # Get rate from item master
+                rate = item.mrp or item.fixing_price or 30.0  # Use fixing_price instead of price
+                
+                batch_info = {
+                    "batch_no": batch.batch_no or "N/A",
+                    "qty": batch.qty,
+                    "rate": rate,
+                    "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
+                    "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
+                    "warranty_end": warranty_end.strftime("%d/%m/%Y") if warranty_end else None,
+                    "location": location
+                }
+                all_batches.append(batch_info)
+                total_qty += batch.qty
+        
+        # Only include items that have stock at this location
+        if total_qty > 0:
+            # Format warranty information
+            warranty_display = "—"
+            if item.has_warranty and latest_warranty_end:
+                warranty_display = latest_warranty_end.strftime("%d/%m/%Y")
+            elif item.has_warranty and item.warranty_period:
+                warranty_display = f"{item.warranty_period} {item.warranty_period_type}"
+            
+            # Format expiry date
+            expiry_display = "—"
+            if earliest_expiry:
+                expiry_display = earliest_expiry.strftime("%d/%m/%Y")
+            
+            stock_data = {
+                "id": item.id,
+                "item_name": item.name,
+                "item_code": item.item_code,
+                "location": location,
+                "available_qty": int(total_qty),
+                "min_stock": item.min_stock or 0,
+                "warranty": warranty_display,
+                "expiry_date": expiry_display,
+                "batch_no": all_batches[0]["batch_no"] if all_batches else "—",
+                "status": "Good" if total_qty > (item.min_stock or 0) else "Low Stock",
+                "batches": all_batches
+            }
+            result.append(stock_data)
+    
+    return result
+
+@stock_overview_router.get("/test")
+def test_stock_overview_endpoints(db: Session = Depends(get_db)):
+    """Test endpoint to verify stock overview functionality"""
+    try:
+        # Test 1: Get stock overview data
+        overview_data = get_stock_overview_list(db)
+        
+        # Test 2: Get location-specific data if available
+        location_data = []
+        if overview_data and overview_data[0].get('location'):
+            location = overview_data[0]['location'].split(',')[0].strip()  # Get first location
+            location_data = get_stock_by_location(location, db)
+        
+        # Test 3: Get batch data if available
+        batch_data = []
+        if overview_data:
+            item_name = overview_data[0]['item_name']
+            location = overview_data[0]['location'].split(',')[0].strip()
+            batch_data = get_batches_for_item_at_location(item_name, location, db)
+        
+        return {
+            "status": "success",
+            "tests": {
+                "overview": {
+                    "count": len(overview_data),
+                    "sample": overview_data[:2] if overview_data else []
+                },
+                "location_filter": {
+                    "count": len(location_data),
+                    "sample": location_data[:1] if location_data else []
+                },
+                "batches": {
+                    "count": len(batch_data),
+                    "sample": batch_data[:2] if batch_data else []
+                }
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@stock_overview_router.get("/batches/{item_name}/{location}")
+def get_batches_for_item_at_location(item_name: str, location: str, db: Session = Depends(get_db)):
+    """Get all batches for a specific item at a specific location from GRN data"""
+    from models.tenant_models import GRN, GRNStatus
+    from urllib.parse import unquote
+    from datetime import timedelta
+    
+    # Decode parameters
+    item_name = unquote(item_name)
+    location = unquote(location)
+    
+    # Get batches from GRN data instead of stock overview table
+    approved_grn_items = db.query(GRNItem).join(GRN).filter(
+        GRNItem.item_name == item_name,
+        GRN.status == GRNStatus.approved,
+        GRN.store.ilike(f"%{location}%")
+    ).all()
+    
+    batches = []
+    for grn_item in approved_grn_items:
+        item_batches = db.query(Batch).filter(Batch.grn_item_id == grn_item.id).all()
+        
+        for batch in item_batches:
+            if batch.qty > 0:  # Only include batches with available quantity
+                # Get rate from item master
+                item = db.query(Item).filter(Item.name == item_name).first()
+                rate = (item.mrp or item.fixing_price or 30.0) if item else 30.0
+                
+                # Calculate warranty end date if applicable
+                warranty_end = None
+                if item and item.has_warranty and item.warranty_period and batch.warranty_end_date:
+                    warranty_end = batch.warranty_end_date
+                elif item and item.has_warranty and item.warranty_period and batch.mfg_date:
+                    # Calculate warranty end from manufacturing date
+                    if item.warranty_period_type == "years":
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 365)
+                    else:  # months
+                        warranty_end = batch.mfg_date + timedelta(days=item.warranty_period * 30)
+                
+                batch_info = {
+                    "batch_no": batch.batch_no or "N/A",
+                    "qty": batch.qty,
+                    "rate": rate,
+                    "expiry_date": batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else None,
+                    "mfg_date": batch.mfg_date.strftime("%d/%m/%Y") if batch.mfg_date else None,
+                    "warranty_end": warranty_end.strftime("%d/%m/%Y") if warranty_end else None,
+                    "location": location
+                }
+                batches.append(batch_info)
+    
+    return batches

@@ -9,7 +9,47 @@ from models.tenant_models import (
     DisposalTransaction, SalvageValuation,
     ReturnTypeEnum, ItemConditionEnum, DisposalMethodEnum, AuditLog
 )
-from utils.email_service_old import send_email
+def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
+    """Send email using current email service"""
+    from utils.email_service import send_registration_email
+    # For now, use registration email function as base
+    # This is a temporary solution - ideally create a generic send_email function
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        import os
+        
+        SMTP_SERVER = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+        EMAIL_USER = os.getenv("SMTP_USER", "")
+        EMAIL_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+        FROM_EMAIL = os.getenv("SMTP_FROM", EMAIL_USER)
+        
+        if not EMAIL_USER or not EMAIL_PASSWORD:
+            print("Email credentials not configured")
+            return False
+        
+        msg = MIMEMultipart()
+        msg['From'] = FROM_EMAIL
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'html' if is_html else 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(FROM_EMAIL, to_email, text)
+        server.quit()
+        
+        print(f"Email sent to {to_email}")
+        return True
+        
+    except Exception as e:
+        print(f"Failed to send email to {to_email}: {e}")
+        return False
 from utils.permissions import (
     require_return_disposal_view, 
     require_return_disposal_create, 

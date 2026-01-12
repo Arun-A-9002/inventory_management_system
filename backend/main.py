@@ -1,8 +1,9 @@
 # backend/main.py
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 import uuid
 
 # ----------------------------------------------------------
@@ -17,9 +18,9 @@ from fastapi.responses import JSONResponse
 # EXISTING ROUTERS
 # ----------------------------------------------------------
 from routers import register, auth
-from routers.department import router as department_router
-from routers.roles import router as roles_router
-from routers.users import router as users_router
+from routers.usermanagement.department import router as department_router
+from routers.usermanagement.roles import router as roles_router
+from routers.usermanagement.users import router as users_router
 
 # ----------------------------------------------------------
 # ORGANIZATION SETUP ROUTERS
@@ -48,8 +49,7 @@ from routers.GRN.grn import router as grn_router
 #----------------------------------------------------------
 # STOCKS
 #----------------------------------------------------------
-from routers.stocks.stock import router as stock_router
-from routers.stocks.stock_overview import router as stock_overview_router
+from routers.stocks.stock import router as stock_router, stock_overview_router
 
 #----------------------------------------------------------
 # INVENTORY LOCATIONS

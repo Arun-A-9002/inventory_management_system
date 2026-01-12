@@ -21,7 +21,7 @@ from utils.logger import log_error, log_audit, log_api
 from utils.audit import log_audit as log_database_audit
 
 # Email utility
-from utils.email_service_old import send_registration_email
+from utils.email_service import send_registration_email
 
 # Permission seeding utility
 from utils.seed_permission import seed_permissions_for_tenant

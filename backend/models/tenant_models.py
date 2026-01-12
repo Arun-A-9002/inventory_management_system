@@ -1015,7 +1015,8 @@ class StockOverview(TenantBase):
     available_qty = Column(Integer, default=0)
     min_stock = Column(Integer, default=0)
     warranty = Column(String(50), default="—")
-    expiry_date = Column(String(50), default="—")
+    expiry_date = Column(Date, nullable=True)  # Changed to Date type
+    mfg_date = Column(Date, nullable=True)     # Added manufacturing date
     batch_no = Column(String(100), nullable=True)
     status = Column(String(50), nullable=False)
     
