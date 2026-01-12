@@ -1,5 +1,7 @@
 # backend/routers/users.py
 
+import asyncio
+import threading
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List
 from sqlalchemy.orm import Session
@@ -73,6 +75,15 @@ def generate_login_code(
     return {"login_code": generate_login_code_on_demand()}
 
 
+def send_email_async(email: str, name: str, password: str, login_code: str):
+    """Send welcome email in background thread"""
+    try:
+        send_welcome_email(email, name, password, login_code)
+        logger.info(f"Welcome email sent successfully to {email}")
+    except Exception as e:
+        logger.warning(f"Welcome email failed for {email}: {e}")
+
+
 # ===========================================================
 # CREATE USER
 # ===========================================================
@@ -117,11 +128,12 @@ def create_user(
     db.commit()
     db.refresh(user)
 
-    # Try sending welcome mail
-    try:
-        send_welcome_email(payload.email, payload.full_name, temp_password)
-    except Exception as e:
-        logger.warning(f"Welcome email failed → {e}")
+    # Send welcome email in background thread (non-blocking)
+    threading.Thread(
+        target=send_email_async,
+        args=(payload.email, payload.full_name, temp_password, user.login_code),
+        daemon=True
+    ).start()
 
     # Audit log
     log_audit(

@@ -89,18 +89,33 @@ export default function Users() {
         role_ids: Array.from(selectedRoles),
       };
 
+      let response;
       if (!editingId) {
-        await api.post("/users", payload);
+        response = await api.post("/users", payload);
+        // Add the new user to the list immediately
+        const newUser = response.data;
+        setUsers(prevUsers => [...prevUsers, newUser]);
+        showToast("User created successfully", 'success');
+        
+        // Auto refresh after 1 second to get updated data with relationships
+        setTimeout(async () => {
+          await loadAll();
+        }, 1000);
       } else {
-        await api.put(`/users/${editingId}`, { ...payload, password: password || undefined });
+        response = await api.put(`/users/${editingId}`, { ...payload, password: password || undefined });
+        // Update the user in the list immediately
+        const updatedUser = response.data;
+        setUsers(prevUsers => prevUsers.map(user => 
+          user.id === editingId ? updatedUser : user
+        ));
+        showToast("User updated successfully", 'success');
       }
 
-      showToast(editingId ? "User updated successfully" : "User created successfully", 'success');
       closeModal();
-      await loadAll();
     } catch (e) {
       console.error("Full error:", e);
-      showToast(e?.response?.data?.detail || "Save failed", 'error');
+      const errorMessage = e?.response?.data?.detail || e?.message || "Save failed";
+      showToast(errorMessage, 'error');
     }
   }
 
@@ -189,9 +204,12 @@ export default function Users() {
               </div>
               {hasPermission("users.create") && (
                 <button 
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSearchQuery("");
                     setShowModal(true);
-                    // Auto-generate login code when opening the modal
                     generateLoginCode();
                   }} 
                   className="flex items-center justify-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors duration-200 text-sm"
@@ -212,18 +230,25 @@ export default function Users() {
         <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-full sm:w-auto border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm"
-                />
-              </div>
+              <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                <div className="relative">
+                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    name="user-search-query"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    className="pl-10 pr-4 py-2 w-full sm:w-auto border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </form>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}

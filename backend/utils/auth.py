@@ -154,16 +154,20 @@ def send_otp_email(to_email: str, otp: str):
 # ===========================================================
 # WELCOME EMAIL
 # ===========================================================
-def send_welcome_email(to_email: str, username: str, temp_password: str):
+def send_welcome_email(to_email: str, username: str, temp_password: str, login_code: str = None):
     subject = "Welcome to Nutryah - Account Created"
     body = f"""
     Dear {username},
 
-    Your account has been created.
+    Your account has been created successfully.
+    
+    Login Details:
     Email: {to_email}
     Temporary Password: {temp_password}
+    Login Code: {login_code or 'Not provided'}
 
-    Please login and change your password.
+    Please login using your email and temporary password, then change your password for security.
+    Use the login code when prompted during the login process.
 
     Regards,
     Nutryah Team

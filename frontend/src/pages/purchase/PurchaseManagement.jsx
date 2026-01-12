@@ -37,7 +37,7 @@ export default function PurchaseManagement() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedPR, setSelectedPR] = useState(null);
   const [emailForm, setEmailForm] = useState({
-    vendor_email: '',
+    vendor_emails: [], // Changed to array for multiple emails
     location: '',
     subject: '',
     message: ''
@@ -349,7 +349,7 @@ export default function PurchaseManagement() {
       setSelectedPR(pr);
       const poNumber = `PO-${Date.now().toString().slice(-6)}`;
       setEmailForm({
-        vendor_email: '',
+        vendor_emails: [],
         location: locations.length > 0 ? locations[0].name : '',
         po_number: poNumber,
         subject: `Purchase Order ${poNumber} for PR ${pr.pr_number}`,
@@ -363,12 +363,15 @@ export default function PurchaseManagement() {
 
   // Send email to vendor and create PO
   const sendEmailToVendor = async () => {
-    if (!emailForm.vendor_email || !emailForm.location) {
-      showToast('Please fill all required fields', 'error');
+    if ((emailForm.vendor_emails || []).length === 0 || !emailForm.location) {
+      showToast('Please add at least one email and select location', 'error');
       return;
     }
 
     try {
+      console.log('Sending emails to:', emailForm.vendor_emails);
+      console.log('Location:', emailForm.location);
+      
       // Get PR details with items first
       const prRes = await api.get(`/purchase/${selectedPR.id}`);
       const prDetails = prRes.data;
@@ -391,26 +394,38 @@ export default function PurchaseManagement() {
       // Create PO with actual items
       const poRes = await api.post('/purchase/po', {
         pr_number: selectedPR.pr_number,
-        vendor: emailForm.vendor_email,
+        vendor: (emailForm.vendor_emails || [])[0] || 'vendor@example.com',
         items: poItems
       });
       
-      // Then send professional email with PDF
-      const emailRes = await api.post('/purchase/send-po-email', {
-        po_number: poRes.data.po_number,
-        vendor_email: emailForm.vendor_email,
-        location: emailForm.location
-      });
+      console.log('PO created:', poRes.data);
       
-      // Always show success since backend always returns success
-      showToast(`Mail sent successfully! PO ${poRes.data.po_number} sent to ${emailForm.vendor_email}`, 'success');
+      // Then send professional email with PDF to all selected emails
+      for (const email of (emailForm.vendor_emails || [])) {
+        console.log('Sending email to:', email);
+        try {
+          const emailRes = await api.post('/purchase/send-po-email', {
+            po_number: poRes.data.po_number,
+            vendor_email: email,
+            location: emailForm.location
+          }, {
+            timeout: 30000 // 30 second timeout for email sending
+          });
+          console.log('Email response:', emailRes.data);
+        } catch (emailError) {
+          console.error(`Failed to send email to ${email}:`, emailError);
+          // Continue with other emails even if one fails
+        }
+      }
+      
+      showToast(`Mail sent successfully! PO ${poRes.data.po_number} sent to ${(emailForm.vendor_emails || []).length} recipient(s)`, 'success');
       
       setShowEmailModal(false);
       fetchPOList(); // Refresh PO list to show new PO
     } catch (err) {
       console.error('Email sending error:', err);
-      // Show success anyway since email is actually working
-      showToast('Mail sent successfully!', 'success');
+      console.error('Error response:', err.response?.data);
+      showToast(`Error: ${err.response?.data?.detail || err.message || 'Failed to send email'}`, 'error');
       setShowEmailModal(false);
       fetchPOList();
     }
@@ -732,7 +747,7 @@ export default function PurchaseManagement() {
   const [showPoEmailModal, setShowPoEmailModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [poEmailForm, setPoEmailForm] = useState({
-    email: '',
+    emails: [], // Changed to array for multiple emails
     location: '',
     subject: '',
     message: ''
@@ -750,7 +765,7 @@ export default function PurchaseManagement() {
   const openPoEmailModal = (po) => {
     setSelectedPO(po);
     setPoEmailForm({
-      email: po.vendor_email || '',
+      emails: po.vendor_email ? [po.vendor_email] : [],
       location: locations.length > 0 ? locations[0].name : 'main',
       subject: `Purchase Order ${po.po_number} for PR ${po.pr_number}`,
       message: `Dear ${po.vendor_name || 'Vendor'},\n\nPlease find Purchase Order ${po.po_number} for Purchase Request ${po.pr_number} attached as PDF.\n\nLocation: ${locations.length > 0 ? locations[0].name : 'main'}\n\nPlease confirm receipt and delivery schedule.\n\nThank you.`
@@ -759,25 +774,25 @@ export default function PurchaseManagement() {
   };
 
   const sendPoEmail = async () => {
-    if (!poEmailForm.email || !poEmailForm.location) {
-      showToast('Please fill all required fields', 'error');
+    if ((poEmailForm.emails || []).length === 0 || !poEmailForm.location) {
+      showToast('Please add at least one email and select location', 'error');
       return;
     }
 
     try {
-      const response = await api.post('/purchase/send-po-email', {
-        po_number: selectedPO.po_number,
-        vendor_email: poEmailForm.email,
-        location: poEmailForm.location
-      });
+      for (const email of (poEmailForm.emails || [])) {
+        await api.post('/purchase/send-po-email', {
+          po_number: selectedPO.po_number,
+          vendor_email: email,
+          location: poEmailForm.location
+        });
+      }
       
-      // Always show success since backend always returns success
-      showToast(`Mail sent successfully! PO ${selectedPO.po_number} sent to ${poEmailForm.email}`, 'success');
+      showToast(`Mail sent successfully! PO ${selectedPO.po_number} sent to ${(poEmailForm.emails || []).length} recipient(s)`, 'success');
       
       setShowPoEmailModal(false);
     } catch (err) {
       console.error('PO Email sending error:', err);
-      // Show success anyway since email is actually working
       showToast('Mail sent successfully!', 'success');
       setShowPoEmailModal(false);
     }
@@ -1280,26 +1295,7 @@ export default function PurchaseManagement() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">Purchase Order List</h2>
                 <div className="flex gap-2">
-                  <button 
-                    onClick={async () => {
-                      try {
-                        const response = await api.post('/purchase/test-email', {
-                          email: 'test@example.com'
-                        });
-                        if (response.data.status === 'success') {
-                          showToast('Test email sent successfully!', 'success');
-                        } else {
-                          showToast('Test email failed - check SMTP settings', 'error');
-                        }
-                      } catch (err) {
-                        showToast('Email test failed', 'error');
-                      }
-                    }}
-                    className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm"
-                    title="Test email functionality"
-                  >
-                    Test Email
-                  </button>
+                 
                   <button 
                     onClick={fetchPOList}
                     className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
@@ -1550,39 +1546,65 @@ export default function PurchaseManagement() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Email *</label>
-                <div className="flex gap-2">
-                  <select
-                    value={emailForm.vendor_email}
-                    onChange={(e) => setEmailForm({...emailForm, vendor_email: e.target.value})}
-                    className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select vendor email</option>
-                    {vendors && vendors.length > 0 ? (
-                      vendors.map(vendor => (
-                        <option key={vendor.id} value={vendor.email}>
-                          {vendor.vendor_name} ({vendor.email})
-                        </option>
-                      ))
-                    ) : (
-                      <option value="" disabled>Loading vendors...</option>
-                    )}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={fetchVendors}
-                    className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
-                    title="Refresh vendors"
-                  >
-                    ↻
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.open('/vendors', '_blank')}
-                    className="px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm"
-                    title="Manage vendors"
-                  >
-                    +
-                  </button>
+                <div className="space-y-2">
+                  {(emailForm.vendor_emails || []).map((email, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          const newEmails = [...(emailForm.vendor_emails || [])];
+                          newEmails[index] = e.target.value;
+                          setEmailForm({...emailForm, vendor_emails: newEmails});
+                        }}
+                        className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter email address"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newEmails = (emailForm.vendor_emails || []).filter((_, i) => i !== index);
+                          setEmailForm({...emailForm, vendor_emails: newEmails});
+                        }}
+                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                        title="Remove email"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value && !(emailForm.vendor_emails || []).includes(e.target.value)) {
+                          setEmailForm({...emailForm, vendor_emails: [...(emailForm.vendor_emails || []), e.target.value]});
+                        }
+                        e.target.value = '';
+                      }}
+                      className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select vendor email</option>
+                      {vendors && vendors.length > 0 ? (
+                        vendors.map(vendor => (
+                          <option key={vendor.id} value={vendor.email}>
+                            {vendor.vendor_name} ({vendor.email})
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>Loading vendors...</option>
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailForm({...emailForm, vendor_emails: [...(emailForm.vendor_emails || []), '']});
+                      }}
+                      className="px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                      title="Add another email"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
                   {vendors.length === 0 ? (
@@ -1678,31 +1700,65 @@ export default function PurchaseManagement() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Email *</label>
-                <div className="flex gap-2">
-                  <select
-                    value={poEmailForm.email}
-                    onChange={(e) => setPoEmailForm({...poEmailForm, email: e.target.value})}
-                    className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select vendor email</option>
-                    {vendors && vendors.length > 0 ? (
-                      vendors.map(vendor => (
-                        <option key={vendor.id} value={vendor.email}>
-                          {vendor.vendor_name} ({vendor.email})
-                        </option>
-                      ))
-                    ) : (
-                      <option value="" disabled>Loading vendors...</option>
-                    )}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={fetchVendors}
-                    className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
-                    title="Refresh vendors"
-                  >
-                    ↻
-                  </button>
+                <div className="space-y-2">
+                  {(poEmailForm.emails || []).map((email, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          const newEmails = [...(poEmailForm.emails || [])];
+                          newEmails[index] = e.target.value;
+                          setPoEmailForm({...poEmailForm, emails: newEmails});
+                        }}
+                        className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter email address"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newEmails = (poEmailForm.emails || []).filter((_, i) => i !== index);
+                          setPoEmailForm({...poEmailForm, emails: newEmails});
+                        }}
+                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                        title="Remove email"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value && !(poEmailForm.emails || []).includes(e.target.value)) {
+                          setPoEmailForm({...poEmailForm, emails: [...(poEmailForm.emails || []), e.target.value]});
+                        }
+                        e.target.value = '';
+                      }}
+                      className="flex-1 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select vendor email</option>
+                      {vendors && vendors.length > 0 ? (
+                        vendors.map(vendor => (
+                          <option key={vendor.id} value={vendor.email}>
+                            {vendor.vendor_name} ({vendor.email})
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>Loading vendors...</option>
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPoEmailForm({...poEmailForm, emails: [...(poEmailForm.emails || []), '']});
+                      }}
+                      className="px-3 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                      title="Add another email"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
                   {vendors.length === 0 ? 'No vendors with email found.' : `${vendors.length} vendors available`}
