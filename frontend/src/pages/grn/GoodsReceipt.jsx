@@ -402,11 +402,25 @@ export default function GoodsReceipt() {
     }
     
     try {
-      await api.put(`/grn/${grnId}/status`, { status });
-      showToast(`GRN status updated to ${status}`, 'success');
-      fetchGRNList();
+      const response = await api.put(`/grn/${grnId}/status`, { status });
+      
+      // Check if the update was successful and use the actual saved status
+      if (response.data.success) {
+        // Update local state with the actual saved status from backend
+        setGrnList(prevList => 
+          prevList.map(grn => 
+            grn.id === grnId ? { ...grn, status: response.data.status } : grn
+          )
+        );
+        showToast(`GRN status updated to ${response.data.status}`, 'success');
+      } else {
+        showToast('Failed to update GRN status', 'error');
+        fetchGRNList(); // Refresh on error
+      }
     } catch (err) {
       showToast('Failed to update GRN status', 'error');
+      console.error('GRN status update error:', err);
+      fetchGRNList(); // Refresh on error
     }
   };
 
@@ -555,16 +569,21 @@ export default function GoodsReceipt() {
     
     try {
       // Make API call first before updating local state
-      await api.put(`/grn/${grn.id}/status`, { status: newStatus });
+      const response = await api.put(`/grn/${grn.id}/status`, { status: newStatus });
       
-      // Update local state only after successful API call
-      setGrnList(prevList => 
-        prevList.map(item => 
-          item.id === grn.id ? { ...item, status: newStatus } : item
-        )
-      );
-      
-      showToast(`GRN ${newStatus === 'Approved' ? 'activated' : 'deactivated'} successfully`, 'success');
+      // Check if the update was successful and use the actual saved status
+      if (response.data.success) {
+        // Update local state with the actual saved status from backend
+        setGrnList(prevList => 
+          prevList.map(item => 
+            item.id === grn.id ? { ...item, status: response.data.status } : item
+          )
+        );
+        showToast(`GRN ${response.data.status === 'Approved' ? 'activated' : 'deactivated'} successfully`, 'success');
+      } else {
+        showToast('Failed to update GRN status', 'error');
+        fetchGRNList(); // Refresh on error
+      }
     } catch (err) {
       showToast('Failed to update GRN status', 'error');
       console.error('GRN status update error:', err);

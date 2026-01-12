@@ -110,13 +110,14 @@ def _update_stock_from_grn(grn_id: int, db: Session):
                 print(f"Processing batch: {batch.batch_no}, qty: {batch.qty}")
                 # Add to stock overview directly in database
                 try:
-                    expiry_str = batch.expiry_date.strftime("%d/%m/%Y") if batch.expiry_date else "—"
+                    # Use raw SQL to avoid SQLAlchemy model column issues
+                    from sqlalchemy import text
                     
-                    # Check if item with same name and batch already exists
-                    existing_stock = db.query(StockOverview).filter(
-                        StockOverview.item_name == item.item_name,
-                        StockOverview.batch_no == batch.batch_no
-                    ).first()
+                    # Check if item with same name and batch already exists using raw SQL
+                    result = db.execute(
+                        text("SELECT id, available_qty FROM stock_overview WHERE item_name = :item_name AND batch_no = :batch_no LIMIT 1"),
+                        {"item_name": item.item_name, "batch_no": batch.batch_no}
+                    ).fetchone()
                     
                     # Calculate warranty display string
                     warranty_str = "—"
@@ -125,30 +126,40 @@ def _update_stock_from_grn(grn_id: int, db: Session):
                     elif batch.warranty_start_date and batch.warranty_end_date:
                         warranty_str = f"{batch.warranty_start_date.strftime('%d/%m/%Y')} - {batch.warranty_end_date.strftime('%d/%m/%Y')}"
                     
-                    if existing_stock:
-                        # Update existing stock - add quantity
-                        old_qty = existing_stock.available_qty
-                        existing_stock.available_qty += int(batch.qty)
-                        existing_stock.warranty = warranty_str  # Update warranty info
-                        if existing_stock.available_qty >= existing_stock.min_stock:
-                            existing_stock.status = "Good"
-                        else:
-                            existing_stock.status = "Low Stock"
-                        print(f"Updated existing stock for {item.item_name} batch {batch.batch_no}: {old_qty} -> {existing_stock.available_qty}")
-                    else:
-                        # Create new stock entry
-                        new_stock = StockOverview(
-                            item_name=item.item_name,
-                            item_code=f"GRN-{batch.batch_no}",
-                            location="Main Store",
-                            available_qty=int(batch.qty),
-                            min_stock=100,
-                            batch_no=batch.batch_no,
-                            expiry_date=expiry_str,
-                            warranty=warranty_str,  # Add warranty info
-                            status="Good" if int(batch.qty) >= 100 else "Low Stock"
+                    # Format expiry date
+                    expiry_date = batch.expiry_date if batch.expiry_date else None
+                    
+                    if result:
+                        # Update existing stock - add quantity using raw SQL
+                        stock_id, old_qty = result
+                        new_qty = old_qty + int(batch.qty)
+                        status = "Good" if new_qty >= 100 else "Low Stock"
+                        
+                        db.execute(
+                            text("UPDATE stock_overview SET available_qty = :new_qty, warranty = :warranty, status = :status WHERE id = :stock_id"),
+                            {"new_qty": new_qty, "warranty": warranty_str, "status": status, "stock_id": stock_id}
                         )
-                        db.add(new_stock)
+                        print(f"Updated existing stock for {item.item_name} batch {batch.batch_no}: {old_qty} -> {new_qty}")
+                    else:
+                        # Create new stock entry using raw SQL
+                        db.execute(
+                            text("""
+                                INSERT INTO stock_overview 
+                                (item_name, item_code, location, available_qty, min_stock, batch_no, expiry_date, warranty, status, created_at, updated_at) 
+                                VALUES (:item_name, :item_code, :location, :available_qty, :min_stock, :batch_no, :expiry_date, :warranty, :status, NOW(), NOW())
+                            """),
+                            {
+                                "item_name": item.item_name,
+                                "item_code": f"GRN-{batch.batch_no}",
+                                "location": "Main Store",
+                                "available_qty": int(batch.qty),
+                                "min_stock": 100,
+                                "batch_no": batch.batch_no,
+                                "expiry_date": expiry_date,
+                                "warranty": warranty_str,
+                                "status": "Good" if int(batch.qty) >= 100 else "Low Stock"
+                            }
+                        )
                         print(f"Created new stock entry for {item.item_name} batch {batch.batch_no}: {batch.qty}")
                     
                     # Commit after each batch to ensure it's saved
@@ -671,7 +682,9 @@ def update_grn_status(grn_id: int, data: dict, request: Request, db: Session = D
         approval_date = date.today()
         update_warranty_dates_on_approval(grn_id, db, approval_date)
     
+    # Commit the changes to database
     db.commit()
+    db.refresh(grn)
     
     # Audit log
     log_audit(
@@ -686,7 +699,12 @@ def update_grn_status(grn_id: int, data: dict, request: Request, db: Session = D
         request=request
     )
     
-    return {"message": f"GRN status updated to {new_status.value}", "status": new_status.value}}
+    return {
+        "message": f"GRN status updated to {new_status.value}", 
+        "status": grn.status.value,
+        "grn_id": grn.id,
+        "success": True
+    }
 
 @router.post("/test-grn-batches")
 def create_test_grn_with_batches(db: Session = Depends(get_db)):
