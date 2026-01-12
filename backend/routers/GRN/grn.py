@@ -641,17 +641,35 @@ def update_quality_check(grn_id: int, data: dict, request: Request, db: Session 
 
 # ---------------- UPDATE STATUS ----------------
 @router.put("/{grn_id}/status")
-def update_grn_status(grn_id: int, data: GRNStatusUpdate, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_grn_status_approve())):
+def update_grn_status(grn_id: int, data: dict, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_grn_status_approve())):
     grn = db.query(GRN).filter(GRN.id == grn_id).first()
     if not grn:
         raise HTTPException(404, "GRN not found")
     
+    # Handle both string and enum status values
+    status_value = data.get('status')
+    if isinstance(status_value, str):
+        # Convert string to enum
+        if status_value.lower() == 'approved':
+            new_status = GRNStatus.approved
+        elif status_value.lower() == 'pending':
+            new_status = GRNStatus.pending
+        elif status_value.lower() == 'rejected':
+            new_status = GRNStatus.rejected
+        else:
+            raise HTTPException(400, f"Invalid status: {status_value}")
+    else:
+        new_status = status_value
+    
     old_status = grn.status
-    grn.status = data.status
+    grn.status = new_status
     
     # If status changed to approved, update stock
-    if data.status == GRNStatus.approved and old_status != GRNStatus.approved:
+    if new_status == GRNStatus.approved and old_status != GRNStatus.approved:
         _update_stock_from_grn(grn_id, db)
+        # Update warranty dates on approval
+        approval_date = date.today()
+        update_warranty_dates_on_approval(grn_id, db, approval_date)
     
     db.commit()
     
@@ -662,13 +680,13 @@ def update_grn_status(grn_id: int, data: GRNStatusUpdate, request: Request, db: 
         action="STATUS_UPDATE",
         table_name="grns",
         record_id=grn_id,
-        old_values={"status": old_status.value},
-        new_values={"status": data.status.value},
-        description=f"GRN {grn.grn_number} status updated from {old_status.value} to {data.status.value}",
+        old_values={"status": old_status.value if old_status else None},
+        new_values={"status": new_status.value},
+        description=f"GRN {grn.grn_number} status updated from {old_status.value if old_status else 'None'} to {new_status.value}",
         request=request
     )
     
-    return {"message": f"GRN status updated to {data.status.value}"}
+    return {"message": f"GRN status updated to {new_status.value}", "status": new_status.value}}
 
 @router.post("/test-grn-batches")
 def create_test_grn_with_batches(db: Session = Depends(get_db)):

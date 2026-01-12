@@ -7,9 +7,9 @@ import Dashboard from "./pages/Dashboard";
 import MainLayout from "./components/Layout/MainLayout";
 
 // User Management
-import Department from "./pages/Department";
-import Roles from "./pages/Roles";
-import Users from "./pages/Users";
+import Department from "./pages/user-management/Department";
+import Roles from "./pages/user-management/Roles";
+import Users from "./pages/user-management/Users";
 import ActiveSessions from "./pages/ActiveSessions";
 
 // Organization Setup Pages

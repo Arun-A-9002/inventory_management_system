@@ -16,6 +16,9 @@ def send_po_email_with_pdf(vendor_email: str, vendor_name: str, po_number: str,
                           pr_number: str, location: str, items: list, pdf_buffer: io.BytesIO):
     """Send professional Purchase Order email with PDF attachment"""
     
+    print(f"Attempting to send email to: {vendor_email}")
+    print(f"SMTP Config - Host: {SMTP_SERVER}, Port: {SMTP_PORT}, User: {EMAIL_USER}")
+    
     if not EMAIL_USER or not EMAIL_PASSWORD:
         print("Email credentials not configured")
         return False
@@ -91,19 +94,24 @@ def send_po_email_with_pdf(vendor_email: str, vendor_name: str, po_number: str,
             pdf_attachment.add_header('Content-Disposition', 'attachment', filename=f'purchase_order_{po_number}.pdf')
             msg.attach(pdf_attachment)
         
+        print(f"Connecting to SMTP server: {SMTP_SERVER}:{SMTP_PORT}")
+        
         # Send email
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
+        print("SMTP connection established, logging in...")
         server.login(EMAIL_USER, EMAIL_PASSWORD)
+        print("SMTP login successful, sending email...")
         text = msg.as_string()
         server.sendmail(FROM_EMAIL, vendor_email, text)
         server.quit()
         
-        print(f"PO email with PDF sent to {vendor_email}")
+        print(f"PO email with PDF sent successfully to {vendor_email}")
         return True
         
     except Exception as e:
         print(f"Failed to send PO email to {vendor_email}: {e}")
+        print(f"Error type: {type(e).__name__}")
         return False
 def send_deadline_alert(staff_email: str, staff_name: str, transfer_no: str, 
                        return_deadline: str, days_left: int, pending_qty: int, location: str):

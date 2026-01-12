@@ -1,9 +1,9 @@
 // src/pages/Users.jsx
 import { useEffect, useState } from "react";
-import api from "../api";
-import Toast from "../components/Toast";
-import { useToast } from "../utils/useToast";
-import { hasPermission } from "../utils/permissions";
+import api from "../../api";
+import Toast from "../../components/Toast";
+import { useToast } from "../../utils/useToast";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Users() {
   const [users, setUsers] = useState([]);

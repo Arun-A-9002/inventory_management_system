@@ -271,7 +271,7 @@ export default function Company() {
                       )}
                     </div>
                   )
-                ))}}
+                ))}
 
                 <div className="flex gap-2">
                   <button

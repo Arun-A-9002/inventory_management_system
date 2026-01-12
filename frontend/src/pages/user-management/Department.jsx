@@ -1,7 +1,7 @@
 // src/pages/Department.jsx
 import { useEffect, useState } from "react";
-import api from "../api";
-import { hasPermission } from "../utils/permissions";
+import api from "../../api";
+import { hasPermission } from "../../utils/permissions";
 
 export default function Department() {
   const [departments, setDepartments] = useState([]);

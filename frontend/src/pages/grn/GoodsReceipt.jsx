@@ -140,6 +140,18 @@ export default function GoodsReceipt() {
     fetchItemList();
     fetchLocations();
     fetchVendors();
+    
+    // Listen for refresh events from header
+    const handleRefreshEvent = () => {
+      fetchGRNList();
+      fetchPOList();
+    };
+
+    window.addEventListener('refreshData', handleRefreshEvent);
+    
+    return () => {
+      window.removeEventListener('refreshData', handleRefreshEvent);
+    };
   }, []);
 
 
@@ -541,25 +553,23 @@ export default function GoodsReceipt() {
     
     const newStatus = grn.status === 'Approved' ? 'Pending' : 'Approved';
     
-    // Update local state immediately
-    setGrnList(prevList => 
-      prevList.map(item => 
-        item.id === grn.id ? { ...item, status: newStatus } : item
-      )
-    );
-    
     try {
+      // Make API call first before updating local state
       await api.put(`/grn/${grn.id}/status`, { status: newStatus });
-      showToast(`GRN ${newStatus === 'Approved' ? 'activated' : 'deactivated'} successfully`, 'success');
-    } catch (err) {
-      // Revert on error
+      
+      // Update local state only after successful API call
       setGrnList(prevList => 
         prevList.map(item => 
-          item.id === grn.id ? { ...item, status: grn.status } : item
+          item.id === grn.id ? { ...item, status: newStatus } : item
         )
       );
+      
+      showToast(`GRN ${newStatus === 'Approved' ? 'activated' : 'deactivated'} successfully`, 'success');
+    } catch (err) {
       showToast('Failed to update GRN status', 'error');
-      console.error(err);
+      console.error('GRN status update error:', err);
+      // Refresh the list to get the current state from database
+      fetchGRNList();
     }
   };
 
