@@ -135,7 +135,7 @@ export default function CustomerRegistration() {
     if (customerForm.customer_type === 'organization') {
       return (
         <>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Organization Name *</label>
               <input
@@ -172,44 +172,44 @@ export default function CustomerRegistration() {
               placeholder="Enter organization address"
             />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Mobile *</label>
-              <input
-                type="tel"
-                value={customerForm.org_mobile}
-                onChange={(e) => setCustomerForm({...customerForm, org_mobile: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="10 digit mobile"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Mobile *</label>
+                <input
+                  type="tel"
+                  value={customerForm.org_mobile}
+                  onChange={(e) => setCustomerForm({...customerForm, org_mobile: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="10 digit mobile"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">PAN Number</label>
+                <input
+                  type="text"
+                  value={customerForm.org_pan}
+                  onChange={(e) => setCustomerForm({...customerForm, org_pan: e.target.value.toUpperCase()})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="ABCDE1234F"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">GST Number</label>
+                <input
+                  type="text"
+                  value={customerForm.org_gst}
+                  onChange={(e) => setCustomerForm({...customerForm, org_gst: e.target.value.toUpperCase()})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="22AAAAA0000A1Z5"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">PAN Number</label>
-              <input
-                type="text"
-                value={customerForm.org_pan}
-                onChange={(e) => setCustomerForm({...customerForm, org_pan: e.target.value.toUpperCase()})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="ABCDE1234F"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">GST Number</label>
-              <input
-                type="text"
-                value={customerForm.org_gst}
-                onChange={(e) => setCustomerForm({...customerForm, org_gst: e.target.value.toUpperCase()})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="22AAAAA0000A1Z5"
-              />
-            </div>
-          </div>
         </>
       );
     } else if (customerForm.customer_type === 'self') {
       return (
         <>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Name *</label>
               <input
@@ -244,38 +244,38 @@ export default function CustomerRegistration() {
               placeholder="Enter address"
             />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Mobile *</label>
-              <input
-                type="tel"
-                value={customerForm.mobile}
-                onChange={(e) => setCustomerForm({...customerForm, mobile: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="10 digit mobile"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Mobile *</label>
+                <input
+                  type="tel"
+                  value={customerForm.mobile}
+                  onChange={(e) => setCustomerForm({...customerForm, mobile: e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="10 digit mobile"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">PAN Number</label>
+                <input
+                  type="text"
+                  value={customerForm.pan}
+                  onChange={(e) => setCustomerForm({...customerForm, pan: e.target.value.toUpperCase()})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="ABCDE1234F"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">GST Number</label>
+                <input
+                  type="text"
+                  value={customerForm.gst}
+                  onChange={(e) => setCustomerForm({...customerForm, gst: e.target.value.toUpperCase()})}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="22AAAAA0000A1Z5"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">PAN Number</label>
-              <input
-                type="text"
-                value={customerForm.pan}
-                onChange={(e) => setCustomerForm({...customerForm, pan: e.target.value.toUpperCase()})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="ABCDE1234F"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">GST Number</label>
-              <input
-                type="text"
-                value={customerForm.gst}
-                onChange={(e) => setCustomerForm({...customerForm, gst: e.target.value.toUpperCase()})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="22AAAAA0000A1Z5"
-              />
-            </div>
-          </div>
         </>
       );
     }
@@ -418,15 +418,17 @@ export default function CustomerRegistration() {
           </div>
         ) : (
           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="text-lg font-medium text-gray-900">All Customers ({customers.length})</h2>
                 <div className="text-sm text-gray-500">
                   {customers.filter(c => c.status === 'approved').length} approved customers
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            
+            {/* Desktop Table */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -532,13 +534,120 @@ export default function CustomerRegistration() {
                               {customer.status === 'approved' ? 'Deactivate' : 'Activate'}
                             </button>
                           )}
-
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="lg:hidden">
+              <div className="space-y-4 p-4">
+                {customers.map((customer) => (
+                  <div key={customer.id} className="bg-gray-50 rounded-lg p-4 border">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                          <span className="text-blue-600 font-semibold text-sm">
+                            {(customer.customer_type === 'organization' ? customer.org_name : customer.name)?.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-semibold text-gray-900 truncate">
+                            {customer.customer_type === 'organization' ? customer.org_name : customer.name}
+                          </h4>
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
+                            {customer.customer_type}
+                          </span>
+                        </div>
+                      </div>
+                      {hasPermission('customers.status') ? (
+                        <select
+                          value={customer.status || 'pending'}
+                          onChange={(e) => updateCustomerStatus(customer.id, e.target.value)}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 focus:ring-2 focus:ring-blue-500 flex-shrink-0 ml-2 ${
+                            customer.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            customer.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="draft">Draft</option>
+                        </select>
+                      ) : (
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 ml-2 ${
+                          customer.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          customer.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {customer.status || 'Pending'}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2 text-sm mb-4">
+                      <div>
+                        <span className="text-gray-500">Contact:</span>
+                        <div className="mt-1">
+                          <div className="font-medium">{customer.customer_type === 'organization' ? customer.org_mobile : customer.mobile}</div>
+                          {customer.email && <div className="text-gray-600">{customer.email}</div>}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Reference:</span>
+                        <div className="mt-1">
+                          <div className="font-medium">{customer.reference_source || '—'}</div>
+                          {customer.reference_details && <div className="text-gray-600 text-xs">{customer.reference_details}</div>}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Created:</span>
+                        <span className="ml-2 font-medium">
+                          {new Date(customer.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2 pt-3 border-t border-gray-200">
+                      {hasPermission('customers.edit') && (
+                        <button
+                          onClick={() => handleEdit(customer)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Edit Customer"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      )}
+                      {hasPermission('customers.status') && (
+                        <button
+                          onClick={() => {
+                            const newStatus = customer.status === 'approved' ? 'rejected' : 'approved';
+                            updateCustomerStatus(customer.id, newStatus);
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            customer.status === 'approved'
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title={customer.status === 'approved' ? "Click to Deactivate" : "Click to Activate"}
+                        >
+                          {customer.status === 'approved' ? 'Deactivate' : 'Activate'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
