@@ -39,10 +39,24 @@ export default function Login() {
   // Validation function
   const validateForm = () => {
     const newErrors = {};
-    if (!tenantCode.trim()) newErrors.tenantCode = "Hospital code is required";
-    if (!loginIdentifier.trim()) newErrors.loginIdentifier = "Login code or email is required";
-    if (!password.trim()) newErrors.password = "Password is required";
-    else if (password.length < 6) newErrors.password = "Password must be at least 6 characters";
+    
+    console.log('Validating form with values:', {
+      tenantCode: `'${tenantCode}'`,
+      loginIdentifier: `'${loginIdentifier}'`,
+      password: password ? '[HIDDEN]' : '[EMPTY]'
+    });
+    
+    if (!tenantCode || !tenantCode.trim()) {
+      newErrors.tenantCode = "Hospital code is required";
+    }
+    if (!loginIdentifier || !loginIdentifier.trim()) {
+      newErrors.loginIdentifier = "Login code or email is required";
+    }
+    if (!password || !password.trim()) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -57,17 +71,42 @@ export default function Login() {
     setLoading(true);
 
     try {
+      console.log('Sending login request with data:', {
+        tenant_code: tenantCode.trim(),
+        login_identifier: loginIdentifier.trim(),
+        password: password ? '[HIDDEN]' : '[EMPTY]'
+      });
+      
+      console.log('Raw form values:', {
+        tenantCode: tenantCode,
+        loginIdentifier: loginIdentifier,
+        password: password ? 'HAS_VALUE' : 'EMPTY'
+      });
+      
       // Always use the regular login endpoint - it will handle both admin and user login
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch("http://127.0.0.1:8000/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_code: tenantCode, login_identifier: loginIdentifier, password }),
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ 
+          tenant_code: tenantCode.trim(), 
+          login_identifier: loginIdentifier.trim(), 
+          password: password 
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setErrors({ general: data.detail || "Invalid credentials" });
+        console.error('Login failed:', {
+          status: res.status,
+          statusText: res.statusText,
+          data: data,
+          url: res.url
+        });
+        setErrors({ general: data.detail || data.message || "Invalid credentials" });
         setLoading(false);
         return;
       }
@@ -279,6 +318,7 @@ export default function Login() {
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
+              
             </form>
           )}
 

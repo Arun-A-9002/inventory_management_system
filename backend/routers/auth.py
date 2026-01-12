@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from datetime import datetime
 import hashlib
 import traceback
+import os
+import json
 
 from database import get_master_db
 from models.register_models import Tenant
@@ -25,7 +27,7 @@ from utils.auth import (
 from utils.logger import log_error, log_audit, log_api
 from utils.audit import log_audit as log_database_audit, get_user_info
 
-router = APIRouter(tags=["Authentication"], prefix="/auth")
+router = APIRouter(tags=["Authentication"])
 
 
 # --------------------------
@@ -35,6 +37,17 @@ class LoginModel(BaseModel):
     tenant_code: str
     login_identifier: str  # Can be either login_code or email
     password: str
+    
+    class Config:
+        str_strip_whitespace = True  # Automatically strip whitespace
+        
+    def __init__(self, **data):
+        # Handle potential field name variations
+        if 'email' in data and 'login_identifier' not in data:
+            data['login_identifier'] = data.pop('email')
+        if 'login_code' in data and 'login_identifier' not in data:
+            data['login_identifier'] = data.pop('login_code')
+        super().__init__(**data)
 
 class LoginEmailModel(BaseModel):
     tenant_code: str
@@ -42,194 +55,164 @@ class LoginEmailModel(BaseModel):
     password: str
 
 
-@router.post("/login")
-def login(req: LoginModel, request: Request, db: Session = Depends(get_master_db)):
-    log_api(f"LOGIN ATTEMPT → {req.login_identifier} with tenant code {req.tenant_code}")
-    
+@router.post("/test-login")
+async def test_login_debug(request: Request):
+    """Debug endpoint to test if the server is receiving requests"""
     try:
-        # First find the tenant by tenant_code
-        tenant = db.query(Tenant).filter(Tenant.tenant_code.ilike(req.tenant_code)).first()
+        body = await request.body()
+        headers = dict(request.headers)
         
+        return {
+            "message": "Server is working",
+            "method": request.method,
+            "url": str(request.url),
+            "headers": headers,
+            "body": body.decode() if body else "No body",
+            "client": request.client.host if request.client else "No client info"
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/debug-login")
+async def debug_login(request: Request):
+    """Debug endpoint to see raw request data"""
+    try:
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        # Try to parse JSON
+        try:
+            import json
+            json_data = json.loads(body.decode()) if body else {}
+        except:
+            json_data = "Could not parse JSON"
+        
+        return {
+            "message": "Debug endpoint working",
+            "raw_body": body.decode() if body else "No body",
+            "parsed_json": json_data,
+            "content_type": headers.get('content-type'),
+            "method": request.method
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/login")
+async def login(request: Request, db: Session = Depends(get_master_db)):
+    try:
+        # Parse JSON manually
+        body = await request.body()
+        import json
+        data = json.loads(body.decode())
+        
+        tenant_code = data.get('tenant_code', '').strip()
+        login_identifier = data.get('login_identifier', '').strip()
+        password = data.get('password', '').strip()
+        
+        log_api(f"LOGIN ATTEMPT → {login_identifier} with tenant code {tenant_code}")
+        
+        # Validate required fields
+        if not tenant_code:
+            raise HTTPException(400, "Tenant code is required")
+        if not login_identifier:
+            raise HTTPException(400, "Login identifier (email or login code) is required")
+        if not password:
+            raise HTTPException(400, "Password is required")
+        
+        # Find tenant
+        tenant = db.query(Tenant).filter(Tenant.tenant_code.ilike(tenant_code)).first()
         if not tenant:
-            log_error(Exception("Invalid tenant code"), location="Login Check")
             raise HTTPException(400, "Invalid tenant code")
         
-        # Check if this is an admin login (email matches admin_email)
-        if '@' in req.login_identifier and tenant.admin_email == req.login_identifier:
-            # Admin login
-            hashed_pw = hashlib.sha256(req.password.encode()).hexdigest()
+        # Check if admin login
+        if '@' in login_identifier and tenant.admin_email == login_identifier:
+            hashed_pw = hashlib.sha256(password.encode()).hexdigest()
             if hashed_pw == tenant.password_hash:
-                # Admin always requires OTP
-                otp = generate_otp(req.login_identifier)
-                send_otp_email(req.login_identifier, otp)
-                log_audit(f"OTP SENT TO ADMIN {req.login_identifier} for tenant {req.tenant_code}")
-                return {"message": "OTP sent to email", "requires_otp": True, "email": req.login_identifier}
+                otp = generate_otp(login_identifier)
+                send_otp_email(login_identifier, otp)
+                return {"message": "OTP sent to email", "requires_otp": True, "email": login_identifier}
             else:
-                log_error(Exception("Invalid admin password"), location="Admin Login Check")
                 raise HTTPException(400, "Invalid credentials")
         
-        # Regular user login - check tenant database
+        # Regular user login
         from database import get_tenant_db
         from models.tenant_models import User, UserSession
         from utils.auth import verify_password
         import secrets
         
-        try:
-            tenant_db_gen = get_tenant_db(tenant.database_name)
-            tenant_db = next(tenant_db_gen)
+        tenant_db_gen = get_tenant_db(tenant.database_name)
+        tenant_db = next(tenant_db_gen)
+        
+        # Find user
+        if '@' in login_identifier:
+            tenant_user = tenant_db.query(User).filter(User.email == login_identifier).first()
+        else:
+            tenant_user = tenant_db.query(User).filter(User.login_code == login_identifier.upper()).first()
+        
+        if tenant_user and verify_password(password, tenant_user.hashed_password):
+            if not tenant_user.is_active:
+                tenant_db.close()
+                raise HTTPException(400, "Account is inactive")
             
-            # Check if it's an email format or login code
-            if '@' in req.login_identifier:
-                # Search by email
-                tenant_user = tenant_db.query(User).filter(User.email == req.login_identifier).first()
-                log_api(f"Searching by email: {req.login_identifier} - Found: {tenant_user is not None}")
-            else:
-                # Search by login code
-                tenant_user = tenant_db.query(User).filter(User.login_code == req.login_identifier.upper()).first()
-                log_api(f"Searching by login_code: {req.login_identifier.upper()} - Found: {tenant_user is not None}")
+            # Check 2FA
+            if tenant_user.two_factor_enabled:
+                otp = generate_otp(tenant_user.email)
+                send_otp_email(tenant_user.email, otp)
+                tenant_db.close()
+                return {"message": "OTP sent to email", "requires_otp": True, "email": tenant_user.email}
             
-            if tenant_user and verify_password(req.password, tenant_user.hashed_password):
-                if not tenant_user.is_active:
-                    tenant_db.close()
-                    raise HTTPException(400, "Account is inactive")
-                
-                # Store user email before potential session issues
-                user_email = tenant_user.email
-                user_two_factor = tenant_user.two_factor_enabled
-                
-                # Check if two-factor authentication is enabled
-                if user_two_factor:
-                    # Send OTP for 2FA users
-                    otp = generate_otp(user_email)
-                    send_otp_email(user_email, otp)
-                    
-                    # Database audit log for OTP sent
-                    log_database_audit(
-                        db=tenant_db,
-                        request=request,
-                        user_id=tenant_user.id,
-                        user_name=tenant_user.full_name,
-                        action="OTP_SENT",
-                        table_name="users",
-                        record_id=tenant_user.id,
-                        new_values={"email": user_email, "two_factor_enabled": True},
-                        module="AUTHENTICATION",
-                        description=f"OTP sent to 2FA user {user_email}"
-                    )
-                    
-                    tenant_db.close()
-                    log_audit(f"OTP SENT TO 2FA USER {user_email} (identifier: {req.login_identifier}) in tenant {req.tenant_code}")
-                    return {"message": "OTP sent to email", "requires_otp": True, "email": user_email}
-                else:
-                    # Direct login without OTP
-                    # Clear any existing sessions if multi-login is disabled
-                    if not tenant_user.multi_login_enabled:
-                        # Deactivate existing sessions instead of blocking login
-                        existing_sessions = tenant_db.query(UserSession).filter(
-                            UserSession.user_id == tenant_user.id,
-                            UserSession.is_active == True
-                        ).all()
-                        
-                        for session in existing_sessions:
-                            session.is_active = False
-                        
-                        if existing_sessions:
-                            tenant_db.commit()
-                            log_audit(f"Deactivated {len(existing_sessions)} existing sessions for user {tenant_user.email}")
-                    
-                    # Get user permissions
-                    permissions = []
-                    for role in tenant_user.roles:
-                        for permission in role.permissions:
-                            permissions.append(permission.name)
-                    
-                    # Get role names
-                    role_names = [role.name for role in tenant_user.roles]
-                    primary_role = role_names[0] if role_names else "user"
-                    
-                    # Create session token
-                    session_token = secrets.token_urlsafe(32)
-                    session_hash = hashlib.sha256(session_token.encode()).hexdigest()
-                    
-                    # Create user session record
-                    user_session = UserSession(
-                        user_id=tenant_user.id,
-                        session_token=session_hash,
-                        ip_address=request.client.host if request.client else None,
-                        user_agent=request.headers.get('user-agent')
-                    )
-                    tenant_db.add(user_session)
+            # Direct login
+            if not tenant_user.multi_login_enabled:
+                existing_sessions = tenant_db.query(UserSession).filter(
+                    UserSession.user_id == tenant_user.id,
+                    UserSession.is_active == True
+                ).all()
+                for session in existing_sessions:
+                    session.is_active = False
+                if existing_sessions:
                     tenant_db.commit()
-                    
-                    # Database audit log for successful login
-                    log_database_audit(
-                        db=tenant_db,
-                        request=request,
-                        user_id=tenant_user.id,
-                        user_name=tenant_user.full_name,
-                        action="LOGIN_SUCCESS",
-                        table_name="users",
-                        record_id=tenant_user.id,
-                        new_values={
-                            "login_identifier": req.login_identifier,
-                            "tenant_code": req.tenant_code,
-                            "session_created": True
-                        },
-                        module="AUTHENTICATION",
-                        description=f"Direct login successful for {tenant_user.email}"
-                    )
-                    
-                    access_token = create_access_token({
-                        "sub": str(tenant_user.id),
-                        "email": tenant_user.email,
-                        "login_code": tenant_user.login_code,
-                        "tenant_db": tenant.database_name,
-                        "tenant_code": tenant.tenant_code,
-                        "user_type": "tenant_user",
-                        "permissions": list(set(permissions)),
-                        "full_name": tenant_user.full_name,
-                        "role": primary_role,
-                        "session_token": session_hash
-                    })
-                    
-                    tenant_db.close()
-                    log_audit(f"DIRECT LOGIN SUCCESS → {tenant_user.email} (identifier: {req.login_identifier}) for tenant {req.tenant_code}")
-                    return {"access_token": access_token, "token_type": "bearer", "requires_otp": False}
             
-            # Database audit log for failed login attempt
-            if tenant_user:
-                log_database_audit(
-                    db=tenant_db,
-                    request=request,
-                    user_id=tenant_user.id,
-                    user_name=tenant_user.full_name,
-                    action="LOGIN_FAILED",
-                    table_name="users",
-                    record_id=tenant_user.id,
-                    new_values={"login_identifier": req.login_identifier, "reason": "Invalid password"},
-                    module="AUTHENTICATION",
-                    description=f"Login failed - invalid password for {req.login_identifier}"
-                )
-            else:
-                # Log failed attempt for non-existent user
-                log_database_audit(
-                    db=tenant_db,
-                    request=request,
-                    user_id=None,
-                    user_name="Unknown",
-                    action="LOGIN_FAILED",
-                    table_name="users",
-                    record_id=None,
-                    new_values={"login_identifier": req.login_identifier, "reason": "User not found"},
-                    module="AUTHENTICATION",
-                    description=f"Login failed - user not found: {req.login_identifier}"
-                )
+            # Get permissions
+            permissions = []
+            for role in tenant_user.roles:
+                for permission in role.permissions:
+                    permissions.append(permission.name)
+            
+            role_names = [role.name for role in tenant_user.roles]
+            primary_role = role_names[0] if role_names else "user"
+            
+            # Create session
+            session_token = secrets.token_urlsafe(32)
+            session_hash = hashlib.sha256(session_token.encode()).hexdigest()
+            
+            user_session = UserSession(
+                user_id=tenant_user.id,
+                session_token=session_hash,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get('user-agent')
+            )
+            tenant_db.add(user_session)
+            tenant_db.commit()
+            
+            access_token = create_access_token({
+                "sub": str(tenant_user.id),
+                "email": tenant_user.email,
+                "login_code": tenant_user.login_code,
+                "tenant_db": tenant.database_name,
+                "tenant_code": tenant.tenant_code,
+                "user_type": "tenant_user",
+                "permissions": list(set(permissions)),
+                "full_name": tenant_user.full_name,
+                "role": primary_role,
+                "session_token": session_hash
+            })
             
             tenant_db.close()
-        except Exception as e:
-            log_error(e, f"Error checking tenant DB {tenant.database_name}")
+            return {"access_token": access_token, "token_type": "bearer", "requires_otp": False}
         
-        log_error(Exception("Invalid credentials"), location="Login Check")
+        tenant_db.close()
         raise HTTPException(400, "Invalid login code/email or password")
         
     except HTTPException:

@@ -1,285 +1,345 @@
-# utils/auth.py
+# backend/utils/auth.py
 
+from fastapi import HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from jose import jwt, JWTError
+import secrets
+import hashlib
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import os
+from typing import Optional, Dict, Any
+import redis
+import json
+
+# ----------------------------------------------------------
+# CONFIGURATION
+# ----------------------------------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# Password hashing - using simple SHA256 with salt
+# pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+
+# JWT Bearer
+security = HTTPBearer()
+
+# Redis for OTP storage (fallback to in-memory dict if Redis not available)
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_client.ping()
+    USE_REDIS = True
+except:
+    USE_REDIS = False
+    otp_storage = {}  # In-memory fallback
+
+# ----------------------------------------------------------
+# PASSWORD UTILITIES
+# ----------------------------------------------------------
 import hashlib
 import secrets
-import smtplib
-import ssl
-import traceback
-from email.mime.text import MIMEText
-from dotenv import load_dotenv
-from fastapi import HTTPException, Header, Depends
-from typing import Optional, Dict, Any
 
-# Logging helpers (assumed present in your project)
-from utils.logger import log_error, log_audit, log_api
+def hash_password(password: str) -> str:
+    """Hash a password using SHA256 with salt."""
+    salt = secrets.token_hex(16)
+    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}${password_hash}"
 
-load_dotenv()
-
-# ===========================================================
-# ENV CONFIG
-# ===========================================================
-SECRET_KEY = os.getenv("SECRET_KEY", "mysecretkey")
-ALGORITHM = "HS256"
-
-ACCESS_EXPIRE_MIN = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-REFRESH_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))
-
-SMTP_HOST = os.getenv("SMTP_HOST")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM = os.getenv("SMTP_FROM", "NUTRYAH <no-reply@nutryah.com>")
-
-# ===========================================================
-# ACCESS TOKEN
-# ===========================================================
-def create_access_token(data: Dict[str, Any]) -> str:
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash."""
     try:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_EXPIRE_MIN)
-        to_encode = data.copy()
-        to_encode.update({"exp": expire})
+        salt, stored_hash = hashed_password.split('$', 1)
+        password_hash = hashlib.sha256((plain_password + salt).encode()).hexdigest()
+        return password_hash == stored_hash
+    except:
+        return False
 
-        token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-        log_audit(f"Access token created for email={data.get('email')}")
-        return token
+# ----------------------------------------------------------
+# TOKEN UTILITIES
+# ----------------------------------------------------------
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
-    except Exception as e:
-        log_error(e, location="create_access_token()")
-        raise
-
-
-# ===========================================================
-# REFRESH TOKEN
-# ===========================================================
 def generate_refresh_token() -> str:
-    token = secrets.token_urlsafe(64)
-    log_audit("Refresh token generated")
-    return token
-
+    """Generate a secure refresh token."""
+    return secrets.token_urlsafe(32)
 
 def hash_token(token: str) -> str:
+    """Hash a token using SHA256."""
     return hashlib.sha256(token.encode()).hexdigest()
 
-
 def refresh_expiry() -> datetime:
-    return datetime.utcnow() + timedelta(days=REFRESH_EXPIRE_DAYS)
+    """Get refresh token expiry datetime."""
+    return datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-
-# ===========================================================
-# OTP STORAGE (IN-MEMORY)
-# ===========================================================
-otp_store: dict = {}
-OTP_EXPIRY_MIN = 5
-
-
+# ----------------------------------------------------------
+# OTP UTILITIES
+# ----------------------------------------------------------
 def generate_otp(email: str) -> str:
-    """Generate & store 6-digit OTP for 5 minutes."""
-    try:
-        otp = str(secrets.randbelow(900000) + 100000)
-        expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MIN)
-
-        otp_store[email] = {"otp": otp, "expires": expires_at}
-
-        log_audit(f"OTP generated for {email}")
-        return otp
-
-    except Exception as e:
-        log_error(e, location="generate_otp()")
-        raise
-
+    """Generate and store OTP for email."""
+    otp = str(secrets.randbelow(900000) + 100000)  # 6-digit OTP
+    expiry = datetime.utcnow() + timedelta(minutes=10)  # 10 minutes expiry
+    
+    otp_data = {
+        "otp": otp,
+        "expiry": expiry.isoformat()
+    }
+    
+    if USE_REDIS:
+        redis_client.setex(f"otp:{email}", 600, json.dumps(otp_data))  # 10 minutes
+        print(f"OTP stored in Redis for {email}: {otp}")
+    else:
+        otp_storage[email] = otp_data
+        print(f"OTP stored in memory for {email}: {otp}")
+    
+    return otp
 
 def verify_otp(email: str, otp: str) -> bool:
-    """Validate OTP and delete after use."""
+    """Verify OTP for email."""
     try:
-        if email not in otp_store:
-            return False
-
-        data = otp_store[email]
-
-        if datetime.utcnow() > data["expires"]:
-            del otp_store[email]
-            return False
-
-        if data["otp"] != otp:
-            return False
-
-        del otp_store[email]
-        log_audit(f"OTP verified successfully for {email}")
-        return True
-
-    except Exception as e:
-        log_error(e, location="verify_otp()")
-        return False
-
-
-# ===========================================================
-# SEND OTP EMAIL
-# ===========================================================
-def send_otp_email(to_email: str, otp: str):
-    subject = "Your Nutryah Login OTP"
-    body = f"""
-    Dear User,
-
-    Your OTP for login is: {otp}
-    This OTP is valid for 5 minutes.
-
-    Regards,
-    Nutryah Team
-    """
-
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = SMTP_FROM
-    msg["To"] = to_email
-
-    try:
-        log_api(f"Sending OTP email → {to_email}")
-
-        context = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.starttls(context=context)
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, to_email, msg.as_string())
-
-        log_audit(f"OTP email sent to {to_email}")
-
-    except Exception as e:
-        log_error(e, location="send_otp_email()")
-        raise HTTPException(500, "Email sending failed. Check SMTP settings.")
-
-
-# ===========================================================
-# WELCOME EMAIL
-# ===========================================================
-def send_welcome_email(to_email: str, username: str, temp_password: str, login_code: str = None):
-    subject = "Welcome to Nutryah - Account Created"
-    body = f"""
-    Dear {username},
-
-    Your account has been created successfully.
-    
-    Login Details:
-    Email: {to_email}
-    Temporary Password: {temp_password}
-    Login Code: {login_code or 'Not provided'}
-
-    Please login using your email and temporary password, then change your password for security.
-    Use the login code when prompted during the login process.
-
-    Regards,
-    Nutryah Team
-    """
-
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = SMTP_FROM
-    msg["To"] = to_email
-
-    try:
-        context = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.starttls(context=context)
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, to_email, msg.as_string())
-
-        log_audit(f"Welcome email sent to {to_email}")
-
-    except Exception as e:
-        log_error(e, location="send_welcome_email()")
-        raise HTTPException(500, "Welcome email sending failed.")
-
-
-# ===========================================================
-# PASSWORD HASHING
-# ===========================================================
-def hash_password(password: str) -> str:
-    salt = "inventory_salt_2024"
-    return hashlib.sha256((password + salt).encode()).hexdigest()
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return hash_password(plain) == hashed
-    except Exception:
-        return False
-
-
-# ===========================================================
-# JWT VERIFY + CURRENT USER
-# ===========================================================
-def verify_token(token: str) -> Optional[dict]:
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        return None
-
-
-def _parse_bearer_token(header_value: str) -> Optional[str]:
-    """Return token string if header is 'Bearer <token>' else None."""
-    if not header_value:
-        return None
-    parts = header_value.split()
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1]
-    return None
-
-
-def get_current_user(Authorization: str = Header(None)) -> dict:
-    """
-    Extract JWT, validate, and return payload with permissions from token.
-    Raises 401 if token missing/invalid.
-    """
-
-    # Require header
-    if not Authorization:
-        log_error(Exception("Missing Authorization header"), location="get_current_user")
-        raise HTTPException(401, "Token required")
-
-    token = _parse_bearer_token(Authorization)
-    if not token:
-        log_error(Exception("Malformed Authorization header"), location="get_current_user")
-        raise HTTPException(401, "Invalid token format")
-
-    payload = verify_token(token)
-    if not payload:
-        log_error(Exception("JWT verification failed or expired"), location="get_current_user")
-        raise HTTPException(401, "Token expired or invalid")
-
-    # Default fields
-    payload.setdefault("permissions", [])
-    payload.setdefault("role", payload.get("role", "user"))
-
-    # Use permissions from token directly - no DB query needed
-    # Permissions are already set during login and stored in JWT
-    if not payload.get("permissions"):
-        # If no permissions in token, default based on role
-        if payload.get("role") == "admin":
-            payload["permissions"] = ["*"]
+        if USE_REDIS:
+            stored_data = redis_client.get(f"otp:{email}")
+            if not stored_data:
+                print(f"No OTP found in Redis for {email}")
+                return False
+            
+            otp_data = json.loads(stored_data)
+            redis_client.delete(f"otp:{email}")  # Delete after use
         else:
-            payload["permissions"] = []
+            otp_data = otp_storage.get(email)
+            if not otp_data:
+                print(f"No OTP found in memory for {email}")
+                return False
+            
+            del otp_storage[email]  # Delete after use
+        
+        # Check expiry
+        expiry = datetime.fromisoformat(otp_data["expiry"])
+        if datetime.utcnow() > expiry:
+            print(f"OTP expired for {email}")
+            return False
+        
+        is_valid = otp_data["otp"] == otp
+        print(f"OTP verification for {email}: stored={otp_data['otp']}, provided={otp}, valid={is_valid}")
+        return is_valid
+    except Exception as e:
+        print(f"Error verifying OTP for {email}: {e}")
+        return False
 
-    return payload
+# ----------------------------------------------------------
+# EMAIL UTILITIES
+# ----------------------------------------------------------
+def _send_email_sync(email: str, otp: str) -> bool:
+    """Synchronous email sending function."""
+    try:
+        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_username = os.getenv("SMTP_USERNAME", "")
+        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        
+        if not smtp_username or not smtp_password:
+            return False
+        
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = email
+        msg['Subject'] = "Your Login OTP - NUTRYAH IMS"
+        
+        body = f"""
+        <html>
+        <body>
+            <h2>NUTRYAH Inventory Management System</h2>
+            <p>Your One-Time Password (OTP) for login is:</p>
+            <h1 style="color: #007bff; font-size: 32px; letter-spacing: 5px;">{otp}</h1>
+            <p>This OTP is valid for 10 minutes.</p>
+            <p>If you didn't request this OTP, please ignore this email.</p>
+            <br>
+            <p>Best regards,<br>NUTRYAH Team</p>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.sendmail(smtp_username, email, msg.as_string())
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Failed to send OTP email: {e}")
+        return False
 
+def send_otp_email(email: str, otp: str) -> bool:
+    """Send OTP via email asynchronously."""
+    # Send email in background thread
+    executor = ThreadPoolExecutor(max_workers=1)
+    executor.submit(_send_email_sync, email, otp)
+    return True  # Return immediately
 
-# ===========================================================
-# PERMISSION CHECK DECORATOR
-# ===========================================================
-def check_permission(required_permission: str):
-    """Used in routers to enforce RBAC."""
-    def permission_checker(user = Depends(get_current_user)):
-        # Admin → full access if role==admin OR wildcard present
-        if user.get("role") == "admin" or "*" in user.get("permissions", []):
-            return user
+def send_registration_email(admin_email: str, organization_name: str, admin_name: str) -> bool:
+    """Send registration confirmation email."""
+    try:
+        # Email configuration
+        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_username = os.getenv("SMTP_USERNAME", "")
+        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        
+        if not smtp_username or not smtp_password:
+            print("SMTP credentials not configured")
+            return False
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = admin_email
+        msg['Subject'] = f"Welcome to NUTRYAH IMS - {organization_name}"
+        
+        body = f"""
+        <html>
+        <body>
+            <h2>Welcome to NUTRYAH Inventory Management System</h2>
+            <p>Dear {admin_name},</p>
+            <p>Your organization <strong>{organization_name}</strong> has been successfully registered with NUTRYAH IMS.</p>
+            <p>You can now log in to your account and start managing your inventory.</p>
+            <p>If you have any questions, please contact our support team.</p>
+            <br>
+            <p>Best regards,<br>NUTRYAH Team</p>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Send email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        text = msg.as_string()
+        server.sendmail(smtp_username, admin_email, text)
+        server.quit()
+        
+        return True
+        
+    except Exception as e:
+        print(f"Failed to send registration email: {e}")
+        return False
 
-        # Tenant user: must have specific permission
-        if required_permission not in user.get("permissions", []):
-            log_error(Exception(f"Permission denied: {required_permission} for {user.get('email')}"),
-                      location="check_permission")
-            raise HTTPException(403, f"Permission denied: {required_permission} required")
+def send_welcome_email(email: str, name: str, password: str, login_code: str) -> bool:
+    """Send welcome email to new user."""
+    try:
+        # Email configuration
+        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_username = os.getenv("SMTP_USERNAME", "")
+        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        
+        if not smtp_username or not smtp_password:
+            print("SMTP credentials not configured")
+            return False
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = email
+        msg['Subject'] = "Welcome to NUTRYAH IMS - Your Account Details"
+        
+        body = f"""
+        <html>
+        <body>
+            <h2>Welcome to NUTRYAH Inventory Management System</h2>
+            <p>Dear {name},</p>
+            <p>Your account has been created successfully. Here are your login details:</p>
+            <div style="background-color: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                <p><strong>Email:</strong> {email}</p>
+                <p><strong>Login Code:</strong> {login_code}</p>
+                <p><strong>Temporary Password:</strong> {password}</p>
+            </div>
+            <p><strong>Important:</strong> Please change your password after your first login for security purposes.</p>
+            <p>You can log in using either your email or login code along with your password.</p>
+            <br>
+            <p>Best regards,<br>NUTRYAH Team</p>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Send email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        text = msg.as_string()
+        server.sendmail(smtp_username, email, text)
+        server.quit()
+        
+        return True
+        
+    except Exception as e:
+        print(f"Failed to send welcome email: {e}")
+        return False
 
-        return user
+# ----------------------------------------------------------
+# JWT AUTHENTICATION
+# ----------------------------------------------------------
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """Get current user from JWT token."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise credentials_exception
 
+# ----------------------------------------------------------
+# PERMISSION UTILITIES
+# ----------------------------------------------------------
+def has_permission(user_data: dict, permission_name: str) -> bool:
+    """Check if user has specific permission."""
+    if not user_data:
+        return False
+    
+    permissions = user_data.get("permissions", [])
+    
+    # Admin has all permissions
+    if "*" in permissions or user_data.get("role") == "admin":
+        return True
+    
+    # Check specific permission
+    return permission_name in permissions
+
+def check_permission(permission_name: str):
+    """FastAPI dependency to check permissions."""
+    def permission_checker(current_user: dict = Depends(get_current_user)):
+        if not has_permission(current_user, permission_name):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Permission denied. Required: {permission_name}"
+            )
+        return current_user
     return permission_checker
