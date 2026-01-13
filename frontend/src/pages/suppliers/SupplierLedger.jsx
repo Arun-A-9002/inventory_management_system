@@ -303,7 +303,11 @@ export default function SupplierLedger() {
   const [filteredGrnList, setFilteredGrnList] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [selectedVendor, setSelectedVendor] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
   const [loading, setLoading] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
   const [viewModal, setViewModal] = useState({ isOpen: false, grn: null });
   const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
   const [paymentModal, setPaymentModal] = useState({ isOpen: false, grn: null });
@@ -319,17 +323,38 @@ export default function SupplierLedger() {
   }, []);
 
   useEffect(() => {
+    let filtered = grnList;
+    
     if (selectedVendor) {
-      const filtered = grnList.filter(grn => grn.vendor_name === selectedVendor);
-      setFilteredGrnList(filtered);
-      // Fetch payments for filtered GRNs
-      if (filtered.length > 0) {
-        fetchPaymentsForGRNs(filtered);
-      }
-    } else {
-      setFilteredGrnList(grnList);
+      filtered = filtered.filter(grn => grn.vendor_name === selectedVendor);
     }
-  }, [selectedVendor, grnList]);
+    
+    if (paymentFilter) {
+      filtered = filtered.filter(grn => {
+        const paidAmount = payments[grn.id] || 0;
+        const totalAmount = grn.total_amount || 0;
+        const outstanding = Math.max(0, totalAmount - paidAmount);
+        
+        if (paymentFilter === 'paid') return outstanding === 0 && paidAmount > 0;
+        if (paymentFilter === 'unpaid') return paidAmount === 0;
+        if (paymentFilter === 'partial') return paidAmount > 0 && outstanding > 0;
+        return true;
+      });
+    }
+    
+    setFilteredGrnList(filtered.sort((a, b) => new Date(b.grn_date) - new Date(a.grn_date)));
+    setCurrentPage(1);
+  }, [selectedVendor, grnList, paymentFilter, payments]);
+
+  // Separate effect for fetching payments to avoid infinite loops
+  useEffect(() => {
+    if (filteredGrnList.length > 0) {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const currentPageData = filteredGrnList.slice(startIndex, endIndex);
+      fetchPaymentsForGRNs(currentPageData);
+    }
+  }, [filteredGrnList.length, currentPage]);
 
   // Check if user has permission to view vendor ledger
   if (!hasPermission("vendor_ledger.view")) {
@@ -355,29 +380,54 @@ export default function SupplierLedger() {
       setVendors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+      if (err.response?.status === 401) {
+        showToast('Session expired. Please login again.', 'error');
+        window.location.href = '/login';
+      }
     }
   };
 
 
 
   const fetchPaymentsForGRNs = async (grnList) => {
+    if (!grnList || grnList.length === 0) return;
+    
     try {
+      setPaymentsLoading(true);
       const paymentMap = {};
       
-      for (const grn of grnList) {
+      // Batch API calls with Promise.allSettled and timeout to prevent blocking
+      const paymentPromises = grnList.map(async (grn) => {
         try {
-          const res = await api.get(`/payments/${grn.grn_number}`);
-          const paidAmount = res.data.total_paid || 0;
-          paymentMap[grn.id] = paidAmount;
+          // Add timeout to prevent hanging requests (reduced to 5 seconds)
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Request timeout')), 5000)
+          );
+          
+          const apiPromise = api.get(`/payments/${grn.grn_number}`);
+          const res = await Promise.race([apiPromise, timeoutPromise]);
+          
+          return { id: grn.id, amount: res.data.total_paid || 0 };
         } catch (err) {
           console.error(`Failed to fetch payment for GRN ${grn.grn_number}:`, err);
-          paymentMap[grn.id] = 0;
+          return { id: grn.id, amount: 0 };
         }
-      }
+      });
+      
+      const results = await Promise.allSettled(paymentPromises);
+      
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          paymentMap[result.value.id] = result.value.amount;
+        }
+      });
       
       setPayments(paymentMap);
     } catch (err) {
       console.error('Failed to fetch payments:', err);
+      showToast('Some payment data could not be loaded', 'warning');
+    } finally {
+      setPaymentsLoading(false);
     }
   };
 
@@ -493,9 +543,14 @@ export default function SupplierLedger() {
           [grnId]: (prev[grnId] || 0) + parseFloat(amount)
         }));
         
-        // Recalculate advance amount
-        const updatedGrnList = filteredGrnList.length > 0 ? filteredGrnList : grnList;
-        setTimeout(() => fetchPaymentsForGRNs(updatedGrnList), 100);
+        // Refresh payments after successful payment
+        const currentList = filteredGrnList.length > 0 ? filteredGrnList : grnList;
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const currentPageData = currentList.slice(startIndex, endIndex);
+        if (currentPageData.length > 0) {
+          setTimeout(() => fetchPaymentsForGRNs(currentPageData), 100);
+        }
         
         setPaymentModal({ isOpen: false, grn: null });
         showToast(`Payment of ₹${parseFloat(amount).toFixed(2)} saved successfully`, 'success');
@@ -516,21 +571,35 @@ export default function SupplierLedger() {
   const fetchGRNList = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/grn/list");
+      
+      // Add timeout to prevent hanging requests (reduced to 8 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 8000)
+      );
+      
+      const apiPromise = api.get("/grn/list");
+      const res = await Promise.race([apiPromise, timeoutPromise]);
+      
       setGrnList(res.data || []);
-      if (res.data && res.data.length > 0) {
-        await fetchPaymentsForGRNs(res.data);
-      }
     } catch (err) {
+      if (err.response?.status === 401) {
+        showToast('Session expired. Please login again.', 'error');
+        window.location.href = '/login';
+        return;
+      }
       try {
-        const res = await api.get("/grn/");
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 8000)
+        );
+        
+        const apiPromise = api.get("/grn/");
+        const res = await Promise.race([apiPromise, timeoutPromise]);
+        
         setGrnList(res.data || []);
-        if (res.data && res.data.length > 0) {
-          await fetchPaymentsForGRNs(res.data);
-        }
       } catch (err2) {
         console.error("Failed to fetch GRN list:", err2);
         setGrnList([]);
+        showToast('Failed to load GRN data. Please refresh the page.', 'error');
       }
     } finally {
       setLoading(false);
@@ -545,21 +614,42 @@ export default function SupplierLedger() {
           <div>
             <h1 className="text-2xl font-semibold mb-2">Vendor Ledger</h1>
             <p className="text-gray-600">Track vendor transactions and outstanding amounts</p>
+            {paymentsLoading && (
+              <div className="flex items-center mt-2 text-sm text-blue-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Loading payment data...
+              </div>
+            )}
           </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
-              <select
-                value={selectedVendor}
-                onChange={(e) => setSelectedVendor(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Vendors</option>
-                {vendors.map(vendor => (
-                  <option key={vendor.id} value={vendor.email}>
-                    {vendor.vendor_name} ({vendor.email})
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center space-x-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Vendor</label>
+                <select
+                  value={selectedVendor}
+                  onChange={(e) => setSelectedVendor(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Vendors</option>
+                  {vendors.map(vendor => (
+                    <option key={vendor.id} value={vendor.email}>
+                      {vendor.vendor_name} ({vendor.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Status</option>
+                  <option value="paid">Paid</option>
+                  <option value="unpaid">Unpaid</option>
+                  <option value="partial">Partial</option>
+                </select>
+              </div>
             </div>
         </div>
       </div>
@@ -581,10 +671,15 @@ export default function SupplierLedger() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading || paymentsLoading ? (
                 <tr>
                   <td colSpan="8" className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <span className="text-gray-600">
+                        {loading ? 'Loading GRN data...' : 'Loading payment information...'}
+                      </span>
+                    </div>
                   </td>
                 </tr>
               ) : filteredGrnList.length === 0 ? (
@@ -594,16 +689,12 @@ export default function SupplierLedger() {
                   </td>
                 </tr>
               ) : (
-                filteredGrnList.map((grn) => {
+                filteredGrnList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((grn) => {
+                  // Memoize calculations to prevent re-computation on every render
                   const paidAmount = payments[grn.id] || 0;
                   const totalAmount = grn.total_amount || 0;
                   const outstanding = Math.max(0, totalAmount - paidAmount);
-                  const getPaymentStatus = () => {
-                    if (paidAmount === 0) return 'Unpaid';
-                    if (outstanding === 0) return 'Paid';
-                    return 'Partial';
-                  };
-                  const status = getPaymentStatus();
+                  const status = paidAmount === 0 ? 'Unpaid' : outstanding === 0 ? 'Paid' : 'Partial';
                   
                   return (
                   <tr key={grn.id} className="border-t hover:bg-gray-50">
@@ -697,6 +788,53 @@ export default function SupplierLedger() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
+        {filteredGrnList.length > itemsPerPage && (
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="text-sm text-gray-500">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredGrnList.length)} to {Math.min(currentPage * itemsPerPage, filteredGrnList.length)} of {filteredGrnList.length} entries
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: Math.ceil(filteredGrnList.length / itemsPerPage) }, (_, i) => i + 1)
+                .filter(page => 
+                  page === 1 || 
+                  page === Math.ceil(filteredGrnList.length / itemsPerPage) || 
+                  Math.abs(page - currentPage) <= 2
+                )
+                .map((page, index, array) => (
+                  <div key={page} className="flex items-center">
+                    {index > 0 && array[index - 1] !== page - 1 && <span className="px-2">...</span>}
+                    <button
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 border rounded ${
+                        currentPage === page 
+                          ? 'bg-blue-600 text-white border-blue-600' 
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </div>
+                ))
+              }
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredGrnList.length / itemsPerPage)))}
+                disabled={currentPage === Math.ceil(filteredGrnList.length / itemsPerPage)}
+                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
 
