@@ -336,25 +336,33 @@ export default function SupplierLedger() {
         const outstanding = Math.max(0, totalAmount - paidAmount);
         
         if (paymentFilter === 'paid') return outstanding === 0 && paidAmount > 0;
-        if (paymentFilter === 'unpaid') return paidAmount === 0;
+        if (paymentFilter === 'unpaid') return paidAmount === 0 && totalAmount > 0;
         if (paymentFilter === 'partial') return paidAmount > 0 && outstanding > 0;
         return true;
       });
     }
     
     setFilteredGrnList(filtered.sort((a, b) => new Date(b.grn_date) - new Date(a.grn_date)));
-    setCurrentPage(1);
   }, [selectedVendor, grnList, paymentFilter, payments]);
 
-  // Separate effect for fetching payments to avoid infinite loops
+  // Reset page only when filters change
   useEffect(() => {
-    if (filteredGrnList.length > 0) {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const currentPageData = filteredGrnList.slice(startIndex, endIndex);
-      fetchPaymentsForGRNs(currentPageData);
+    setCurrentPage(1);
+  }, [selectedVendor, paymentFilter]);
+
+  // Fetch payments for all filtered data once
+  useEffect(() => {
+    if (filteredGrnList.length > 0 && filteredGrnList.length <= 100 && !paymentFilter) {
+      fetchPaymentsForGRNs(filteredGrnList);
     }
-  }, [filteredGrnList.length, currentPage]);
+  }, [filteredGrnList.length]);
+
+  // Fetch payments when payment filter is applied
+  useEffect(() => {
+    if (paymentFilter && filteredGrnList.length > 0 && Object.keys(payments).length === 0) {
+      fetchPaymentsForGRNs(filteredGrnList);
+    }
+  }, [paymentFilter]);
 
   // Check if user has permission to view vendor ledger
   if (!hasPermission("vendor_ledger.view")) {
