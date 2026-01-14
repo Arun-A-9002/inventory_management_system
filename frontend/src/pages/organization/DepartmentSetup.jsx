@@ -79,46 +79,39 @@ export default function DepartmentSetup() {
                 <p className="text-sm text-gray-500 mt-1">Complete overview of your organization's department information</p>
               </div>
               
-              {/* Desktop Table */}
-              <div className="hidden lg:block overflow-hidden">
+              <div className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">#</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Department</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {loading ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center">
+                          <td colSpan={3} className="px-6 py-8 text-center">
                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto"></div>
                           </td>
                         </tr>
                       ) : departments.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                          <td colSpan={3} className="px-6 py-8 text-center text-gray-400">
                             No departments registered
                           </td>
                         </tr>
                       ) : (
-                        departments.map((d, idx) => (
-                          <tr key={d.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 text-sm text-gray-500 text-center">{idx + 1}</td>
-                            <td className="px-6 py-4">
-                              <div className="font-semibold text-gray-900">{d.name}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-600">{d.description || '-'}</div>
-                            </td>
+                        departments.map((d) => (
+                          <tr key={d.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 font-medium text-gray-900">{d.name}</td>
+                            <td className="px-6 py-4 text-sm text-gray-900">{d.description || '-'}</td>
                             <td className="px-6 py-4">
                               <span className={`px-2 py-1 text-xs rounded ${
                                 d.is_active 
                                   ? 'bg-green-100 text-green-800' 
-                                  : 'bg-gray-100 text-gray-600'
+                                  : 'bg-red-100 text-red-800'
                               }`}>
                                 {d.is_active ? 'Active' : 'Inactive'}
                               </span>
@@ -129,47 +122,6 @@ export default function DepartmentSetup() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-
-              {/* Mobile Cards */}
-              <div className="lg:hidden">
-                {loading ? (
-                  <div className="text-center py-6">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto"></div>
-                  </div>
-                ) : departments.length === 0 ? (
-                  <div className="text-center py-6 text-gray-400">No departments registered</div>
-                ) : (
-                  <div className="space-y-4 p-4">
-                    {departments.map((d, idx) => (
-                      <div key={d.id} className="bg-gray-50 rounded-lg p-4 border">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex items-center flex-1 min-w-0">
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                              <span className="text-blue-600 font-semibold text-sm">{d.name.charAt(0)}</span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className="font-semibold text-gray-900 truncate">{d.name}</h4>
-                              <p className="text-xs text-gray-500">#{idx + 1}</p>
-                            </div>
-                          </div>
-                          <span className={`px-2 py-1 text-xs rounded flex-shrink-0 ml-2 ${
-                            d.is_active 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {d.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                        
-                        <div className="text-sm mb-4">
-                          <span className="text-gray-500">Description:</span>
-                          <div className="mt-1 font-medium">{d.description || "No description provided"}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               
               <div className="p-4 bg-gray-50 text-sm text-gray-500 border-t">

@@ -23,7 +23,7 @@ import json
 # ----------------------------------------------------------
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 260
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Password hashing - using simple SHA256 with salt
