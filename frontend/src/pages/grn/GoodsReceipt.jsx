@@ -14,7 +14,13 @@ export default function GoodsReceipt() {
   const [viewModal, setViewModal] = useState({ isOpen: false, grn: null });
   const [printModal, setPrintModal] = useState({ isOpen: false, grn: null });
   const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, grn: null });
+  const [createModal, setCreateModal] = useState(false);
   const [editMode, setEditMode] = useState({ isEditing: false, grnId: null });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const [form, setForm] = useState({
     grn_date: new Date().toISOString().split('T')[0],
@@ -56,7 +62,8 @@ export default function GoodsReceipt() {
   const fetchItemList = async () => {
     try {
       const res = await api.get("/items/");
-      setItemList(res.data || []);
+      const itemData = res.data || [];
+      setItemList(Array.isArray(itemData) ? itemData : []);
     } catch (err) {
       console.error("Failed to fetch items:", err);
       setItemList([]);
@@ -64,10 +71,16 @@ export default function GoodsReceipt() {
   };
   const fetchPOList = async () => {
     try {
-      const res = await api.get("/purchase/po");
-      setPoList(res.data || []);
+      const res = await api.get("/purchase/po?page=1&limit=1000");
+      console.log('PO List Response:', res.data);
+      // Handle paginated response - POs are in 'data' property
+      const poData = res.data?.data || res.data;
+      const poArray = Array.isArray(poData) ? poData : (poData ? [poData] : []);
+      console.log('PO Array:', poArray, 'Is Array:', Array.isArray(poArray));
+      setPoList(poArray);
     } catch (err) {
       console.error("Failed to fetch PO list:", err);
+      setPoList([]);
     }
   };
 
@@ -75,7 +88,8 @@ export default function GoodsReceipt() {
   const fetchLocations = async () => {
     try {
       const res = await api.get("/inventory/locations/internal");
-      setLocations(res.data || []);
+      const locationData = res.data || [];
+      setLocations(Array.isArray(locationData) ? locationData : []);
     } catch (err) {
       console.error("Failed to fetch locations:", err);
       setLocations([]);
@@ -86,7 +100,8 @@ export default function GoodsReceipt() {
   const fetchVendors = async () => {
     try {
       const res = await api.get("/vendors/");
-      setVendors(res.data || []);
+      const vendorData = res.data || [];
+      setVendors(Array.isArray(vendorData) ? vendorData : []);
     } catch (err) {
       console.error("Failed to fetch vendors:", err);
       setVendors([]);
@@ -94,19 +109,24 @@ export default function GoodsReceipt() {
   };
 
   // Fetch GRN list
-  const fetchGRNList = async () => {
+  const fetchGRNList = async (page = 1) => {
     if (!hasPermission("grn.view")) return;
     
     try {
       setLoading(true);
-      const res = await api.get("/grn/list");
+      const res = await api.get(`/grn/list?page=${page}&limit=${itemsPerPage}`);
       console.log('GRN API Response:', res.data);
-      const grnData = res.data || [];
-      setGrnList(grnData);
+      const grnData = res.data.data || [];
+      const grnArray = Array.isArray(grnData) ? grnData : [];
+      console.log('GRN Array:', grnArray, 'Is Array:', Array.isArray(grnArray));
+      setGrnList(grnArray);
+      setTotalRecords(res.data.total || 0);
+      setTotalPages(res.data.total_pages || 0);
+      setCurrentPage(page);
       
       // Initialize quality checks from database
       const qualityCheckState = {};
-      grnData.forEach(grn => {
+      grnArray.forEach(grn => {
         qualityCheckState[grn.id] = grn.quality_check || false;
       });
       setQualityChecks(qualityCheckState);
@@ -117,17 +137,20 @@ export default function GoodsReceipt() {
         const res = await api.get("/grn/");
         console.log('GRN Alternative API Response:', res.data);
         const grnData = res.data || [];
-        setGrnList(grnData);
+        const grnArray = Array.isArray(grnData) ? grnData : [];
+        setGrnList(grnArray);
         
         // Initialize quality checks from database
         const qualityCheckState = {};
-        grnData.forEach(grn => {
+        grnArray.forEach(grn => {
           qualityCheckState[grn.id] = grn.quality_check || false;
         });
         setQualityChecks(qualityCheckState);
       } catch (err2) {
         console.error("Both GRN endpoints failed:", err2);
         setGrnList([]);
+        setTotalRecords(0);
+        setTotalPages(0);
       }
     } finally {
       setLoading(false);
@@ -158,54 +181,69 @@ export default function GoodsReceipt() {
 
   const fetchPODetails = async (poNumber) => {
     try {
+      console.log('Fetching PO details for:', poNumber);
       const poRes = await api.get(`/purchase/po/${poNumber}`);
+      console.log('PO Details Response:', poRes.data);
       const poDetails = poRes.data;
       
       // Get PR details using the PR number from PO
       if (poDetails?.pr_number) {
-        const prRes = await api.get('/purchase/pr');
-        const matchingPR = prRes.data?.find(pr => pr.pr_number === poDetails.pr_number);
-        
-        if (matchingPR) {
-          const prDetailRes = await api.get(`/purchase/${matchingPR.id}`);
-          if (prDetailRes.data?.items?.length > 0) {
-            const mappedItems = await Promise.all(prDetailRes.data.items.map(async (item) => {
-              // Find matching item in item master to get price and MRP
-              const masterItem = itemList.find(master => master.name === item.item_name);
-              return {
-                item_name: item.item_name || '',
-                po_qty: item.quantity || 0,
-                price: masterItem?.fixing_price || 0,
-                mrp: masterItem?.mrp || 0,
-                tax: masterItem?.tax || 0,
-                batch_no: '',
-                expiry_date: ''
-              };
-            }));
-            setGrnItems(mappedItems);
-            showToast(`Loaded ${mappedItems.length} items from Purchase Request with prices`, 'success');
-            return;
+        try {
+          const prRes = await api.get('/purchase/pr');
+          console.log('PR List Response:', prRes.data);
+          const prData = prRes.data?.data || prRes.data || [];
+          const matchingPR = Array.isArray(prData) ? prData.find(pr => pr.pr_number === poDetails.pr_number) : null;
+          
+          if (matchingPR) {
+            const prDetailRes = await api.get(`/purchase/${matchingPR.id}`);
+            console.log('PR Detail Response:', prDetailRes.data);
+            if (prDetailRes.data?.items?.length > 0) {
+              const mappedItems = prDetailRes.data.items.map((item) => {
+                const masterItem = Array.isArray(itemList) ? itemList.find(master => master.name === item.item_name) : null;
+                return {
+                  item_name: item.item_name || '',
+                  po_qty: item.quantity || 0,
+                  price: masterItem?.fixing_price || 0,
+                  mrp: masterItem?.mrp || 0,
+                  tax: masterItem?.tax || 0,
+                  batch_no: '',
+                  expiry_date: '',
+                  date_type: "expiry",
+                  mfg_date: "",
+                  warranty_period: 0,
+                  warranty_period_type: "years"
+                };
+              });
+              setGrnItems(mappedItems);
+              showToast(`Loaded ${mappedItems.length} items from Purchase Request`, 'success');
+              return;
+            }
           }
+        } catch (prErr) {
+          console.error('PR fetch error:', prErr);
         }
       }
       
       // Fallback: Check if PO has direct items
       if (poDetails?.items?.length > 0) {
-        const mappedItems = await Promise.all(poDetails.items.map(async (item) => {
-          // Find matching item in item master to get price and MRP
-          const masterItem = itemList.find(master => master.name === item.item_name);
+        const mappedItems = poDetails.items.map((item) => {
+          const masterItem = Array.isArray(itemList) ? itemList.find(master => master.name === item.item_name) : null;
           return {
             item_name: item.item_name || '',
             po_qty: item.quantity || 0,
-            price: masterItem?.fixing_price || 0,
+            price: masterItem?.fixing_price || item.rate || 0,
             mrp: masterItem?.mrp || 0,
-            tax: masterItem?.tax || 0,
+            tax: masterItem?.tax || item.tax || 0,
             batch_no: '',
-            expiry_date: ''
+            expiry_date: '',
+            date_type: "expiry",
+            mfg_date: "",
+            warranty_period: 0,
+            warranty_period_type: "years"
           };
-        }));
+        });
         setGrnItems(mappedItems);
-        showToast(`Loaded ${mappedItems.length} items from PO with prices`, 'success');
+        showToast(`Loaded ${mappedItems.length} items from PO`, 'success');
         return;
       }
       
@@ -214,26 +252,20 @@ export default function GoodsReceipt() {
       
     } catch (err) {
       console.error('Error fetching PO details:', err);
+      console.error('Error details:', err.response?.data);
       showToast('Failed to load PO items', 'error');
     }
   };
 
   // Handle PO selection
   const handlePOSelect = async (poNumber) => {
-    const selectedPO = poList.find(po => po.po_number === poNumber);
-    if (selectedPO) {
+    if (!poNumber) {
+      // Reset if no PO selected
       setForm({
         ...form,
-        po_number: poNumber,
-        vendor_name: selectedPO.vendor || ''
+        po_number: "",
+        vendor_name: ""
       });
-      
-      // Fetch and populate PO items
-      if (poNumber) {
-        await fetchPODetails(poNumber);
-      }
-    } else {
-      // Reset items if no PO selected
       setGrnItems([{
         item_name: '',
         po_qty: 0,
@@ -241,8 +273,27 @@ export default function GoodsReceipt() {
         mrp: 0,
         tax: 0,
         batch_no: '',
-        expiry_date: ''
+        expiry_date: '',
+        date_type: "expiry",
+        mfg_date: "",
+        warranty_period: 0,
+        warranty_period_type: "years"
       }]);
+      return;
+    }
+
+    const poArray = Array.isArray(poList) ? poList : [];
+    const selectedPO = poArray.find(po => po.po_number === poNumber);
+    
+    if (selectedPO) {
+      setForm({
+        ...form,
+        po_number: poNumber,
+        vendor_name: selectedPO.vendor_name || selectedPO.vendor || ''
+      });
+      
+      // Fetch and populate PO items
+      await fetchPODetails(poNumber);
     }
   };
 
@@ -374,6 +425,13 @@ export default function GoodsReceipt() {
       const subtotal = (item.po_qty || 0) * (item.price || 0);
       return sum + (subtotal * (item.tax || 0) / 100);
     }, 0);
+  };
+
+  // Pagination
+  const paginate = (pageNumber) => {
+    setPageLoading(true);
+    fetchGRNList(pageNumber);
+    setTimeout(() => setPageLoading(false), 300);
   };
 
   // Update quality check status
@@ -637,18 +695,24 @@ export default function GoodsReceipt() {
     }
 
     // Validate that each item has either expiry date or warranty period
-    const itemsWithoutDates = grnItems.filter(item => {
-      if (!item.item_name) return false;
-      
+    const validItems = grnItems.filter(item => item.item_name && item.po_qty > 0);
+    
+    if (validItems.length === 0) {
+      showToast("Please add at least one valid item", 'error');
+      return;
+    }
+    
+    const itemsWithoutDates = validItems.filter(item => {
       if (item.date_type === 'warranty') {
         return !item.warranty_period || item.warranty_period <= 0;
       } else {
-        return !item.expiry_date;
+        return !item.expiry_date || item.expiry_date === '';
       }
     });
     
     if (itemsWithoutDates.length > 0) {
-      showToast("Each item must have either an expiry date or warranty period", 'error');
+      const itemNames = itemsWithoutDates.map(item => item.item_name).join(', ');
+      showToast(`Each item must have either an expiry date or warranty period. Missing for: ${itemNames}`, 'error');
       return;
     }
 
@@ -659,7 +723,7 @@ export default function GoodsReceipt() {
         ...form,
         invoice_date: form.invoice_date || null,
         total_amount: totalAmount,
-        items: grnItems.map(item => ({
+        items: grnItems.filter(item => item.item_name && item.po_qty > 0).map(item => ({
           item_name: item.item_name,
           po_qty: item.po_qty,
           received_qty: item.po_qty,
@@ -667,15 +731,19 @@ export default function GoodsReceipt() {
           rate: item.price,
           batches: [{
             batch_no: item.batch_no,
-            mfg_date: item.mfg_date || null,
-            expiry_date: item.date_type === 'expiry' ? item.expiry_date || null : null,
-            warranty_period: item.date_type === 'warranty' ? item.warranty_period || null : null,
-            warranty_period_type: item.date_type === 'warranty' ? item.warranty_period_type || null : null,
+            mfg_date: item.date_type === 'expiry' ? (item.mfg_date || null) : null,
+            expiry_date: item.date_type === 'expiry' ? (item.expiry_date || null) : null,
+            warranty_period: item.date_type === 'warranty' ? (parseInt(item.warranty_period) || null) : null,
+            warranty_period_type: item.date_type === 'warranty' ? (item.warranty_period_type || 'years') : null,
             qty: item.po_qty
           }]
         }))
       };
 
+      console.log('Sending GRN Data:', JSON.stringify(grnData, null, 2));
+
+      console.log('GRN Data to send:', grnData);
+      
       let res;
       if (editMode.isEditing) {
         // Update existing GRN
@@ -686,6 +754,8 @@ export default function GoodsReceipt() {
         res = await api.post("/grn/create", grnData);
         showToast(`GRN Created: ${res.data.grn_number}`, 'success');
       }
+      
+      console.log('GRN Response:', res.data);
       
       // Reset form and edit mode
       setForm({
@@ -751,6 +821,42 @@ export default function GoodsReceipt() {
               <div className="bg-blue-50 px-4 py-2 rounded-lg">
                 <span className="text-sm font-medium text-blue-700">📦 Active GRNs: {grnList.length}</span>
               </div>
+              {hasPermission("grn.create") && (
+                <button
+                  onClick={() => {
+                    setEditMode({ isEditing: false, grnId: null });
+                    setForm({
+                      grn_date: new Date().toISOString().split('T')[0],
+                      po_number: "",
+                      vendor_name: "",
+                      store: "",
+                      invoice_number: "",
+                      invoice_date: "",
+                      with_po: true
+                    });
+                    setGrnItems([{
+                      item_name: "",
+                      po_qty: 0,
+                      price: 0,
+                      mrp: 0,
+                      tax: 0,
+                      batch_no: "",
+                      date_type: "expiry",
+                      mfg_date: "",
+                      expiry_date: "",
+                      warranty_period: 0,
+                      warranty_period_type: "years"
+                    }]);
+                    setCreateModal(true);
+                  }}
+                  className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Create GRN
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -758,8 +864,8 @@ export default function GoodsReceipt() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-12 gap-8">
-          {/* LEFT PANEL - GRN FORM */}
-          <div className="col-span-5">
+          {/* LEFT PANEL - REMOVED - Form now in modal */}
+          <div className="col-span-12" style={{display: 'none'}}>
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
               {/* Form Header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
@@ -792,7 +898,7 @@ export default function GoodsReceipt() {
                       className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     >
                       <option value="">Select Location</option>
-                      {locations.map(location => (
+                      {Array.isArray(locations) && locations.map(location => (
                         <option key={location.id} value={location.name}>
                           {location.name} ({location.code})
                         </option>
@@ -834,7 +940,7 @@ export default function GoodsReceipt() {
                       className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     >
                       <option value="">Select Purchase Order</option>
-                      {poList.map((po) => (
+                      {Array.isArray(poList) && poList.map((po) => (
                         <option key={po.id} value={po.po_number}>
                           {po.po_number} - {po.vendor}
                         </option>
@@ -852,7 +958,7 @@ export default function GoodsReceipt() {
                       className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     >
                       <option value="">Select vendor</option>
-                      {vendors.map((vendor) => (
+                      {Array.isArray(vendors) && vendors.map((vendor) => (
                         <option key={vendor.id} value={vendor.vendor_name}>
                           {vendor.vendor_name} ({vendor.vendor_code})
                         </option>
@@ -970,7 +1076,7 @@ export default function GoodsReceipt() {
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               >
                                 <option value="">Select item</option>
-                                {itemList.map((masterItem) => (
+                                {Array.isArray(itemList) && itemList.map((masterItem) => (
                                   <option key={masterItem.id} value={masterItem.name}>
                                     {masterItem.name} ({masterItem.item_code})
                                   </option>
@@ -1164,20 +1270,26 @@ export default function GoodsReceipt() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Date Type</label>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">
+                                Date Type * 
+                                <span className="text-red-500 ml-1">(Required: Choose one)</span>
+                              </label>
                               <select
                                 value={item.date_type || 'expiry'}
                                 onChange={(e) => updateItem(idx, 'date_type', e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               >
                                 <option value="expiry">Expiry Date</option>
-                                <option value="warranty">Warranty Date</option>
+                                <option value="warranty">Warranty Period</option>
                               </select>
                             </div>
                             
                             {item.date_type === 'warranty' ? (
                               <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Warranty Period *</label>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
+                                  Warranty Period * 
+                                  <span className="text-red-500 ml-1">(Required)</span>
+                                </label>
                                 <div className="flex gap-1">
                                   <input
                                     type="number"
@@ -1208,7 +1320,10 @@ export default function GoodsReceipt() {
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-medium text-slate-600 mb-1">Expiry Date</label>
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    Expiry Date * 
+                                    <span className="text-red-500 ml-1">(Required)</span>
+                                  </label>
                                   <input
                                     type="date"
                                     value={item.expiry_date}
@@ -1311,7 +1426,7 @@ export default function GoodsReceipt() {
           </div>
 
           {/* RIGHT PANEL - GRN LIST */}
-          <div className="col-span-7">
+          <div className="col-span-12">
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
               {/* Table Header */}
               <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
@@ -1326,41 +1441,6 @@ export default function GoodsReceipt() {
                     <p className="text-sm text-slate-600 mt-1">Manage and track all GRN transactions</p>
                   </div>
                   <div className="flex gap-2">
-                    {hasPermission("grn.create") && (
-                      <button
-                        onClick={() => {
-                          setEditMode({ isEditing: false, grnId: null });
-                          setForm({
-                            grn_date: new Date().toISOString().split('T')[0],
-                            po_number: "",
-                            vendor_name: "",
-                            store: "",
-                            invoice_number: "",
-                            invoice_date: "",
-                            with_po: true
-                          });
-                          setGrnItems([{
-                            item_name: "",
-                            po_qty: 0,
-                            price: 0,
-                            mrp: 0,
-                            tax: 0,
-                            batch_no: "",
-                            date_type: "expiry",
-                            mfg_date: "",
-                            expiry_date: "",
-                            warranty_period: 0,
-                            warranty_period_type: "years"
-                          }]);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Create GRN
-                      </button>
-                    )}
                     <button
                       onClick={fetchGRNList}
                       className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
@@ -1374,7 +1454,7 @@ export default function GoodsReceipt() {
                 </div>
               </div>
 
-              {loading ? (
+              {loading || pageLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -1540,6 +1620,46 @@ export default function GoodsReceipt() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Pagination */}
+              {totalRecords > itemsPerPage && (
+                <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-600">
+                      Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalRecords)} of {totalRecords}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => paginate(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-2 py-1 rounded text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-200 transition-colors"
+                      >
+                        ‹
+                      </button>
+                      {[...Array(totalPages)].map((_, i) => (
+                        <button
+                          key={i + 1}
+                          onClick={() => paginate(i + 1)}
+                          className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
+                            currentPage === i + 1
+                              ? 'bg-blue-600 text-white'
+                              : 'hover:bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => paginate(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-2 py-1 rounded text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-200 transition-colors"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1989,6 +2109,411 @@ export default function GoodsReceipt() {
           .no-print { display: none !important; }
         }
       `}</style>
+
+      {/* Create GRN Modal */}
+      {createModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  {editMode.isEditing ? 'Edit Goods Receipt Note' : 'Create New GRN'}
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">Fill in the details to process goods receipt</p>
+              </div>
+              <button 
+                onClick={() => setCreateModal(false)}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content - Same as left panel form */}
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">GRN Date *</label>
+                  <input
+                    type="date"
+                    value={form.grn_date}
+                    onChange={(e) => setForm({ ...form, grn_date: e.target.value })}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Location *</label>
+                  <select
+                    value={form.store}
+                    onChange={(e) => setForm({ ...form, store: e.target.value })}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Location</option>
+                    {Array.isArray(locations) && locations.map(location => (
+                      <option key={location.id} value={location.name}>
+                        {location.name} ({location.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* PO Toggle */}
+              <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-xl">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="po_type_modal"
+                    checked={form.with_po}
+                    onChange={() => setForm({ ...form, with_po: true, po_number: "", vendor_name: "" })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-slate-700">With PO</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="po_type_modal"
+                    checked={!form.with_po}
+                    onChange={() => setForm({ ...form, with_po: false, po_number: "", vendor_name: "" })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Without PO</span>
+                </label>
+              </div>
+
+              {form.with_po && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Purchase Order *</label>
+                  <select
+                    value={form.po_number}
+                    onChange={(e) => handlePOSelect(e.target.value)}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Purchase Order</option>
+                    {Array.isArray(poList) && poList.length > 0 ? (
+                      poList.map((po) => (
+                        <option key={po.id} value={po.po_number}>
+                          {po.po_number} - {po.vendor}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>No POs available (Count: {poList.length})</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {!form.with_po && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name *</label>
+                  <select
+                    value={form.vendor_name}
+                    onChange={(e) => setForm({ ...form, vendor_name: e.target.value })}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select vendor</option>
+                    {Array.isArray(vendors) && vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.vendor_name}>
+                        {vendor.vendor_name} ({vendor.vendor_code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {form.with_po && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Name</label>
+                  <input
+                    value={form.vendor_name}
+                    readOnly
+                    className="w-full rounded-xl border-2 border-slate-100 px-4 py-3 bg-slate-50 text-slate-600"
+                    placeholder="Auto-filled from selected PO"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Invoice Number</label>
+                  <input
+                    type="text"
+                    value={form.invoice_number}
+                    onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    placeholder="Enter invoice number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Invoice Date</label>
+                  <input
+                    type="date"
+                    value={form.invoice_date}
+                    onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Items Section */}
+              <div className="border-t-2 border-slate-100 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Items to Receive
+                  </h3>
+                  <button
+                    onClick={addItemRow}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Item
+                  </button>
+                </div>
+
+                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                  {grnItems.map((item, idx) => (
+                    <div key={idx} className="bg-slate-50 rounded-xl p-4 border-2 border-slate-200">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-sm font-semibold text-slate-600">Item #{idx + 1}</span>
+                        {grnItems.length > 1 && (
+                          <button
+                            onClick={() => removeItem(idx)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Item Name *</label>
+                          {form.with_po ? (
+                            <input
+                              placeholder="Enter item name"
+                              value={item.item_name}
+                              onChange={(e) => updateItem(idx, 'item_name', e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                          ) : (
+                            <select
+                              value={item.item_name}
+                              onChange={(e) => {
+                                const selectedItemName = e.target.value;
+                                const selectedItem = itemList.find(i => i.name === selectedItemName);
+                                const updatedItems = grnItems.map((grnItem, grnIdx) => {
+                                  if (grnIdx === idx) {
+                                    return {
+                                      ...grnItem,
+                                      item_name: selectedItemName,
+                                      price: selectedItem?.fixing_price || grnItem.price,
+                                      mrp: selectedItem?.mrp || grnItem.mrp,
+                                      tax: selectedItem?.tax || grnItem.tax
+                                    };
+                                  }
+                                  return grnItem;
+                                });
+                                setGrnItems(updatedItems);
+                              }}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            >
+                              <option value="">Select item</option>
+                              {Array.isArray(itemList) && itemList.map((masterItem) => (
+                                <option key={masterItem.id} value={masterItem.name}>
+                                  {masterItem.name} ({masterItem.item_code})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Quantity *</label>
+                            <input
+                              type="number"
+                              value={item.po_qty}
+                              onChange={(e) => updateItem(idx, 'po_qty', parseFloat(e.target.value) || 0)}
+                              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price *</label>
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value) || 0)}
+                              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">MRP</label>
+                            <input
+                              type="number"
+                              value={item.mrp}
+                              onChange={(e) => updateItem(idx, 'mrp', parseFloat(e.target.value) || 0)}
+                              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
+                            <input
+                              type="number"
+                              value={item.tax}
+                              onChange={(e) => updateItem(idx, 'tax', parseFloat(e.target.value) || 0)}
+                              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Batch/Lot Number *</label>
+                            <input
+                              placeholder="Batch/Lot number"
+                              value={item.batch_no}
+                              onChange={(e) => updateItem(idx, 'batch_no', e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">
+                              Date Type * 
+                              <span className="text-red-500 ml-1">(Required: Choose one)</span>
+                            </label>
+                            <select
+                              value={item.date_type || 'expiry'}
+                              onChange={(e) => updateItem(idx, 'date_type', e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            >
+                              <option value="expiry">Expiry Date</option>
+                              <option value="warranty">Warranty Period</option>
+                            </select>
+                          </div>
+                          
+                          {item.date_type === 'warranty' ? (
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">
+                                Warranty Period * 
+                                <span className="text-red-500 ml-1">(Required)</span>
+                              </label>
+                              <div className="flex gap-1">
+                                <input
+                                  type="number"
+                                  placeholder="Period"
+                                  value={item.warranty_period || ''}
+                                  onChange={(e) => updateItem(idx, 'warranty_period', parseInt(e.target.value) || 0)}
+                                  className="w-2/3 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                                />
+                                <select
+                                  value={item.warranty_period_type || 'years'}
+                                  onChange={(e) => updateItem(idx, 'warranty_period_type', e.target.value)}
+                                  className="w-1/3 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                                >
+                                  <option value="months">Months</option>
+                                  <option value="years">Years</option>
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">Manufacturing Date</label>
+                                <input
+                                  type="date"
+                                  value={item.mfg_date || ''}
+                                  onChange={(e) => updateItem(idx, 'mfg_date', e.target.value)}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
+                                  Expiry Date * 
+                                  <span className="text-red-500 ml-1">(Required)</span>
+                                </label>
+                                <input
+                                  type="date"
+                                  value={item.expiry_date}
+                                  onChange={(e) => updateItem(idx, 'expiry_date', e.target.value)}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                <h3 className="font-semibold text-slate-800 mb-3">Price Summary</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Subtotal:</span>
+                    <span className="font-medium">₹{calculateSubtotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">MRP Total:</span>
+                    <span className="font-medium text-purple-600">₹{calculateMRPTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Tax Amount:</span>
+                    <span className="font-medium">₹{calculateTaxAmount().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Total Items:</span>
+                    <span className="font-medium">{grnItems.reduce((sum, item) => sum + (item.po_qty || 0), 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2 border-blue-200">
+                    <span className="text-slate-800">Grand Total:</span>
+                    <span className="text-blue-600">₹{(calculateSubtotal() + calculateTaxAmount()).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    handleSubmit();
+                    setCreateModal(false);
+                  }}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Create GRN
+                </button>
+                <button
+                  onClick={() => setCreateModal(false)}
+                  className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       )}
     </div>

@@ -255,15 +255,23 @@ def create_grn(data: GRNCreate, request: Request, db: Session = Depends(get_db),
 
 # ---------------- LIST GRN ----------------
 @router.get("/list")
-def list_grns(db: Session = Depends(get_db), current_user: dict = Depends(require_grn_view())):
-    """Get all GRN records"""
+def list_grns(page: int = 1, limit: int = 10, db: Session = Depends(get_db), current_user: dict = Depends(require_grn_view())):
+    """Get paginated GRN records"""
     try:
-        grns = db.query(GRN).all()
-        print(f"Found {len(grns)} GRN records")
-        return grns
+        skip = (page - 1) * limit
+        total = db.query(GRN).count()
+        grns = db.query(GRN).order_by(GRN.id.desc()).offset(skip).limit(limit).all()
+        print(f"Found {len(grns)} GRN records (page {page}, total {total})")
+        return {
+            "data": grns,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit
+        }
     except Exception as e:
         print(f"Error fetching GRNs: {str(e)}")
-        return []
+        return {"data": [], "total": 0, "page": 1, "limit": limit, "total_pages": 0}
 
 # ---------------- GET GRN DETAILS ----------------
 @router.get("/{grn_id}")

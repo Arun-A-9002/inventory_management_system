@@ -323,7 +323,7 @@ export default function SupplierLedger() {
   }, []);
 
   useEffect(() => {
-    let filtered = grnList;
+    let filtered = Array.isArray(grnList) ? grnList : [];
     
     if (selectedVendor) {
       filtered = filtered.filter(grn => grn.vendor_name === selectedVendor);
@@ -385,9 +385,13 @@ export default function SupplierLedger() {
   const fetchVendors = async () => {
     try {
       const res = await api.get('/vendors/');
-      setVendors(res.data || []);
+      const vendorData = res.data || [];
+      const vendorArray = Array.isArray(vendorData) ? vendorData : [];
+      console.log('Vendor Ledger - Vendors:', vendorArray);
+      setVendors(vendorArray);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+      setVendors([]);
       if (err.response?.status === 401) {
         showToast('Session expired. Please login again.', 'error');
         window.location.href = '/login';
@@ -580,15 +584,17 @@ export default function SupplierLedger() {
     try {
       setLoading(true);
       
-      // Add timeout to prevent hanging requests (reduced to 8 seconds)
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout')), 8000)
       );
       
-      const apiPromise = api.get("/grn/list");
+      const apiPromise = api.get("/grn/list?page=1&limit=1000");
       const res = await Promise.race([apiPromise, timeoutPromise]);
       
-      setGrnList(res.data || []);
+      const grnData = res.data?.data || res.data || [];
+      const grnArray = Array.isArray(grnData) ? grnData : [];
+      console.log('Vendor Ledger - GRN Data:', grnArray);
+      setGrnList(grnArray);
     } catch (err) {
       if (err.response?.status === 401) {
         showToast('Session expired. Please login again.', 'error');
@@ -603,7 +609,10 @@ export default function SupplierLedger() {
         const apiPromise = api.get("/grn/");
         const res = await Promise.race([apiPromise, timeoutPromise]);
         
-        setGrnList(res.data || []);
+        const grnData = res.data || [];
+        const grnArray = Array.isArray(grnData) ? grnData : [];
+        console.log('Vendor Ledger - GRN Data (fallback):', grnArray);
+        setGrnList(grnArray);
       } catch (err2) {
         console.error("Failed to fetch GRN list:", err2);
         setGrnList([]);
