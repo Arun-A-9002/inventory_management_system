@@ -158,9 +158,17 @@ def get_purchase_requests(db: Session = Depends(get_db), current_user: dict = De
     return prs
 
 @router.get("/pr")
-def get_purchase_requests_pr(db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_view())):
-    prs = db.query(PurchaseRequest).all()
-    return prs
+def get_purchase_requests_pr(page: int = 1, limit: int = 15, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_view())):
+    skip = (page - 1) * limit
+    total = db.query(PurchaseRequest).count()
+    prs = db.query(PurchaseRequest).order_by(PurchaseRequest.id.desc()).offset(skip).limit(limit).all()
+    return {
+        "data": prs,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 @router.get("/po/{po_number}")
 def get_purchase_order_details(po_number: str, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_order_view())):
@@ -448,10 +456,12 @@ def generate_po_pdf(po_number: str, db: Session = Depends(get_db), current_user:
     )
 
 @router.get("/po")
-def list_purchase_orders(db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_order_view())):
+def list_purchase_orders(page: int = 1, limit: int = 15, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_order_view())):
     from models.tenant_models import Vendor
     
-    pos = db.query(PurchaseOrder).all()
+    skip = (page - 1) * limit
+    total = db.query(PurchaseOrder).count()
+    pos = db.query(PurchaseOrder).order_by(PurchaseOrder.id.desc()).offset(skip).limit(limit).all()
     
     # Enhance PO data with vendor details and calculations
     enhanced_pos = []
@@ -483,7 +493,13 @@ def list_purchase_orders(db: Session = Depends(get_db), current_user: dict = Dep
         }
         enhanced_pos.append(po_data)
     
-    return enhanced_pos
+    return {
+        "data": enhanced_pos,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 @router.get("/{pr_id}")
 def get_purchase_request_by_id(pr_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_view())):
@@ -901,7 +917,7 @@ def update_purchase_request(pr_id: int, data: PRCreate, request: Request, db: Se
 
 # ---------------- UPDATE PR STATUS ----------------
 @router.patch("/{pr_id}/status")
-def update_pr_status(pr_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_status())):
+async def update_pr_status(pr_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_purchase_request_status())):
     log_api("UPDATE PR STATUS")
     
     from models.tenant_models import PRStatus

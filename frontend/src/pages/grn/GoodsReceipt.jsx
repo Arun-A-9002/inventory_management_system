@@ -1325,15 +1325,52 @@ export default function GoodsReceipt() {
                     </h2>
                     <p className="text-sm text-slate-600 mt-1">Manage and track all GRN transactions</p>
                   </div>
-                  <button
-                    onClick={fetchGRNList}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Refresh
-                  </button>
+                  <div className="flex gap-2">
+                    {hasPermission("grn.create") && (
+                      <button
+                        onClick={() => {
+                          setEditMode({ isEditing: false, grnId: null });
+                          setForm({
+                            grn_date: new Date().toISOString().split('T')[0],
+                            po_number: "",
+                            vendor_name: "",
+                            store: "",
+                            invoice_number: "",
+                            invoice_date: "",
+                            with_po: true
+                          });
+                          setGrnItems([{
+                            item_name: "",
+                            po_qty: 0,
+                            price: 0,
+                            mrp: 0,
+                            tax: 0,
+                            batch_no: "",
+                            date_type: "expiry",
+                            mfg_date: "",
+                            expiry_date: "",
+                            warranty_period: 0,
+                            warranty_period_type: "years"
+                          }]);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Create GRN
+                      </button>
+                    )}
+                    <button
+                      onClick={fetchGRNList}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
                 </div>
               </div>
 

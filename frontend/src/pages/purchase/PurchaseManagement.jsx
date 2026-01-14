@@ -44,13 +44,20 @@ export default function PurchaseManagement() {
   });
   const [vendors, setVendors] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [showPRModal, setShowPRModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalPRs, setTotalPRs] = useState(0);
 
   // Fetch PR list
-  const fetchPRList = async () => {
+  const fetchPRList = async (page = 1) => {
     try {
       setLoading(true);
-      const res = await api.get("/purchase/pr");
-      setPrList(res.data);
+      const res = await api.get(`/purchase/pr?page=${page}&limit=15`);
+      setPrList(res.data.data || []);
+      setTotalPages(res.data.total_pages || 1);
+      setTotalPRs(res.data.total || 0);
+      setCurrentPage(page);
     } catch (err) {
       console.error("Failed to fetch PR list:", err);
     } finally {
@@ -752,11 +759,17 @@ export default function PurchaseManagement() {
     subject: '',
     message: ''
   });
+  const [currentPOPage, setCurrentPOPage] = useState(1);
+  const [totalPOPages, setTotalPOPages] = useState(1);
+  const [totalPOs, setTotalPOs] = useState(0);
 
-  const fetchPOList = async () => {
+  const fetchPOList = async (page = 1) => {
     try {
-      const res = await api.get("/purchase/po");
-      setPoList(res.data);
+      const res = await api.get(`/purchase/po?page=${page}&limit=15`);
+      setPoList(res.data.data || []);
+      setTotalPOPages(res.data.total_pages || 1);
+      setTotalPOs(res.data.total || 0);
+      setCurrentPOPage(page);
     } catch (err) {
       console.error("Failed to fetch PO list:", err);
     }
@@ -963,221 +976,29 @@ export default function PurchaseManagement() {
 
       {/* TAB CONTENT */}
       {activeTab === "PR" && (
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          {/* LEFT SIDE - FORM */}
-          <div className="xl:col-span-2 bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
-            {hasPermission("purchase_request.create") || hasPermission("purchase_request.edit") ? (
-              <>
-                <h2 className="text-xl font-semibold mb-4">Create Purchase Request</h2>
-                <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Requested By</label>
-                <input 
-                  value={requestedBy}
-                  onChange={e => setRequestedBy(e.target.value)}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter requester name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Item Name</label>
-                <select 
-                  value={prItem.item_id || ""}
-                  onChange={e => {
-                    const itemId = e.target.value;
-                    if (itemId) {
-                      handleItemSelect(itemId);
-                    } else {
-                      setPrItem({ ...prItem, item_id: "", item_name: "", uom: "" });
-                    }
-                  }}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select item from master</option>
-                  {itemList.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} {item.item_code ? `(${item.item_code})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <div className="text-xs text-slate-500 mt-1">
-                  {itemList.length === 0 ? "No items found. Please add items to the item master first." : `${itemList.length} items available`}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                  <input 
-                    value={prItem.category}
-                    readOnly
-                    className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                    placeholder="Auto-filled from item"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Sub Category</label>
-                  <input 
-                    value={prItem.sub_category}
-                    readOnly
-                    className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                    placeholder="Auto-filled from item"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
-                  <input 
-                    value={prItem.brand}
-                    readOnly
-                    className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                    placeholder="Auto-filled from item"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Manufacturer</label>
-                  <input 
-                    value={prItem.manufacturer}
-                    readOnly
-                    className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                    placeholder="Auto-filled from item"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fixing Price</label>
-                  <input 
-                    value={prItem.fixing_price}
-                    readOnly
-                    className="w-full rounded-lg border px-4 py-2 bg-gray-50 text-gray-600"
-                    placeholder="Auto-filled"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
-                  <input 
-                    value={prItem.quantity}
-                    onChange={e => setPrItem({ ...prItem, quantity: e.target.value })}
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Quantity"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                <select 
-                  value={prItem.priority}
-                  onChange={e => setPrItem({ ...prItem, priority: e.target.value })}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select priority (optional)</option>
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Urgent">Urgent</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
-                <textarea 
-                  value={prItem.remarks}
-                  onChange={e => setPrItem({ ...prItem, remarks: e.target.value })}
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="Additional remarks"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={addItemToList}
-                  className="flex-1 rounded-lg bg-green-600 text-white px-4 py-2 hover:bg-green-700 transition-colors"
-                >
-                  Add Item
-                </button>
-              </div>
-              
-              {/* Selected Items List */}
-              {selectedItems.length > 0 && (
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-2">Selected Items ({selectedItems.length})</h3>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {selectedItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between bg-slate-50 p-2 rounded">
-                        <div className="text-sm flex-1">
-                          <span className="font-medium">{item.item_name}</span>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-slate-500">Qty:</span>
-                            <input 
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const updatedItems = selectedItems.map(selectedItem => 
-                                  selectedItem.id === item.id 
-                                    ? { ...selectedItem, quantity: e.target.value }
-                                    : selectedItem
-                                );
-                                setSelectedItems(updatedItems);
-                              }}
-                              className="w-16 px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-blue-500"
-                            />
-                            <span className="text-slate-500 ml-2">Priority: {item.priority}</span>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => removeItem(item.id)}
-                          className="text-red-600 hover:text-red-800 text-sm ml-2"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {selectedItems.length > 0 && (
-                <div className="space-y-2">
-                  {editingPR && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                      <span className="text-blue-800 font-medium">Editing: {editingPR.pr_number}</span>
-                      <button 
-                        onClick={cancelEdit}
-                        className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Cancel Edit
-                      </button>
-                    </div>
-                  )}
-                  <button 
-                    onClick={createPR}
-                    className="w-full rounded-full bg-blue-600 text-white px-6 py-2 hover:bg-blue-700 transition-colors font-medium"
-                  >
-                    {editingPR ? `Update Purchase Request (${selectedItems.length} items)` : `Create Purchase Request (${selectedItems.length} items)`}
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-8">
-            <div className="text-slate-500">You don't have permission to create or edit purchase requests.</div>
-          </div>
-        )}
-      </div>
-
-          {/* RIGHT SIDE - PR LIST */}
-          <div className="xl:col-span-3 bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
+        <div className="grid grid-cols-1 gap-6">
+          {/* PR LIST */}
+          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border">
             {hasPermission("purchase_request.view") ? (
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold">Purchase Request List</h2>
-                  <button 
-                    onClick={fetchPRList}
-                    className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                  >
-                    Refresh
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={fetchPRList}
+                      className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                    >
+                      Refresh
+                    </button>
+                    {hasPermission("purchase_request.create") && (
+                      <button 
+                        onClick={() => setShowPRModal(true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      >
+                        Create PR
+                      </button>
+                    )}
+                  </div>
                 </div>
             
             {loading ? (
@@ -1277,7 +1098,34 @@ export default function PurchaseManagement() {
               </div>
             )}
             
-            <div className="mt-4 text-sm text-slate-500">Showing {prList.length} purchase request{prList.length!==1 ? "s": ""}.</div>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-slate-500">Showing {prList.length} of {totalPRs} purchase requests (Page {currentPage} of {totalPages})</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => fetchPRList(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 rounded-lg text-sm ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                  }`}
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm text-slate-600">Page {currentPage} of {totalPages}</span>
+                <button
+                  onClick={() => fetchPRList(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 rounded-lg text-sm ${
+                    currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </>
         ) : (
           <div className="text-center py-8">
@@ -1370,6 +1218,35 @@ export default function PurchaseManagement() {
                     )}
                   </tbody>
                 </table>
+              </div>
+              
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-slate-500">Showing {poList.length} of {totalPOs} purchase orders (Page {currentPOPage} of {totalPOPages})</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => fetchPOList(currentPOPage - 1)}
+                    disabled={currentPOPage === 1}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      currentPOPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm text-slate-600">Page {currentPOPage} of {totalPOPages}</span>
+                  <button
+                    onClick={() => fetchPOList(currentPOPage + 1)}
+                    disabled={currentPOPage === totalPOPages}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      currentPOPage === totalPOPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -1805,6 +1682,34 @@ export default function PurchaseManagement() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PR Modal */}
+      {showPRModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold">Create Purchase Request</h3>
+                <button onClick={() => { setShowPRModal(false); cancelEdit(); }} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div><label className="block text-sm font-medium text-slate-700 mb-1">Requested By</label><input value={requestedBy} onChange={e => setRequestedBy(e.target.value)} className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Enter requester name" /></div>
+                <div><label className="block text-sm font-medium text-slate-700 mb-1">Item Name</label><select value={prItem.item_id || ""} onChange={e => { const itemId = e.target.value; if (itemId) { handleItemSelect(itemId); } else { setPrItem({ ...prItem, item_id: "", item_name: "", uom: "" }); }}} className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500"><option value="">Select item from master</option>{itemList.map((item) => (<option key={item.id} value={item.id}>{item.name} {item.item_code ? `(${item.item_code})` : ''}</option>))}</select><div className="text-xs text-slate-500 mt-1">{itemList.length === 0 ? "No items found" : `${itemList.length} items available`}</div></div>
+                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Category</label><input value={prItem.category} readOnly className="w-full rounded-lg border px-4 py-2 bg-gray-50" placeholder="Auto-filled" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Sub Category</label><input value={prItem.sub_category} readOnly className="w-full rounded-lg border px-4 py-2 bg-gray-50" placeholder="Auto-filled" /></div></div>
+                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Brand</label><input value={prItem.brand} readOnly className="w-full rounded-lg border px-4 py-2 bg-gray-50" placeholder="Auto-filled" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Manufacturer</label><input value={prItem.manufacturer} readOnly className="w-full rounded-lg border px-4 py-2 bg-gray-50" placeholder="Auto-filled" /></div></div>
+                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Fixing Price</label><input value={prItem.fixing_price} readOnly className="w-full rounded-lg border px-4 py-2 bg-gray-50" placeholder="Auto-filled" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label><input value={prItem.quantity} onChange={e => setPrItem({ ...prItem, quantity: e.target.value })} className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Quantity" /></div></div>
+                <div><label className="block text-sm font-medium text-slate-700 mb-1">Priority</label><select value={prItem.priority} onChange={e => setPrItem({ ...prItem, priority: e.target.value })} className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500"><option value="">Select priority (optional)</option><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Urgent">Urgent</option></select></div>
+                <div><label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label><textarea value={prItem.remarks} onChange={e => setPrItem({ ...prItem, remarks: e.target.value })} className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-blue-500" rows={3} placeholder="Additional remarks" /></div>
+                <button onClick={addItemToList} className="w-full rounded-lg bg-green-600 text-white px-4 py-2 hover:bg-green-700">Add Item</button>
+                {selectedItems.length > 0 && (<div className="border rounded-lg p-4"><h3 className="font-medium mb-2">Selected Items ({selectedItems.length})</h3><div className="space-y-2 max-h-40 overflow-y-auto">{selectedItems.map((item) => (<div key={item.id} className="flex items-center justify-between bg-slate-50 p-2 rounded"><div className="text-sm flex-1"><span className="font-medium">{item.item_name}</span><div className="flex items-center gap-2 mt-1"><span className="text-slate-500">Qty:</span><input type="number" value={item.quantity} onChange={(e) => { const updatedItems = selectedItems.map(selectedItem => selectedItem.id === item.id ? { ...selectedItem, quantity: e.target.value } : selectedItem); setSelectedItems(updatedItems); }} className="w-16 px-2 py-1 text-xs border rounded" /><span className="text-slate-500 ml-2">Priority: {item.priority}</span></div></div><button onClick={() => removeItem(item.id)} className="text-red-600 hover:text-red-800 text-sm ml-2">Remove</button></div>))}</div></div>)}
+                {selectedItems.length > 0 && (<div className="space-y-2">{editingPR && (<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm"><span className="text-blue-800 font-medium">Editing: {editingPR.pr_number}</span><button onClick={cancelEdit} className="ml-2 text-blue-600 hover:text-blue-800 underline">Cancel Edit</button></div>)}<button onClick={() => { createPR(); setShowPRModal(false); }} className="w-full rounded-full bg-blue-600 text-white px-6 py-2 hover:bg-blue-700 font-medium">{editingPR ? `Update Purchase Request (${selectedItems.length} items)` : `Create Purchase Request (${selectedItems.length} items)`}</button></div>)}
+              </div>
             </div>
           </div>
         </div>

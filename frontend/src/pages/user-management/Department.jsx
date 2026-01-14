@@ -198,7 +198,7 @@ export default function Department() {
           </div>
         </div>
 
-        {/* Departments Table */}
+        {/* Departments Cards */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
@@ -211,50 +211,46 @@ export default function Department() {
             <p className="text-gray-600">Try adjusting your search or filter criteria</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredDepartments.map((dept, i) => (
-                    <tr key={dept.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-500">{i + 1}</td>
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">{dept.name}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{dept.description || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs rounded ${dept.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                          {dept.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          {hasPermission("departments.update") && (
-                            <button onClick={() => startEdit(dept)} className="text-cyan-600 hover:text-cyan-900">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            </button>
-                          )}
-                          {hasPermission("departments.delete") && (
-                            <button onClick={() => handleDelete(dept.id)} className="text-red-600 hover:text-red-900">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {filteredDepartments.map((dept) => (
+              <div key={dept.id} className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow duration-200">
+                <div className="p-4 sm:p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-lg flex-shrink-0">
+                        {dept.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="ml-3 min-w-0 flex-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{dept.name}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 truncate">{dept.description || 'No description'}</p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ml-2 ${dept.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {dept.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex gap-2 mt-6 pt-4 border-t">
+                    {hasPermission("departments.update") && (
+                      <button 
+                        onClick={() => startEdit(dept)} 
+                        className="flex-1 px-3 py-2 text-sm font-medium text-cyan-600 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors duration-200"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {hasPermission("departments.delete") && (
+                      <button 
+                        onClick={() => handleDelete(dept.id)} 
+                        className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
