@@ -3,11 +3,18 @@ import api from "../../api";
 import QRCode from "react-qr-code";
 import JsBarcode from "jsbarcode";
 import Toast from "../../components/Toast";
+import Pagination from "../../components/Pagination";
 import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function Item() {
   const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
   const { toast, showToast, hideToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -102,11 +109,17 @@ export default function Item() {
     }
   };
 
-  const loadItems = async () => {
+  const loadItems = async (page = 1) => {
     try {
       setLoading(true);
-      const res = await api.get("/items");
-      setItems(res.data || []);
+      const res = await api.get(`/items?page=${page}&limit=10`);
+      setItems(res.data.items || []);
+      setPagination({
+        page: res.data.page,
+        limit: res.data.limit,
+        total: res.data.total,
+        totalPages: res.data.total_pages
+      });
     } catch (err) {
       console.error(err);
       showToast("Failed to load items", 'error');
@@ -201,7 +214,7 @@ export default function Item() {
       }
       showToast(editingId ? "Item updated successfully" : "Item created successfully", 'success');
       resetForm();
-      loadItems();
+      loadItems(pagination.page);
     } catch (err) {
       console.error(err);
       let errorMessage = "Failed to save item";
@@ -313,7 +326,7 @@ export default function Item() {
       showToast(`Successfully took ${extraQuantity} units from ${editingItem.name}`, 'success');
       setShowEditDialog(false);
       setShowBatchSelector(false);
-      loadItems(); // Refresh the items list
+      loadItems(pagination.page); // Refresh the items list
     } catch (err) {
       console.error('Failed to take quantity:', err);
       showToast('Failed to take quantity', 'error');
@@ -342,7 +355,7 @@ export default function Item() {
       showToast(`Successfully returned ${returnQuantity} units of ${editingItem.name} to stock`, 'success');
       setShowEditDialog(false);
       setShowBatchSelector(false);
-      loadItems(); // Refresh the items list
+      loadItems(pagination.page); // Refresh the items list
     } catch (err) {
       console.error('Failed to return quantity:', err);
       showToast('Failed to return quantity', 'error');
@@ -369,7 +382,7 @@ export default function Item() {
     try {
       await api.put(`/items/${id}`, { ...item, is_active: !item.is_active });
       showToast(`Item ${action}d successfully`, 'success');
-      loadItems();
+      loadItems(pagination.page);
     } catch (err) {
       console.error(err);
       showToast(`Failed to ${action} item`, 'error');
@@ -502,6 +515,12 @@ const downloadQR = () => {
   }
 };
 
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      loadItems(newPage);
+    }
+  };
+
   const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -580,7 +599,7 @@ const downloadQR = () => {
               ) : (
                 filteredItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{idx + 1}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{((pagination.page - 1) * pagination.limit) + idx + 1}</td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{item.name}</div>
                       <div className="text-sm text-gray-500 font-mono">{item.item_code}</div>
@@ -738,6 +757,16 @@ const downloadQR = () => {
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        <Pagination
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          itemsPerPage={pagination.limit}
+          onPageChange={handlePageChange}
+          itemName="items"
+        />
       </div>
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

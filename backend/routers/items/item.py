@@ -101,8 +101,15 @@ def create_item(payload: ItemCreate, request: Request, db: Session = Depends(get
 
 # ---------------- GET ALL ----------------
 @router.get("/")
-def list_items(db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
-    items = db.query(Item).order_by(Item.id.desc()).all()
+def list_items(page: int = 1, limit: int = 10, db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
+    # Calculate offset
+    offset = (page - 1) * limit
+    
+    # Get total count
+    total_count = db.query(Item).count()
+    
+    # Get paginated items
+    items = db.query(Item).order_by(Item.id.desc()).offset(offset).limit(limit).all()
     
     # Get category and subcategory names
     categories = {cat.id: cat.name for cat in db.query(Category).all()}
@@ -174,7 +181,13 @@ def list_items(db: Session = Depends(get_db), current_user: dict = Depends(requi
         }
         result.append(item_dict)
     
-    return result
+    return {
+        "items": result,
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_count + limit - 1) // limit
+    }
 
 # ---------------- SEARCH ----------------
 @router.get("/search")

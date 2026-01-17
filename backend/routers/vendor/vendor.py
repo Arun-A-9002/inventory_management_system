@@ -78,12 +78,16 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
-def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
-    # Check cache first
-    if is_cache_valid():
-        return vendor_cache["data"]
+def get_vendors(page: int = 1, limit: int = 10, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
+    # Calculate offset
+    offset = (page - 1) * limit
     
-    vendors = db.query(Vendor).all()
+    # Get total count
+    total_count = db.query(Vendor).count()
+    
+    # Get paginated vendors
+    vendors = db.query(Vendor).offset(offset).limit(limit).all()
+    
     # Return vendors with all fields for frontend compatibility
     result = [{
         "id": vendor.id,
@@ -105,11 +109,13 @@ def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(requ
         "status": vendor.status
     } for vendor in vendors]
     
-    # Cache the result
-    vendor_cache["data"] = result
-    vendor_cache["timestamp"] = datetime.now()
-    
-    return result
+    return {
+        "vendors": result,
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_count + limit - 1) // limit
+    }
 
 # ---------------- GET VENDORS BASIC (LIGHTWEIGHT) ----------------
 @router.get("/basic")

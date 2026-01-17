@@ -2,12 +2,19 @@ import { useState, useEffect } from "react";
 import api from "../../api";
 import { getCountries, getStates, getCities } from "../../utils/locationData";
 import Toast from "../../components/Toast";
+import Pagination from "../../components/Pagination";
 import { useToast } from "../../utils/useToast";
 import { hasPermission } from "../../utils/permissions";
 
 export default function Vendor() {
   // const [activeTab, setActiveTab] = useState("Registration");
   const [vendors, setVendors] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const { toast, showToast, hideToast } = useToast();
@@ -33,11 +40,17 @@ export default function Vendor() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
 
-  const loadVendors = async () => {
+  const loadVendors = async (page = 1) => {
     try {
       setLoading(true);
-      const res = await api.get("/vendors/");
-      setVendors(res.data || []);
+      const res = await api.get(`/vendors/?page=${page}&limit=10`);
+      setVendors(res.data.vendors || []);
+      setPagination({
+        page: res.data.page,
+        limit: res.data.limit,
+        total: res.data.total,
+        totalPages: res.data.total_pages
+      });
     } catch (err) {
       console.error("Error loading vendors:", err);
       showToast("Failed to load vendors", 'error');
@@ -100,6 +113,12 @@ export default function Vendor() {
     setAvailableCities(cities);
   };
 
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      loadVendors(newPage);
+    }
+  };
+
   const registerVendor = async () => {
     if (!hasPermission(editingId ? "vendors.edit" : "vendors.create")) {
       showToast("Permission denied", 'error');
@@ -119,7 +138,7 @@ export default function Vendor() {
         showToast("Vendor created successfully", 'success');
       }
       resetForm();
-      loadVendors();
+      loadVendors(pagination.page);
     } catch (err) {
       console.error(err);
       showToast("Error saving vendor", 'error');
@@ -198,7 +217,7 @@ export default function Vendor() {
     } catch (err) {
       console.error(err);
       showToast("Failed to update vendor status", 'error');
-      loadVendors();
+      loadVendors(pagination.page);
     }
   };
 
@@ -354,7 +373,7 @@ export default function Vendor() {
             <div className="text-center sm:text-right">
               <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
                 <span className="text-sm font-medium">Vendors</span>
-                <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">{vendors.length}</div>
+                <div className="ml-4 bg-white/20 px-3 py-1 rounded-full text-sm">{pagination.total}</div>
               </div>
             </div>
           </div>
@@ -424,7 +443,7 @@ export default function Vendor() {
                   ) : (
                     vendors.map((vendor, idx) => (
                       <tr key={vendor.id} className="hover:bg-slate-50">
-                        <td className="border border-gray-300 px-4 py-2">{idx + 1}</td>
+                        <td className="border border-gray-300 px-4 py-2">{((pagination.page - 1) * pagination.limit) + idx + 1}</td>
                         <td className="border border-gray-300 px-4 py-2">
                           <div className="font-medium">{vendor.vendor_name}</div>
                           <div className="text-sm text-slate-500">{vendor.vendor_code}</div>
@@ -632,7 +651,14 @@ export default function Vendor() {
               )}
             </div>
             
-            <div className="mt-4 text-sm text-slate-500">Showing {vendors.length} vendor{vendors.length !== 1 ? "s" : ""}.</div>
+            <Pagination
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              itemsPerPage={pagination.limit}
+              onPageChange={handlePageChange}
+              itemName="vendors"
+            />
           </div>
         </div>
       </div>
