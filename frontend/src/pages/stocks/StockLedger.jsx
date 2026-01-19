@@ -37,10 +37,17 @@ export default function StockLedger() {
 
   const fetchLedgerData = async () => {
     try {
+      setLoading(true);
+      console.log('Fetching stock ledger data...');
       const response = await api.get("/stocks/ledger");
-      setLedgerData(response.data);
+      console.log('Stock ledger response:', response.data);
+      setLedgerData(response.data || []);
     } catch (error) {
       console.error("Error fetching ledger:", error);
+      console.error("Error details:", error.response?.data || error.message);
+      // Show user-friendly error message
+      alert("Failed to load stock data. Please check if you have created any GRN records first.");
+      setLedgerData([]);
     } finally {
       setLoading(false);
     }

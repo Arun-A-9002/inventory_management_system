@@ -17,10 +17,14 @@ export default function MainLayout() {
     try {
       const response = await api.get('/purchase/pr');
       if (response.data) {
-        const pending = response.data.filter(pr => 
-          !pr.status || pr.status === 'draft' || pr.status === 'submitted'
-        ).length;
-        setPendingCount(pending);
+        // Handle paginated response structure
+        const prData = response.data.items || response.data;
+        if (Array.isArray(prData)) {
+          const pending = prData.filter(pr => 
+            !pr.status || pr.status === 'draft' || pr.status === 'submitted'
+          ).length;
+          setPendingCount(pending);
+        }
       }
     } catch (error) {
       console.error('Error fetching pending count:', error);
@@ -30,8 +34,12 @@ export default function MainLayout() {
   const fetchCompanyDetails = async () => {
     try {
       const response = await api.get('/organization/company');
-      if (response.data && response.data.length > 0) {
-        setCompanyDetails(response.data[0]);
+      if (response.data) {
+        // Handle paginated response structure
+        const companyData = response.data.companies || response.data;
+        if (Array.isArray(companyData) && companyData.length > 0) {
+          setCompanyDetails(companyData[0]);
+        }
       }
     } catch (error) {
       console.error('Error fetching company details:', error);

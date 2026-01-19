@@ -94,11 +94,15 @@ export default function StockManagement() {
       ]);
       
       const stocksData = stocksRes.data || [];
-      const itemsData = itemsRes.data || [];
+      // Handle paginated response structure for items
+      const itemsData = itemsRes.data?.items || itemsRes.data || [];
+      
+      // Ensure itemsData is an array before using find method
+      const itemsArray = Array.isArray(itemsData) ? itemsData : [];
       
       // Merge warranty information from items database into stocks data
       const enrichedStocks = stocksData.map(stock => {
-        const itemInfo = itemsData.find(item => item.name === stock.item_name);
+        const itemInfo = itemsArray.find(item => item.name === stock.item_name);
         return {
           ...stock,
           warranty_period: itemInfo?.warranty_period || stock.warranty_period,
@@ -107,7 +111,7 @@ export default function StockManagement() {
       });
       
       setStocks(enrichedStocks);
-      setItems(itemsData);
+      setItems(itemsArray);
       setLocations(locationsRes.data || []);
       setDepartments(deptsRes.data || []);
       setDashboard(dashRes.data);

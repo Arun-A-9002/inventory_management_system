@@ -68,13 +68,17 @@ export default function PurchaseManagement() {
   // Fetch item list
   const fetchItemList = async () => {
     try {
-      const res = await api.get("/items/");
+      const res = await api.get("/items/?limit=1000"); // Get more items for dropdown
       console.log("Items from API:", res.data);
-      console.log("Item count:", res.data?.length || 0);
-      if (res.data && res.data.length > 0) {
-        console.log("First item structure:", res.data[0]);
+      
+      // Handle paginated response structure
+      const itemsData = res.data?.items || res.data || [];
+      console.log("Item count:", itemsData.length);
+      
+      if (itemsData && itemsData.length > 0) {
+        console.log("First item structure:", itemsData[0]);
         // Filter only active items
-        const activeItems = res.data.filter(item => item.is_active !== false);
+        const activeItems = itemsData.filter(item => item.is_active !== false);
         console.log("Active items count:", activeItems.length);
         setItemList(activeItems);
       } else {
@@ -149,10 +153,15 @@ export default function PurchaseManagement() {
   // Fetch vendors for email
   const fetchVendors = async () => {
     try {
-      const res = await api.get('/vendors/');
-      const activeVendors = res.data.filter(vendor => 
-        vendor.email && vendor.status === 'active'
+      const res = await api.get('/vendors/?limit=1000'); // Get more vendors for dropdown
+      console.log('Vendors API response:', res.data);
+      
+      // Handle paginated response structure
+      const vendorsData = res.data?.vendors || res.data || [];
+      const activeVendors = vendorsData.filter(vendor => 
+        vendor.email && (vendor.status === 'active' || vendor.status === 'Active')
       );
+      console.log('Active vendors with email:', activeVendors.length);
       setVendors(activeVendors || []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
@@ -989,7 +998,7 @@ export default function PurchaseManagement() {
                       className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
                     >
                       Refresh
-                    </button>
+                      </button>
                     {hasPermission("purchase_request.create") && (
                       <button 
                         onClick={() => setShowPRModal(true)}
