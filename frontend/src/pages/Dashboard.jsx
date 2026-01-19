@@ -27,6 +27,18 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      
+      // Check if user is logged in
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        console.error('No access token found');
+        window.location.href = '/login';
+        return;
+      }
+      
+      console.log('Fetching dashboard data...');
+      
+      // Use individual API calls that we know work
       const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes, companyRes] = await Promise.allSettled([
         api.get('/items/'),
         api.get('/stock-overview/'),
@@ -37,10 +49,99 @@ export default function Dashboard() {
         api.get('/company/')
       ]);
 
+      console.log('API Results:', {
+        items: itemsRes.status === 'fulfilled' ? itemsRes.value.data?.length : itemsRes.reason,
+        stock: stockRes.status === 'fulfilled' ? stockRes.value.data?.length : stockRes.reason,
+        vendors: vendorsRes.status === 'fulfilled' ? vendorsRes.value.data?.length : vendorsRes.reason,
+        customers: customersRes.status === 'fulfilled' ? customersRes.value.data?.length : customersRes.reason,
+        locations: locationsRes.status === 'fulfilled' ? locationsRes.value.data?.length : locationsRes.reason,
+        purchase: purchaseRes.status === 'fulfilled' ? purchaseRes.value.data?.length : purchaseRes.reason
+      });
+
       // Set company name if available
       if (companyRes.status === 'fulfilled' && companyRes.value.data && companyRes.value.data.length > 0) {
         setCompanyName(companyRes.value.data[0].name);
       }
+
+      let totalStockValue = 0;
+      let lowStockCount = 0;
+      let expiredCount = 0;
+      
+      if (stockRes.status === 'fulfilled' && stockRes.value.data) {
+        console.log('Processing stock data:', stockRes.value.data.length, 'items');
+        stockRes.value.data.forEach(item => {
+          const qty = item.available_qty || 0;
+          const minStock = item.min_stock || 10;
+          totalStockValue += qty * 50;
+          if (qty < minStock) {
+            lowStockCount++;
+          }
+          
+          // Check for expired batches
+          if (item.batches && item.batches.length > 0) {
+            const hasExpiredBatch = item.batches.some(batch => {
+              if (!batch.expiry_date || batch.expiry_date === "—") return false;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const parts = batch.expiry_date.split('/');
+              if (parts.length === 3) {
+                const expiry = new Date(parts[2], parts[1] - 1, parts[0]);
+                return expiry < today;
+              }
+              return false;
+            });
+            if (hasExpiredBatch) {
+              expiredCount++;
+            }
+          }
+        });
+      }
+
+      let pendingCount = 0;
+      if (purchaseRes.status === 'fulfilled' && purchaseRes.value.data && Array.isArray(purchaseRes.value.data)) {
+        pendingCount = purchaseRes.value.data.filter(pr => 
+          !pr.status || pr.status === 'draft' || pr.status === 'submitted'
+        ).length;
+      }
+
+      const finalStats = {
+        totalItems: itemsRes.status === 'fulfilled' ? (itemsRes.value.data?.length || 0) : 0,
+        totalStock: totalStockValue,
+        lowStockItems: lowStockCount,
+        expiredItems: expiredCount,
+        totalVendors: vendorsRes.status === 'fulfilled' ? (vendorsRes.value.data?.length || 0) : 0,
+        totalCustomers: customersRes.status === 'fulfilled' ? (customersRes.value.data?.length || 0) : 0,
+        activeLocations: locationsRes.status === 'fulfilled' ? (locationsRes.value.data?.length || 0) : 0,
+        pendingOrders: pendingCount,
+        recentTransactions: []
+      };
+      
+      console.log('Final stats:', finalStats);
+      setStats(finalStats);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        localStorage.removeItem('access_token');
+        window.location.href = '/login';
+        return;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFallbackData = async () => {
+    try {
+      const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes] = await Promise.allSettled([
+        api.get('/items/'),
+        api.get('/stock-overview/'),
+        api.get('/vendors/'),
+        api.get('/customers/'),
+        api.get('/inventory/locations/'),
+        api.get('/purchase/pr')
+      ]);
 
       let totalStockValue = 0;
       let lowStockCount = 0;
@@ -94,16 +195,34 @@ export default function Dashboard() {
         recentTransactions: []
       });
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Fallback data fetch failed:', error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        localStorage.removeItem('access_token');
+        window.location.href = '/login';
+        return;
+      }
+      
+      // Set default values if all fails
+      setStats({
+        totalItems: 0,
+        totalStock: 0,
+        lowStockItems: 0,
+        expiredItems: 0,
+        totalVendors: 0,
+        totalCustomers: 0,
+        activeLocations: 0,
+        pendingOrders: 0,
+        recentTransactions: []
+      });
     }
   };
 
   const StatCard = ({ title, value, icon, color, link, trend }) => (
     <div className="group bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80">
       <div className="flex items-center justify-between">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">{title}</p>
           <div className="flex items-baseline">
             <p className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
@@ -124,7 +243,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-        <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+        <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0`}>
           {icon}
         </div>
       </div>
@@ -264,7 +383,6 @@ export default function Dashboard() {
               icon={<svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               color="from-red-500 to-red-600"
               link="/app/stocks"
-              trend={0}
             />
             <StatCard
               title="Active Vendors"

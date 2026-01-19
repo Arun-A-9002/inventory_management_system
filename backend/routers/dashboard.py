@@ -5,6 +5,7 @@ from typing import Dict, List, Any
 from datetime import datetime, timedelta
 
 from database import get_tenant_db
+from utils.auth import get_current_user
 from models.tenant_models import (
     Item, Stock, StockOverview, GRN, PurchaseOrder, 
     ReturnHeader, Customer, Vendor, VendorPayment,
@@ -14,9 +15,18 @@ from models.tenant_models import (
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 @router.get("/overview")
-def get_dashboard_overview(db: Session = Depends(get_tenant_db)):
+def get_dashboard_overview(current_user = Depends(get_current_user)):
     """Get main dashboard overview statistics"""
     try:
+        # Get tenant database from JWT token
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(status_code=400, detail="No tenant database specified")
+        
+        # Get database session
+        from database import get_tenant_db
+        tenant_db_gen = get_tenant_db(tenant_db_name)
+        db = next(tenant_db_gen)
         # Total Items
         total_items = db.query(Item).filter(Item.is_active == True).count()
         
@@ -47,7 +57,7 @@ def get_dashboard_overview(db: Session = Depends(get_tenant_db)):
         recent_issues = db.query(IssueHeader).filter(IssueHeader.created_at >= week_ago).count()
         recent_returns = db.query(ReturnHeader).filter(ReturnHeader.created_at >= week_ago).count()
         
-        return {
+        overview_data = {
             "total_items": total_items,
             "total_stock_value": round(total_stock_value, 2),
             "low_stock_items": low_stock_items,
@@ -62,13 +72,25 @@ def get_dashboard_overview(db: Session = Depends(get_tenant_db)):
             }
         }
         
+        # Close database connection
+        db.close()
+        return overview_data
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stock-alerts")
-def get_stock_alerts(db: Session = Depends(get_tenant_db)):
+def get_stock_alerts(current_user = Depends(get_current_user)):
     """Get stock alerts for low stock items"""
     try:
+        # Get tenant database from JWT token
+        tenant_db_name = current_user.get("tenant_db")
+        if not tenant_db_name:
+            raise HTTPException(status_code=400, detail="No tenant database specified")
+        
+        # Get database session
+        tenant_db_gen = get_tenant_db(tenant_db_name)
+        db = next(tenant_db_gen)
         # Low stock items
         low_stock = db.query(StockOverview).filter(
             StockOverview.available_qty <= StockOverview.min_stock,
@@ -89,7 +111,7 @@ def get_stock_alerts(db: Session = Depends(get_tenant_db)):
             StockOverview.expiry_date >= datetime.now().strftime("%Y-%m-%d")
         ).all()
         
-        return {
+        alerts_data = {
             "low_stock": [
                 {
                     "item_name": item.item_name,
@@ -117,6 +139,10 @@ def get_stock_alerts(db: Session = Depends(get_tenant_db)):
                 } for item in expiring_soon
             ]
         }
+        
+        # Close database connection
+        db.close()
+        return alerts_data
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
