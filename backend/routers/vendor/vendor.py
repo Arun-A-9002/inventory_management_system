@@ -10,6 +10,7 @@ from schemas.tenant_schemas import *
 from utils.permissions import require_vendors_view, require_vendors_create, require_vendors_edit, require_vendors_delete, require_vendors_status
 from utils.logger import log_api, log_error, log_audit
 import uuid
+import re
 from functools import lru_cache
 from datetime import datetime, timedelta
 
@@ -35,6 +36,95 @@ def clear_vendor_cache():
     vendor_cache["timestamp"] = None
 
 
+
+def validate_ifsc_code(ifsc_code: str) -> str:
+    """Validate IFSC code format and return uppercase version"""
+    if not ifsc_code:
+        return ifsc_code
+    
+    ifsc_code = ifsc_code.upper().strip()
+    if len(ifsc_code) != 11 or not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', ifsc_code):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid IFSC code format. Must be 11 characters: 4 letters + '0' + 6 alphanumeric"
+        )
+    return ifsc_code
+
+def validate_account_number(account_number: str) -> str:
+    """Validate account number - only numbers, max 14 digits"""
+    if not account_number:
+        return account_number
+    
+    account_number = account_number.strip()
+    if not account_number.isdigit() or len(account_number) > 14:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid account number. Must be numbers only, maximum 14 digits"
+        )
+    return account_number
+
+def validate_name_field(name: str, field_name: str) -> str:
+    """Validate name fields - letters, spaces, dots, hyphens only"""
+    if not name:
+        return name
+    
+    name = name.strip()
+    if not re.match(r'^[A-Za-z\s.-]+$', name) or len(name) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}. Only letters, spaces, dots, and hyphens allowed. Max 100 characters"
+        )
+    return name
+
+def validate_phone(phone: str) -> str:
+    """Validate phone number - 10 digits"""
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+    
+    phone = re.sub(r'\D', '', phone)  # Remove non-digits
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Phone number must be exactly 10 digits")
+    return phone
+
+def validate_pan(pan: str) -> str:
+    """Validate PAN number format"""
+    if not pan:
+        return pan
+    
+    pan = pan.upper().strip()
+    if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$', pan):
+        raise HTTPException(status_code=400, detail="Invalid PAN format. Must be 5 letters + 4 digits + 1 letter")
+    return pan
+
+def validate_gst(gst: str) -> str:
+    """Validate GST number format"""
+    if not gst:
+        return gst
+    
+    gst = gst.upper().strip()
+    if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$', gst):
+        raise HTTPException(status_code=400, detail="Invalid GST format")
+    return gst
+
+def validate_email(email: str) -> str:
+    """Validate email format"""
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    email = email.strip().lower()
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    return email
+
+def validate_vendor_name(name: str) -> str:
+    """Validate vendor name - letters, numbers, spaces, common punctuation"""
+    if not name:
+        raise HTTPException(status_code=400, detail="Vendor name is required")
+    
+    name = name.strip()
+    if not re.match(r'^[A-Za-z0-9\s.,&()-]+$', name) or len(name) < 2 or len(name) > 150:
+        raise HTTPException(status_code=400, detail="Invalid vendor name. Only letters, numbers, spaces, and common punctuation allowed. 2-150 characters")
+    return name
 
 def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
     yield from get_tenant_db(tenant_db_name)
@@ -227,6 +317,31 @@ def create_vendor(data: VendorCreate, request: Request, db: Session = Depends(ge
     log_api("CREATE VENDOR")
     
     try:
+        # Validate required fields
+        data.vendor_name = validate_vendor_name(data.vendor_name)
+        data.email = validate_email(data.email)
+        data.phone = validate_phone(data.phone)
+        
+        # Validate IFSC code if provided
+        if data.ifsc_code:
+            data.ifsc_code = validate_ifsc_code(data.ifsc_code)
+        
+        # Validate account number if provided
+        if data.account_number:
+            data.account_number = validate_account_number(data.account_number)
+        
+        # Validate name fields
+        if data.account_holder_name:
+            data.account_holder_name = validate_name_field(data.account_holder_name, "account holder name")
+        if data.branch_name:
+            data.branch_name = validate_name_field(data.branch_name, "branch name")
+        
+        # Validate other fields
+        if data.pan_number:
+            data.pan_number = validate_pan(data.pan_number)
+        if data.gst_number:
+            data.gst_number = validate_gst(data.gst_number)
+        
         vendor_code = f"VND-{uuid.uuid4().hex[:6].upper()}"
 
         vendor = Vendor(
@@ -429,6 +544,31 @@ def update_vendor(vendor_id: int, data: VendorCreate, request: Request, db: Sess
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
+    # Validate required fields
+    data.vendor_name = validate_vendor_name(data.vendor_name)
+    data.email = validate_email(data.email)
+    data.phone = validate_phone(data.phone)
+    
+    # Validate IFSC code if provided
+    if data.ifsc_code:
+        data.ifsc_code = validate_ifsc_code(data.ifsc_code)
+    
+    # Validate account number if provided
+    if data.account_number:
+        data.account_number = validate_account_number(data.account_number)
+    
+    # Validate name fields
+    if data.account_holder_name:
+        data.account_holder_name = validate_name_field(data.account_holder_name, "account holder name")
+    if data.branch_name:
+        data.branch_name = validate_name_field(data.branch_name, "branch name")
+    
+    # Validate other fields
+    if data.pan_number:
+        data.pan_number = validate_pan(data.pan_number)
+    if data.gst_number:
+        data.gst_number = validate_gst(data.gst_number)
+    
     old_values = {
         "vendor_name": vendor.vendor_name,
         "phone": vendor.phone,
@@ -527,9 +667,30 @@ def update_vendor_bank_details(vendor_id: int, bank_details: dict, db: Session =
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
+    # Validate IFSC code if provided
+    ifsc_code = bank_details.get("ifsc_code")
+    if ifsc_code:
+        ifsc_code = validate_ifsc_code(ifsc_code)
+    
+    # Validate account number if provided
+    account_number = bank_details.get("account_number")
+    if account_number:
+        account_number = validate_account_number(account_number)
+    
+    # Validate name fields
+    account_holder_name = bank_details.get("account_holder_name")
+    if account_holder_name:
+        account_holder_name = validate_name_field(account_holder_name, "account holder name")
+    
+    branch_name = bank_details.get("branch_name")
+    if branch_name:
+        branch_name = validate_name_field(branch_name, "branch name")
+    
     # Update bank details
-    vendor.ifsc_code = bank_details.get("ifsc_code")
-    vendor.account_number = bank_details.get("account_number")
+    vendor.ifsc_code = ifsc_code
+    vendor.account_number = account_number
+    vendor.account_holder_name = account_holder_name
+    vendor.branch_name = branch_name
     vendor.account_holder_name = bank_details.get("account_holder_name")
     vendor.branch_name = bank_details.get("branch_name")
     

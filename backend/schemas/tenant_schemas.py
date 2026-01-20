@@ -517,6 +517,8 @@ class ItemResponse(ItemBase):
 
 
 # ================= VENDOR =================
+from pydantic import validator
+
 class VendorCreate(BaseModel):
     vendor_name: str
     contact_person: Optional[str] = None
@@ -533,6 +535,17 @@ class VendorCreate(BaseModel):
     account_number: Optional[str] = None
     account_holder_name: Optional[str] = None
     branch_name: Optional[str] = None
+    
+    @validator('ifsc_code')
+    def validate_ifsc(cls, v):
+        if v:
+            import re
+            v = v.upper().strip()
+            if len(v) != 11:
+                raise ValueError('IFSC code must be exactly 11 characters')
+            if not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', v):
+                raise ValueError('Invalid IFSC format: First 4 letters (bank), 5th must be 0, last 6 alphanumeric')
+        return v
 
 class VendorResponse(VendorCreate):
     id: int

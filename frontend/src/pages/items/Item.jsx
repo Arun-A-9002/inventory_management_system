@@ -53,6 +53,13 @@ export default function Item() {
   const [showBatchSelector, setShowBatchSelector] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Bulk upload states
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkStep, setBulkStep] = useState(1); // 1: Template, 2: Upload, 3: Preview, 4: Commit
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -61,6 +68,13 @@ export default function Item() {
       loadMasterData();
     }
   }, []);
+
+  // Auto-preview when file is selected
+  useEffect(() => {
+    if (selectedFile && bulkStep === 3) {
+      previewBulkUpload();
+    }
+  }, [selectedFile, bulkStep]);
 
   const loadMasterData = async () => {
     try {
@@ -502,6 +516,110 @@ const downloadQR = () => {
   }
 };
 
+// Bulk upload functions
+const downloadTemplate = async (format) => {
+  try {
+    setBulkLoading(true);
+    const response = await api.get(`/items/bulk/template/${format}`, {
+      responseType: 'blob'
+    });
+    
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `items_template.${format}`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    
+    showToast(`${format.toUpperCase()} template downloaded successfully`, 'success');
+  } catch (err) {
+    console.error('Template download failed:', err);
+    showToast('Failed to download template', 'error');
+  } finally {
+    setBulkLoading(false);
+  }
+};
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    const allowedTypes = ['.xlsx', '.xls', '.csv'];
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    
+    if (!allowedTypes.includes(fileExtension)) {
+      showToast('Please select an Excel (.xlsx) or CSV (.csv) file', 'error');
+      return;
+    }
+    
+    setSelectedFile(file);
+    setBulkStep(3);
+  }
+};
+
+const previewBulkUpload = async () => {
+  if (!selectedFile) {
+    showToast('Please select a file first', 'error');
+    return;
+  }
+
+  try {
+    setBulkLoading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    const response = await api.post('/items/bulk/preview', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    setPreviewData(response.data);
+    showToast('File preview loaded successfully', 'success');
+  } catch (err) {
+    console.error('Preview failed:', err);
+    showToast(err.response?.data?.detail || 'Failed to preview file', 'error');
+  } finally {
+    setBulkLoading(false);
+  }
+};
+
+const commitBulkUpload = async () => {
+  if (!selectedFile || !previewData) {
+    showToast('No data to commit', 'error');
+    return;
+  }
+
+  try {
+    setBulkLoading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    const response = await api.post('/items/bulk/commit', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    showToast(`Successfully created ${response.data.created_count} items`, 'success');
+    setBulkStep(5);
+    loadItems();
+  } catch (err) {
+    console.error('Commit failed:', err);
+    showToast(err.response?.data?.detail || 'Failed to commit bulk upload', 'error');
+  } finally {
+    setBulkLoading(false);
+  }
+};
+
+const resetBulkUpload = () => {
+  setShowBulkModal(false);
+  setBulkStep(1);
+  setSelectedFile(null);
+  setPreviewData(null);
+  setBulkLoading(false);
+};
+
   const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -533,6 +651,15 @@ const downloadQR = () => {
                 <span>⚙️</span>
                 <span className="hidden sm:inline">Master Data Setup</span>
                 <span className="sm:hidden">Setup</span>
+              </button>
+              )}
+              {hasPermission("items.create") && (
+              <button
+                onClick={() => setShowBulkModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+              >
+                <span>📊</span>
+                <span>Bulk Items</span>
               </button>
               )}
               <button
@@ -1277,6 +1404,291 @@ const downloadQR = () => {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Bulk Upload Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold">Bulk Upload Items</h2>
+                <button 
+                  onClick={resetBulkUpload}
+                  className="text-gray-500 hover:text-gray-700 p-1"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Step Indicator */}
+              <div className="flex items-center justify-center mb-8">
+                <div className="flex items-center space-x-4">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                    bulkStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    1
+                  </div>
+                  <span className="text-sm font-medium">Template</span>
+                  <div className="w-8 h-0.5 bg-gray-300"></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                    bulkStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    2
+                  </div>
+                  <span className="text-sm font-medium">Upload</span>
+                  <div className="w-8 h-0.5 bg-gray-300"></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                    bulkStep >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    3
+                  </div>
+                  <span className="text-sm font-medium">Preview</span>
+                  <div className="w-8 h-0.5 bg-gray-300"></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                    bulkStep >= 4 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    4
+                  </div>
+                  <span className="text-sm font-medium">Commit</span>
+                </div>
+              </div>
+
+              {/* Step 1: Template Download */}
+              {bulkStep === 1 && (
+                <div className="text-center space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Download Template</h3>
+                    <p className="text-gray-600 mb-6">Download the template file, fill it with your item data, and upload it back.</p>
+                  </div>
+                  
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => downloadTemplate('xlsx')}
+                      disabled={bulkLoading}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      <span>📊</span>
+                      <span>XLSX Template</span>
+                    </button>
+                    <button
+                      onClick={() => downloadTemplate('csv')}
+                      disabled={bulkLoading}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      <span>📄</span>
+                      <span>CSV Template</span>
+                    </button>
+                  </div>
+                  
+                  <div className="mt-8">
+                    <button
+                      onClick={() => setBulkStep(2)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                    >
+                      Next: Upload File
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: File Upload */}
+              {bulkStep === 2 && (
+                <div className="text-center space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Upload File</h3>
+                    <p className="text-gray-600 mb-6">Select the filled template file to upload.</p>
+                  </div>
+                  
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="bulk-file-input"
+                    />
+                    <label
+                      htmlFor="bulk-file-input"
+                      className="cursor-pointer flex flex-col items-center space-y-2"
+                    >
+                      <span className="text-4xl">📁</span>
+                      <span className="text-lg font-medium">Choose File</span>
+                      <span className="text-sm text-gray-500">Excel (.xlsx) or CSV (.csv) files only</span>
+                    </label>
+                  </div>
+                  
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => setBulkStep(1)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg"
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Preview */}
+              {bulkStep === 3 && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-lg font-medium mb-2">Preview & Validate</h3>
+                    <p className="text-gray-600">Review your data before importing.</p>
+                  </div>
+                  
+                  {selectedFile && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p><strong>File:</strong> {selectedFile.name}</p>
+                      <p><strong>Size:</strong> {(selectedFile.size / 1024).toFixed(2)} KB</p>
+                    </div>
+                  )}
+                  
+                  {!previewData && (
+                    <div className="text-center">
+                      <button
+                        onClick={previewBulkUpload}
+                        disabled={bulkLoading}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg disabled:opacity-50"
+                      >
+                        {bulkLoading ? 'Loading...' : 'Preview Data'}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {previewData && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{previewData.total_rows}</div>
+                          <div className="text-sm text-gray-600">Total Rows</div>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{previewData.valid_rows}</div>
+                          <div className="text-sm text-gray-600">Valid Rows</div>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-red-600">{previewData.error_rows}</div>
+                          <div className="text-sm text-gray-600">Error Rows</div>
+                        </div>
+                      </div>
+                      
+                      {previewData.errors.length > 0 && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <h4 className="font-medium text-red-800 mb-2">Errors Found:</h4>
+                          <ul className="text-sm text-red-700 space-y-1">
+                            {previewData.errors.slice(0, 10).map((error, idx) => (
+                              <li key={idx}>• {error}</li>
+                            ))}
+                            {previewData.errors.length > 10 && (
+                              <li>... and {previewData.errors.length - 10} more errors</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      <div className="max-h-64 overflow-y-auto border rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left">Row</th>
+                              <th className="px-4 py-2 text-left">Code</th>
+                              <th className="px-4 py-2 text-left">Name</th>
+                              <th className="px-4 py-2 text-left">Type</th>
+                              <th className="px-4 py-2 text-left">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {previewData.preview_data.map((item, idx) => (
+                              <tr key={idx} className={item.status === 'Error' ? 'bg-red-50' : 'bg-white'}>
+                                <td className="px-4 py-2">{item.row_number}</td>
+                                <td className="px-4 py-2">{item.code}</td>
+                                <td className="px-4 py-2">{item.name}</td>
+                                <td className="px-4 py-2">{item.item_type}</td>
+                                <td className="px-4 py-2">
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    item.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {item.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => setBulkStep(2)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg"
+                    >
+                      Back
+                    </button>
+                    {previewData && previewData.can_proceed && (
+                      <button
+                        onClick={() => setBulkStep(4)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+                      >
+                        Proceed to Commit
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Commit */}
+              {bulkStep === 4 && (
+                <div className="text-center space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Commit Changes</h3>
+                    <p className="text-gray-600 mb-6">Ready to import {previewData?.valid_rows} items?</p>
+                  </div>
+                  
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-yellow-800">⚠️ This action cannot be undone. Make sure your data is correct.</p>
+                  </div>
+                  
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => setBulkStep(3)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg"
+                    >
+                      Back to Preview
+                    </button>
+                    <button
+                      onClick={commitBulkUpload}
+                      disabled={bulkLoading}
+                      className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg disabled:opacity-50"
+                    >
+                      {bulkLoading ? 'Importing...' : 'Commit Import'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Success */}
+              {bulkStep === 5 && (
+                <div className="text-center space-y-6">
+                  <div>
+                    <span className="text-6xl">✅</span>
+                    <h3 className="text-lg font-medium mt-4 mb-2">Import Completed!</h3>
+                    <p className="text-gray-600">Your items have been successfully imported.</p>
+                  </div>
+                  
+                  <button
+                    onClick={resetBulkUpload}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

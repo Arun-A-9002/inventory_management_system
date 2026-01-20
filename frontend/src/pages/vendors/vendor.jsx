@@ -29,6 +29,56 @@ export default function Vendor() {
     account_holder_name: "",
     branch_name: ""
   });
+  
+  // IFSC validation function
+  const validateIFSC = (ifsc) => {
+    if (!ifsc) return true; // Optional field
+    const pattern = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    return ifsc.length === 11 && pattern.test(ifsc.toUpperCase());
+  };
+  
+  // Account number validation function
+  const validateAccountNumber = (accountNumber) => {
+    if (!accountNumber) return true; // Optional field
+    return /^\d{1,14}$/.test(accountNumber);
+  };
+  
+  // Name field validation (letters, spaces, dots, hyphens only)
+  const validateNameField = (name) => {
+    if (!name) return true; // Optional field
+    return /^[A-Za-z\s.-]+$/.test(name) && name.length <= 100;
+  };
+  
+  // Phone validation (10 digits)
+  const validatePhone = (phone) => {
+    if (!phone) return false;
+    const cleanPhone = phone.replace(/\D/g, '');
+    return cleanPhone.length === 10;
+  };
+  
+  // PAN validation
+  const validatePAN = (pan) => {
+    if (!pan) return true; // Optional field
+    return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan.toUpperCase());
+  };
+  
+  // GST validation
+  const validateGST = (gst) => {
+    if (!gst) return true; // Optional field
+    return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/.test(gst.toUpperCase());
+  };
+  
+  // Email validation
+  const validateEmail = (email) => {
+    if (!email) return false;
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+  };
+  
+  // Vendor name validation
+  const validateVendorName = (name) => {
+    if (!name) return false;
+    return /^[A-Za-z0-9\s.,&()-]+$/.test(name) && name.length >= 2 && name.length <= 150;
+  };
   const [showVendorModal, setShowVendorModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
@@ -109,6 +159,59 @@ export default function Vendor() {
       showToast("Vendor name, phone, and email are required", 'error');
       return;
     }
+    
+    // Validate vendor name
+    if (!validateVendorName(vendorForm.vendor_name)) {
+      showToast("Invalid vendor name. Only letters, numbers, spaces, and common punctuation allowed. 2-150 characters", 'error');
+      return;
+    }
+    
+    // Validate email
+    if (!validateEmail(vendorForm.email)) {
+      showToast("Invalid email format", 'error');
+      return;
+    }
+    
+    // Validate IFSC code if provided
+    if (vendorForm.ifsc_code && !validateIFSC(vendorForm.ifsc_code)) {
+      showToast("Invalid IFSC code format. Must be 11 characters: 4 letters + '0' + 6 alphanumeric", 'error');
+      return;
+    }
+    
+    // Validate account number if provided
+    if (vendorForm.account_number && !validateAccountNumber(vendorForm.account_number)) {
+      showToast("Invalid account number. Must be numbers only, maximum 14 digits", 'error');
+      return;
+    }
+    
+    // Validate phone number
+    if (!validatePhone(vendorForm.phone)) {
+      showToast("Phone number must be exactly 10 digits", 'error');
+      return;
+    }
+    
+    // Validate name fields
+    if (vendorForm.account_holder_name && !validateNameField(vendorForm.account_holder_name)) {
+      showToast("Account holder name: only letters, spaces, dots, and hyphens allowed", 'error');
+      return;
+    }
+    
+    if (vendorForm.branch_name && !validateNameField(vendorForm.branch_name)) {
+      showToast("Branch name: only letters, spaces, dots, and hyphens allowed", 'error');
+      return;
+    }
+    
+    // Validate PAN if provided
+    if (vendorForm.pan_number && !validatePAN(vendorForm.pan_number)) {
+      showToast("Invalid PAN format. Must be 5 letters + 4 digits + 1 letter", 'error');
+      return;
+    }
+    
+    // Validate GST if provided
+    if (vendorForm.gst_number && !validateGST(vendorForm.gst_number)) {
+      showToast("Invalid GST number format", 'error');
+      return;
+    }
 
     try {
       if (editingId) {
@@ -186,7 +289,7 @@ export default function Vendor() {
     }
     try {
       const statusValue = newStatus === "Active" ? "active" : "inactive";
-      await api.patch(`/vendors/${vendorId}/status?status=${statusValue}`);
+      await api.patch(`/vendors/${vendorId}/status`, { status: statusValue });
       setVendors(prevVendors => 
         prevVendors.map(vendor => 
           vendor.id === vendorId 
@@ -659,10 +762,25 @@ export default function Vendor() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Vendor Name *</label>
                 <input 
                   value={vendorForm.vendor_name}
-                  onChange={(e)=>setVendorForm({...vendorForm,vendor_name:e.target.value})} 
-                  className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter vendor name"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^A-Za-z0-9\s.,&()-]/g, ''); // Filter invalid chars
+                    if (value.length <= 150) {
+                      setVendorForm({...vendorForm, vendor_name: value});
+                    }
+                  }}
+                  className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                    vendorForm.vendor_name && !validateVendorName(vendorForm.vendor_name)
+                      ? 'border-red-500 bg-red-50'
+                      : ''
+                  }`}
+                  placeholder="ABC Company Ltd"
+                  maxLength={150}
                 />
+                {vendorForm.vendor_name && !validateVendorName(vendorForm.vendor_name) && (
+                  <p className="text-red-500 text-xs mt-1">
+                    Only letters, numbers, spaces, and common punctuation. 2-150 characters
+                  </p>
+                )}
               </div>
               
               <div>
@@ -680,10 +798,25 @@ export default function Vendor() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Phone *</label>
                   <input 
                     value={vendorForm.phone}
-                    onChange={(e)=>setVendorForm({...vendorForm,phone:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    placeholder="Phone number"
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ''); // Only numbers
+                      if (value.length <= 10) {
+                        setVendorForm({...vendorForm, phone: value});
+                      }
+                    }}
+                    className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                      vendorForm.phone && !validatePhone(vendorForm.phone)
+                        ? 'border-red-500 bg-red-50'
+                        : ''
+                    }`}
+                    placeholder="9876543210"
+                    maxLength={10}
                   />
+                  {vendorForm.phone && !validatePhone(vendorForm.phone) && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Must be exactly 10 digits
+                    </p>
+                  )}
                 </div>
                 
                 <div>
@@ -691,10 +824,22 @@ export default function Vendor() {
                   <input 
                     type="email"
                     value={vendorForm.email}
-                    onChange={(e)=>setVendorForm({...vendorForm,email:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    placeholder="Email address"
+                    onChange={(e) => {
+                      const value = e.target.value.toLowerCase();
+                      setVendorForm({...vendorForm, email: value});
+                    }}
+                    className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                      vendorForm.email && !validateEmail(vendorForm.email)
+                        ? 'border-red-500 bg-red-50'
+                        : ''
+                    }`}
+                    placeholder="vendor@company.com"
                   />
+                  {vendorForm.email && !validateEmail(vendorForm.email) && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Invalid email format
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -760,20 +905,50 @@ export default function Vendor() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">PAN Number</label>
                   <input 
                     value={vendorForm.pan_number}
-                    onChange={(e)=>setVendorForm({...vendorForm,pan_number:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    placeholder="PAN Number"
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      if (value.length <= 10) {
+                        setVendorForm({...vendorForm, pan_number: value});
+                      }
+                    }}
+                    className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                      vendorForm.pan_number && !validatePAN(vendorForm.pan_number)
+                        ? 'border-red-500 bg-red-50'
+                        : ''
+                    }`}
+                    placeholder="ABCDE1234F"
+                    maxLength={10}
                   />
+                  {vendorForm.pan_number && !validatePAN(vendorForm.pan_number) && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Format: 5 letters + 4 digits + 1 letter
+                    </p>
+                  )}
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label>
                   <input 
                     value={vendorForm.gst_number}
-                    onChange={(e)=>setVendorForm({...vendorForm,gst_number:e.target.value})} 
-                    className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    placeholder="GST Number"
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      if (value.length <= 15) {
+                        setVendorForm({...vendorForm, gst_number: value});
+                      }
+                    }}
+                    className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                      vendorForm.gst_number && !validateGST(vendorForm.gst_number)
+                        ? 'border-red-500 bg-red-50'
+                        : ''
+                    }`}
+                    placeholder="27ABCDE1234F1Z5"
+                    maxLength={15}
                   />
+                  {vendorForm.gst_number && !validateGST(vendorForm.gst_number) && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Invalid GST format
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -786,20 +961,48 @@ export default function Vendor() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">IFSC Code</label>
                     <input 
                       value={vendorForm.ifsc_code}
-                      onChange={(e)=>setVendorForm({...vendorForm,ifsc_code:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                      placeholder="IFSC Code"
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase();
+                        setVendorForm({...vendorForm, ifsc_code: value});
+                      }}
+                      className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                        vendorForm.ifsc_code && !validateIFSC(vendorForm.ifsc_code) 
+                          ? 'border-red-500 bg-red-50' 
+                          : ''
+                      }`}
+                      placeholder="PUNB0055000"
+                      maxLength={11}
                     />
+                    {vendorForm.ifsc_code && !validateIFSC(vendorForm.ifsc_code) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Format: 4 letters + '0' + 6 alphanumeric (e.g., PUNB0055000)
+                      </p>
+                    )}
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Account Number</label>
                     <input 
                       value={vendorForm.account_number}
-                      onChange={(e)=>setVendorForm({...vendorForm,account_number:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                      placeholder="Account Number"
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, ''); // Only numbers
+                        if (value.length <= 14) {
+                          setVendorForm({...vendorForm, account_number: value});
+                        }
+                      }}
+                      className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                        vendorForm.account_number && !validateAccountNumber(vendorForm.account_number)
+                          ? 'border-red-500 bg-red-50'
+                          : ''
+                      }`}
+                      placeholder="1234567890"
+                      maxLength={14}
                     />
+                    {vendorForm.account_number && !validateAccountNumber(vendorForm.account_number) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Numbers only, maximum 14 digits
+                      </p>
+                    )}
                   </div>
                 </div>
                 
@@ -808,20 +1011,50 @@ export default function Vendor() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Name</label>
                     <input 
                       value={vendorForm.account_holder_name}
-                      onChange={(e)=>setVendorForm({...vendorForm,account_holder_name:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                      placeholder="Account Holder Name"
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^A-Za-z\s.-]/g, ''); // Only letters, spaces, dots, hyphens
+                        if (value.length <= 100) {
+                          setVendorForm({...vendorForm, account_holder_name: value});
+                        }
+                      }}
+                      className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                        vendorForm.account_holder_name && !validateNameField(vendorForm.account_holder_name)
+                          ? 'border-red-500 bg-red-50'
+                          : ''
+                      }`}
+                      placeholder="John Doe"
+                      maxLength={100}
                     />
+                    {vendorForm.account_holder_name && !validateNameField(vendorForm.account_holder_name) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Only letters, spaces, dots, and hyphens allowed
+                      </p>
+                    )}
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Branch Name</label>
                     <input 
                       value={vendorForm.branch_name}
-                      onChange={(e)=>setVendorForm({...vendorForm,branch_name:e.target.value})} 
-                      className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                      placeholder="Branch Name"
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^A-Za-z\s.-]/g, ''); // Only letters, spaces, dots, hyphens
+                        if (value.length <= 100) {
+                          setVendorForm({...vendorForm, branch_name: value});
+                        }
+                      }}
+                      className={`w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm ${
+                        vendorForm.branch_name && !validateNameField(vendorForm.branch_name)
+                          ? 'border-red-500 bg-red-50'
+                          : ''
+                      }`}
+                      placeholder="Main Branch"
+                      maxLength={100}
                     />
+                    {vendorForm.branch_name && !validateNameField(vendorForm.branch_name) && (
+                      <p className="text-red-500 text-xs mt-1">
+                        Only letters, spaces, dots, and hyphens allowed
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

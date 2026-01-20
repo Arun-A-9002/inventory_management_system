@@ -8,6 +8,7 @@ from models.tenant_models import Item, Category, SubCategory, AuditLog
 from schemas.tenant_schemas import ItemCreate, ItemUpdate, ItemResponse
 from utils.permissions import require_items_view, require_items_create, require_items_edit, require_items_delete
 from utils.logger import log_api, log_error, log_audit
+from routers.items.bulk_upload import router as bulk_router
 
 
 
@@ -15,6 +16,9 @@ router = APIRouter(
     prefix="/items",
     tags=["Item Master"]
 )
+
+# Include bulk upload router
+router.include_router(bulk_router)
 
 def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
     yield from get_tenant_db(tenant_db_name)
