@@ -838,6 +838,64 @@ def get_stock_audit_logs(item_name: str, db: Session = Depends(get_db), current_
     return result
 
 # Update dispense endpoint with audit logging
+@router.get("/filter-options")
+def get_filter_options(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
+    """Get unique filter options for stock ledger and overview"""
+    try:
+        from models.tenant_models import GRN, GRNStatus
+        
+        # Get all active items
+        items = db.query(Item).filter(Item.is_active == True).all()
+        
+        # Get unique item names and codes
+        item_names = list(set([item.name for item in items]))
+        item_codes = list(set([item.item_code for item in items if item.item_code]))
+        
+        # Get unique locations from approved GRNs
+        locations = db.query(GRN.store).filter(
+            GRN.status == GRNStatus.approved,
+            GRN.store.isnot(None)
+        ).distinct().all()
+        location_list = list(set([loc[0] for loc in locations if loc[0]]))
+        
+        # Get unique batch numbers
+        batch_numbers = db.query(Batch.batch_no).filter(
+            Batch.batch_no.isnot(None)
+        ).distinct().all()
+        batch_list = list(set([batch[0] for batch in batch_numbers if batch[0]]))
+        
+        # Get unique transaction types from ledger
+        txn_types = [
+            "GRN_RECEIPT", "OPENING", "ISSUE", "TRANSFER", 
+            "DISPOSAL", "ADJUST_IN", "ADJUST_OUT"
+        ]
+        
+        return {
+            "items": sorted(item_names),
+            "item_codes": sorted(item_codes),
+            "locations": sorted(location_list),
+            "batches": sorted(batch_list),
+            "transaction_types": txn_types,
+            "status_options": [
+                {"value": "good", "label": "Good Stock"},
+                {"value": "low_stock", "label": "Low Stock"},
+                {"value": "expired", "label": "Has Expired Batches"}
+            ],
+            "expiry_options": [
+                {"value": "expired", "label": "Already Expired"},
+                {"value": "expiring_soon", "label": "Expiring in 30 days"},
+                {"value": "expiring_3months", "label": "Expiring in 3 months"}
+            ],
+            "stock_level_options": [
+                {"value": "zero", "label": "Zero Stock"},
+                {"value": "low", "label": "Low Stock"},
+                {"value": "normal", "label": "Normal Stock"}
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error getting filter options: {str(e)}")
+
 @router.get("/real-time-overview")
 def get_real_time_stock_overview(db: Session = Depends(get_db), current_user: dict = Depends(require_stock_ledger_view())):
     """Get real-time stock overview with calculations"""

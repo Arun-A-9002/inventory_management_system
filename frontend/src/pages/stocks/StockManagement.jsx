@@ -6,12 +6,24 @@ import { hasPermission } from "../../utils/permissions";
 
 export default function StockManagement() {
   const [stocks, setStocks] = useState([]);
+  const [filteredStocks, setFilteredStocks] = useState([]);
   const [items, setItems] = useState([]);
   const [locations, setLocations] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedBatches, setSelectedBatches] = useState({});
   const [viewModal, setViewModal] = useState({ isOpen: false, item: null });
+  const [filters, setFilters] = useState({
+    item: '',
+    location: '',
+    status: '',
+    search: ''
+  });
+  const [filterOptions, setFilterOptions] = useState({
+    items: [],
+    locations: [],
+    batches: []
+  });
   const { toast, showToast, hideToast } = useToast();
   
 
@@ -49,6 +61,78 @@ export default function StockManagement() {
     setViewModal({ isOpen: true, item });
   };
 
+  const applyFilters = () => {
+    let filtered = [...stocks];
+
+    if (filters.item) {
+      filtered = filtered.filter(stock => stock.item_name === filters.item);
+    }
+
+    if (filters.location) {
+      filtered = filtered.filter(stock => 
+        stock.location.includes(filters.location) ||
+        (stock.batches && stock.batches.some(batch => 
+          batch.location && batch.location.includes(filters.location)
+        ))
+      );
+    }
+
+    if (filters.status) {
+      filtered = filtered.filter(stock => {
+        const isLowStock = stock.available_qty <= stock.min_stock;
+        const hasExpiredBatches = stock.batches && stock.batches.some(batch => isExpired(batch.expiry_date));
+        
+        switch (filters.status) {
+          case 'low_stock':
+            return isLowStock;
+          case 'expired':
+            return hasExpiredBatches;
+          case 'good':
+            return stock.available_qty > stock.min_stock && (!stock.batches || !stock.batches.some(batch => isExpired(batch.expiry_date)));
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filtered = filtered.filter(stock => 
+        stock.item_name.toLowerCase().includes(searchTerm) ||
+        stock.item_code.toLowerCase().includes(searchTerm) ||
+        (stock.batches && stock.batches.some(batch => 
+          batch.batch_no && batch.batch_no.toLowerCase().includes(searchTerm)
+        ))
+      );
+    }
+
+    setFilteredStocks(filtered);
+  };
+
+  const clearFilters = () => {
+    setFilters({ item: '', location: '', status: '', search: '' });
+    setFilteredStocks(stocks);
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const fetchFilterOptions = async () => {
+    try {
+      const [stockResponse, locationResponse] = await Promise.all([
+        api.get("/stocks/filter-options"),
+        api.get("/inventory/locations/")
+      ]);
+      setFilterOptions({
+        ...stockResponse.data,
+        locations: locationResponse.data.map(loc => loc.name)
+      });
+    } catch (error) {
+      console.error("Error fetching filter options:", error);
+    }
+  };
+
   const handleDispense = async (item, batchNo) => {
     if (!hasPermission("stock_ledger.dispense")) {
       showToast("Permission denied", 'error');
@@ -81,7 +165,12 @@ export default function StockManagement() {
 
   useEffect(() => {
     loadData();
+    fetchFilterOptions();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, stocks]);
 
   const loadData = async () => {
     try {
@@ -111,6 +200,7 @@ export default function StockManagement() {
       });
       
       setStocks(enrichedStocks);
+      setFilteredStocks(enrichedStocks);
       setItems(itemsArray);
       setLocations(locationsRes.data || []);
       setDepartments(deptsRes.data || []);
@@ -151,6 +241,74 @@ export default function StockManagement() {
       {/* STOCK OVERVIEW */}
       <section>
         <h2 className="text-xl font-bold mb-4">Stock Overview</h2>
+        
+        {/* Filter Section */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Filters</h3>
+            <button
+              onClick={clearFilters}
+              className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+            >
+              Clear All
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <select
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                value={filters.item}
+                onChange={(e) => handleFilterChange('item', e.target.value)}
+              >
+                <option value="">All Items</option>
+                {[...new Set(stocks.map(s => s.item_name))].sort().map(item => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <select
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                value={filters.location}
+                onChange={(e) => handleFilterChange('location', e.target.value)}
+              >
+                <option value="">All Locations</option>
+                {filterOptions.locations && filterOptions.locations.map(location => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <select
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+              >
+                <option value="">All Status</option>
+                <option value="good">Good Stock</option>
+                <option value="low_stock">Low Stock</option>
+                <option value="expired">Has Expired Batches</option>
+              </select>
+            </div>
+            
+            <div>
+              <input
+                type="text"
+                placeholder="Search item, code, batch..."
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <div className="mt-4 text-sm text-gray-600">
+            Showing {filteredStocks.length} of {stocks.length} items
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full border text-sm">
             <thead>
@@ -167,7 +325,7 @@ export default function StockManagement() {
               </tr>
             </thead>
             <tbody>
-              {stocks.map((s) => (
+              {filteredStocks.map((s) => (
                 <tr key={s.id}>
                   <td className="border p-2">
                     <div className="font-medium">{s.item_name}</div>

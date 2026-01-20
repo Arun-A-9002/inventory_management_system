@@ -17,14 +17,29 @@ export default function StockLedger() {
     dateTo: '',
     reference: ''
   });
+  const [filterOptions, setFilterOptions] = useState({
+    items: [],
+    batches: [],
+    transaction_types: []
+  });
 
   useEffect(() => {
     if (hasPermission("stock_ledger.view")) {
       fetchLedgerData();
+      fetchFilterOptions();
     } else {
       setLoading(false);
     }
   }, []);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await api.get("/stocks/filter-options");
+      setFilterOptions(response.data);
+    } catch (error) {
+      console.error("Error fetching filter options:", error);
+    }
+  };
 
   // Check if user has permission to view stock ledger
   if (!hasPermission("stock_ledger.view")) {
@@ -69,19 +84,19 @@ export default function StockLedger() {
 
     if (filters.item) {
       filtered = filtered.filter(entry => 
-        entry.item_name.toLowerCase().includes(filters.item.toLowerCase())
+        entry.item_name === filters.item
       );
     }
 
     if (filters.batch) {
       filtered = filtered.filter(entry => 
-        entry.batch_no && entry.batch_no.toLowerCase().includes(filters.batch.toLowerCase())
+        entry.batch_no === filters.batch
       );
     }
 
     if (filters.transaction) {
       filtered = filtered.filter(entry => 
-        entry.txn_type.toLowerCase().includes(filters.transaction.toLowerCase())
+        entry.txn_type === filters.transaction
       );
     }
 
@@ -124,6 +139,34 @@ export default function StockLedger() {
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Date', 'Item Name', 'Batch No', 'Transaction Type', 'Qty In', 'Qty Out', 'Balance', 'Reference'];
+    const csvData = filteredData.map(entry => [
+      entry.date,
+      entry.item_name,
+      entry.batch_no || '—',
+      entry.txn_type,
+      entry.qty_in || '—',
+      entry.qty_out || '—',
+      entry.balance,
+      entry.ref_no
+    ]);
+    
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `stock_ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   useEffect(() => {
@@ -180,35 +223,52 @@ export default function StockLedger() {
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-          <button
-            onClick={clearFilters}
-            className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
-          >
-            Clear All
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={exportToCSV}
+              className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+            <button
+              onClick={clearFilters}
+              className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+            >
+              Clear All
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-            <input
-              type="text"
-              placeholder="Search by item name"
+            <select
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               value={filters.item}
               onChange={(e) => handleFilterChange('item', e.target.value)}
-            />
+            >
+              <option value="">All Items</option>
+              {filterOptions.items.map(item => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
-            <input
-              type="text"
-              placeholder="Search by batch number"
+            <select
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               value={filters.batch}
               onChange={(e) => handleFilterChange('batch', e.target.value)}
-            />
+            >
+              <option value="">All Batches</option>
+              {filterOptions.batches.map(batch => (
+                <option key={batch} value={batch}>{batch}</option>
+              ))}
+            </select>
           </div>
           
           <div>
@@ -219,13 +279,9 @@ export default function StockLedger() {
               onChange={(e) => handleFilterChange('transaction', e.target.value)}
             >
               <option value="">All Transactions</option>
-              <option value="GRN_RECEIPT">GRN Receipt</option>
-              <option value="OPENING">Opening</option>
-              <option value="ISSUE">Issue</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="DISPOSAL">Disposal</option>
-              <option value="ADJUST_IN">Adjust In</option>
-              <option value="ADJUST_OUT">Adjust Out</option>
+              {filterOptions.transaction_types.map(type => (
+                <option key={type} value={type}>{type.replace('_', ' ')}</option>
+              ))}
             </select>
           </div>
           

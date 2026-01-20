@@ -3,25 +3,52 @@ import api from "../../api";
 
 export default function StockOverview() {
   const [stockData, setStockData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedBatches, setSelectedBatches] = useState({});
   const [dispenseQuantities, setDispenseQuantities] = useState({});
   const [showExpiredModal, setShowExpiredModal] = useState(false);
+  const [filters, setFilters] = useState({
+    item: '',
+    location: '',
+    status: '',
+    batch: '',
+    expiry: '',
+    stockLevel: ''
+  });
+  const [filterOptions, setFilterOptions] = useState({
+    items: [],
+    locations: [],
+    batches: [],
+    status_options: [],
+    expiry_options: [],
+    stock_level_options: []
+  });
 
   useEffect(() => {
     fetchStockData();
+    fetchFilterOptions();
   }, []);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await api.get("/stocks/filter-options");
+      setFilterOptions(response.data);
+    } catch (error) {
+      console.error("Error fetching filter options:", error);
+    }
+  };
 
   useEffect(() => {
     // Check for expired items after data is loaded
-    if (stockData.length > 0) {
-      const expiredItems = stockData.filter(item => getExpiredBatches(item.batches).length > 0);
+    if (filteredData.length > 0) {
+      const expiredItems = filteredData.filter(item => getExpiredBatches(item.batches).length > 0);
       if (expiredItems.length > 0) {
         setShowExpiredModal(true);
       }
     }
-  }, [stockData]);
+  }, [filteredData]);
 
   const fetchStockData = async () => {
     try {
@@ -29,6 +56,7 @@ export default function StockOverview() {
       const response = await api.get('/stock-overview/');
       console.log('Stock data received:', response.data);
       setStockData(response.data);
+      setFilteredData(response.data);
     } catch (err) {
       setError("Failed to fetch stock data");
       console.error("Error fetching stock data:", err);
@@ -36,6 +64,147 @@ export default function StockOverview() {
       setLoading(false);
     }
   };
+
+  const applyFilters = () => {
+    let filtered = [...stockData];
+
+    if (filters.item) {
+      filtered = filtered.filter(item => 
+        item.item_name === filters.item
+      );
+    }
+
+    if (filters.location) {
+      filtered = filtered.filter(item => 
+        item.location === filters.location
+      );
+    }
+
+    if (filters.status) {
+      filtered = filtered.filter(item => {
+        const hasExpiredBatches = getExpiredBatches(item.batches).length > 0;
+        const isLowStock = item.available_qty <= item.min_stock;
+        
+        switch (filters.status) {
+          case 'expired':
+            return hasExpiredBatches;
+          case 'low_stock':
+            return isLowStock && !hasExpiredBatches;
+          case 'good':
+            return !hasExpiredBatches && !isLowStock;
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (filters.batch) {
+      filtered = filtered.filter(item => 
+        item.batches && item.batches.some(batch => 
+          batch.batch_no === filters.batch
+        )
+      );
+    }
+
+    if (filters.expiry) {
+      const today = new Date();
+      filtered = filtered.filter(item => {
+        if (!item.batches) return false;
+        
+        return item.batches.some(batch => {
+          if (!batch.expiry_date || batch.expiry_date === "—") return false;
+          
+          const parts = batch.expiry_date.split('/');
+          if (parts.length !== 3) return false;
+          
+          const expiry = new Date(parts[2], parts[1] - 1, parts[0]);
+          const daysDiff = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+          
+          switch (filters.expiry) {
+            case 'expired':
+              return daysDiff < 0;
+            case 'expiring_soon':
+              return daysDiff >= 0 && daysDiff <= 30;
+            case 'expiring_3months':
+              return daysDiff > 30 && daysDiff <= 90;
+            default:
+              return true;
+          }
+        });
+      });
+    }
+
+    if (filters.stockLevel) {
+      filtered = filtered.filter(item => {
+        switch (filters.stockLevel) {
+          case 'zero':
+            return item.available_qty === 0;
+          case 'low':
+            return item.available_qty > 0 && item.available_qty <= item.min_stock;
+          case 'normal':
+            return item.available_qty > item.min_stock;
+          default:
+            return true;
+        }
+      });
+    }
+
+    setFilteredData(filtered);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      item: '',
+      location: '',
+      status: '',
+      batch: '',
+      expiry: '',
+      stockLevel: ''
+    });
+    setFilteredData(stockData);
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Item Name', 'Item Code', 'Location', 'Available Qty', 'Min Stock', 'Status', 'Batch No', 'Expiry Date'];
+    const csvData = filteredData.map(item => {
+      const hasExpiredBatches = getExpiredBatches(item.batches).length > 0;
+      const isLowStock = item.available_qty <= item.min_stock;
+      const status = hasExpiredBatches ? 'Has Expired Batches' : (isLowStock ? 'Low Stock' : 'Good');
+      
+      return [
+        item.item_name,
+        item.item_code,
+        item.location,
+        item.available_qty,
+        item.min_stock,
+        status,
+        item.batches && item.batches.length > 0 ? item.batches[0].batch_no : '—',
+        item.batches && item.batches.length > 0 ? item.batches[0].expiry_date || '—' : '—'
+      ];
+    });
+    
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `stock_overview_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, stockData]);
 
   const handleBatchChange = (itemId, batchIndex) => {
     setSelectedBatches(prev => ({
@@ -228,7 +397,7 @@ export default function StockOverview() {
               <h2 className="text-lg sm:text-xl font-bold text-red-800">Expired Items Alert!</h2>
             </div>
             <p className="text-gray-700 mb-4 text-sm sm:text-base">
-              You have {stockData.filter(item => getExpiredBatches(item.batches).length > 0).length} items with expired batches. 
+              You have {filteredData.filter(item => getExpiredBatches(item.batches).length > 0).length} items with expired batches. 
               Please dispense expired items first before continuing other work.
             </p>
             <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
@@ -250,6 +419,164 @@ export default function StockOverview() {
       )}
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Stock Overview</h1>
       
+      {/* Filter Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={exportToCSV}
+              className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+            <button
+              onClick={clearFilters}
+              className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.item}
+              onChange={(e) => handleFilterChange('item', e.target.value)}
+            >
+              <option value="">All Items</option>
+              {filterOptions.items.map(item => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.location}
+              onChange={(e) => handleFilterChange('location', e.target.value)}
+            >
+              <option value="">All Locations</option>
+              {filterOptions.locations.map(location => (
+                <option key={location} value={location}>{location}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+            >
+              <option value="">All Status</option>
+              {filterOptions.status_options.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.batch}
+              onChange={(e) => handleFilterChange('batch', e.target.value)}
+            >
+              <option value="">All Batches</option>
+              {filterOptions.batches.map(batch => (
+                <option key={batch} value={batch}>{batch}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Status</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.expiry}
+              onChange={(e) => handleFilterChange('expiry', e.target.value)}
+            >
+              <option value="">All Expiry Status</option>
+              {filterOptions.expiry_options.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Stock Level</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.stockLevel}
+              onChange={(e) => handleFilterChange('stockLevel', e.target.value)}
+            >
+              <option value="">All Stock Levels</option>
+              {filterOptions.stock_level_options.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="text-sm font-medium text-gray-700">Quick Filters:</span>
+          <button
+            onClick={() => handleFilterChange('status', 'expired')}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              filters.status === 'expired' 
+                ? 'bg-red-600 text-white' 
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            }`}
+          >
+            Expired Items
+          </button>
+          <button
+            onClick={() => handleFilterChange('status', 'low_stock')}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              filters.status === 'low_stock' 
+                ? 'bg-yellow-600 text-white' 
+                : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+            }`}
+          >
+            Low Stock
+          </button>
+          <button
+            onClick={() => handleFilterChange('expiry', 'expiring_soon')}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              filters.expiry === 'expiring_soon' 
+                ? 'bg-orange-600 text-white' 
+                : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+            }`}
+          >
+            Expiring Soon
+          </button>
+          <button
+            onClick={() => handleFilterChange('stockLevel', 'zero')}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              filters.stockLevel === 'zero' 
+                ? 'bg-gray-600 text-white' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Zero Stock
+          </button>
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {filteredData.length} of {stockData.length} items
+        </div>
+      </div>
+      
       {/* Dashboard Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
@@ -259,7 +586,7 @@ export default function StockOverview() {
             </svg>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-medium text-blue-600 truncate">Total Items</p>
-              <p className="text-lg sm:text-2xl font-bold text-blue-800">{stockData.length}</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-800">{filteredData.length}</p>
             </div>
           </div>
         </div>
@@ -271,7 +598,7 @@ export default function StockOverview() {
             </svg>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-medium text-green-600 truncate">Good Stock</p>
-              <p className="text-lg sm:text-2xl font-bold text-green-800">{stockData.filter(item => item.available_qty > item.min_stock).length}</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-800">{filteredData.filter(item => item.available_qty > item.min_stock).length}</p>
             </div>
           </div>
         </div>
@@ -283,7 +610,7 @@ export default function StockOverview() {
             </svg>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-medium text-yellow-600 truncate">Low Stock</p>
-              <p className="text-lg sm:text-2xl font-bold text-yellow-800">{stockData.filter(item => item.available_qty <= item.min_stock).length}</p>
+              <p className="text-lg sm:text-2xl font-bold text-yellow-800">{filteredData.filter(item => item.available_qty <= item.min_stock).length}</p>
             </div>
           </div>
         </div>
@@ -295,7 +622,7 @@ export default function StockOverview() {
             </svg>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-medium text-red-600 truncate">Expired</p>
-              <p className="text-lg sm:text-2xl font-bold text-red-800">{stockData.filter(item => getExpiredBatches(item.batches).length > 0).length}</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-800">{filteredData.filter(item => getExpiredBatches(item.batches).length > 0).length}</p>
             </div>
           </div>
         </div>
@@ -330,7 +657,7 @@ export default function StockOverview() {
             </tr>
           </thead>
           <tbody>
-            {stockData.map((item) => {
+            {filteredData.map((item) => {
               console.log(`Rendering item: ${item.item_name}, batches:`, item.batches);
               const selectedBatch = getSelectedBatch(item);
               const displayQty = getDisplayQuantity(item);
@@ -468,7 +795,7 @@ export default function StockOverview() {
 
       {/* Mobile Cards */}
       <div className="lg:hidden space-y-4">
-        {stockData.map((item) => {
+        {filteredData.map((item) => {
           const selectedBatch = getSelectedBatch(item);
           const displayQty = getDisplayQuantity(item);
           const expiredBatches = getExpiredBatches(item.batches);
