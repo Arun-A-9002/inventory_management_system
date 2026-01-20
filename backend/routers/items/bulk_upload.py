@@ -6,7 +6,7 @@ import io
 import json
 
 from database import get_current_tenant_db_name, get_tenant_db
-from models.tenant_models import Item, Category, SubCategory, Brand, AuditLog
+from models.tenant_models import Item, Category, SubCategory, Brand, AuditLog, InventoryLocation
 from schemas.tenant_schemas import ItemCreate
 from utils.permissions import require_items_create, require_items_view
 from utils.logger import log_api, log_error, log_audit
@@ -40,7 +40,7 @@ def download_xlsx_template(db: Session = Depends(get_db), current_user: dict = D
             'min_stock': [10],
             'max_stock': [1000],
             'safety_stock': [5],
-            'location_code': ['LOC001'],
+            'location_name': ['Main Warehouse'],
             'current_quantity': [100],
             'fixing_price': [5.50],
             'mrp': [6.00],
@@ -112,7 +112,7 @@ def download_csv_template(db: Session = Depends(get_db), current_user: dict = De
             'min_stock': [10],
             'max_stock': [1000],
             'safety_stock': [5],
-            'location_code': ['LOC001'],
+            'location_name': ['Main Warehouse'],
             'current_quantity': [100],
             'fixing_price': [5.50],
             'mrp': [6.00],
@@ -324,6 +324,28 @@ def get_or_create_brand(db: Session, brand_name: str) -> int:
     
     return brand.id
 
+def get_or_create_location(db: Session, location_name: str) -> int:
+    """Get existing location or create new one, return location ID"""
+    if not location_name or location_name.strip() == '':
+        return None
+    
+    location_name = location_name.strip()
+    location = db.query(InventoryLocation).filter(InventoryLocation.name == location_name).first()
+    
+    if not location:
+        # Generate code from name
+        location_code = location_name.upper().replace(' ', '_')[:10]
+        location = InventoryLocation(
+            name=location_name,
+            code=location_code,
+            location_type="internal",
+            is_active=True
+        )
+        db.add(location)
+        db.flush()  # Get ID without committing
+    
+    return location.id
+
 @router.post("/commit")
 async def commit_bulk_upload(file: UploadFile = File(...), request: Request = None, db: Session = Depends(get_db), current_user: dict = Depends(require_items_create())):
     """Commit bulk upload after preview validation"""
@@ -341,6 +363,7 @@ async def commit_bulk_upload(file: UploadFile = File(...), request: Request = No
         created_categories = set()
         created_subcategories = set()
         created_brands = set()
+        created_locations = set()
         
         for index, row in df.iterrows():
             try:
@@ -376,6 +399,14 @@ async def commit_bulk_upload(file: UploadFile = File(...), request: Request = No
                     if brand_id:
                         created_brands.add(brand_name)
                 
+                # Get or create location from location_name
+                location_name = str(row.get('location_name', '') or '').strip()
+                location_id = None
+                if location_name:
+                    location_id = get_or_create_location(db, location_name)
+                    if location_id:
+                        created_locations.add(location_name)
+                
                 # Create item with minimal required fields
                 item = Item(
                     name=str(row['name']).strip(),
@@ -389,6 +420,8 @@ async def commit_bulk_upload(file: UploadFile = File(...), request: Request = No
                     min_stock=int(row.get('min_stock', 0) or 0),
                     max_stock=int(row.get('max_stock', 0) or 0),
                     safety_stock=int(row.get('safety_stock', 0) or 0),
+                    location_id=location_id,
+                    current_quantity=int(row.get('current_quantity', 0) or 0),
                     fixing_price=float(row.get('fixing_price', 0) or 0),
                     mrp=float(row.get('mrp', 0) or 0),
                     tax=float(row.get('tax', 0) or 0),
@@ -416,7 +449,8 @@ async def commit_bulk_upload(file: UploadFile = File(...), request: Request = No
             "auto_created": {
                 "categories": list(created_categories),
                 "subcategories": list(created_subcategories),
-                "brands": list(created_brands)
+                "brands": list(created_brands),
+                "locations": list(created_locations)
             }
         }
         

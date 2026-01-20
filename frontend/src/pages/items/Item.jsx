@@ -15,6 +15,9 @@ export default function Item() {
   const [allSubCategories, setAllSubCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationForm, setLocationForm] = useState({ code: "", name: "", description: "" });
   const [generatedBarcode, setGeneratedBarcode] = useState("");
   const [generatedQR, setGeneratedQR] = useState("");
 
@@ -70,7 +73,16 @@ export default function Item() {
       loadItems();
       loadMasterData();
     }
-  }, []);
+    
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      if (showLocationDropdown && !event.target.closest('.relative')) {
+        setShowLocationDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLocationDropdown]);
 
   // Auto-preview when file is selected
   useEffect(() => {
@@ -648,6 +660,18 @@ const resetBulkUpload = () => {
   setBulkLoading(false);
 };
 
+const createLocation = async () => {
+  try {
+    await api.post("/inventory/locations/", { ...locationForm, location_type: "internal" });
+    showToast("Location created successfully", 'success');
+    setLocationForm({ code: "", name: "", description: "" });
+    setShowLocationModal(false);
+    loadMasterData();
+  } catch (err) {
+    showToast(err.response?.data?.detail || "Failed to create location", 'error');
+  }
+};
+
   const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -690,6 +714,45 @@ const resetBulkUpload = () => {
                 <span>Bulk Items</span>
               </button>
               )}
+              <div className="relative">
+                <button
+                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm"
+                >
+                  <span>📍</span>
+                  <span>Locations</span>
+                  <span className="text-xs">▼</span>
+                </button>
+                {showLocationDropdown && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50">
+                    <div className="p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-medium">Internal Locations</h3>
+                        <button
+                          onClick={() => { setShowLocationModal(true); setShowLocationDropdown(false); }}
+                          className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                        >
+                          + Add New
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {locations.filter(loc => loc.location_type === 'internal').map(location => (
+                          <div key={location.id} className="p-2 border rounded hover:bg-gray-50">
+                            <div className="font-medium text-sm">{location.name}</div>
+                            <div className="text-xs text-gray-500">{location.code}</div>
+                            {location.description && (
+                              <div className="text-xs text-gray-400 mt-1">{location.description}</div>
+                            )}
+                          </div>
+                        ))}
+                        {locations.filter(loc => loc.location_type === 'internal').length === 0 && (
+                          <div className="text-center text-gray-500 py-4 text-sm">No internal locations found</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setShowCreateModal(true)}
                 disabled={!hasPermission("items.create")}
@@ -1787,6 +1850,62 @@ const resetBulkUpload = () => {
         isVisible={toast.isVisible}
         onClose={hideToast}
       />
+      
+      {/* Location Creation Modal */}
+      {showLocationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4">Create Internal Location</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Location Code *</label>
+                <input
+                  type="text"
+                  value={locationForm.code}
+                  onChange={(e) => setLocationForm({...locationForm, code: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., WH001"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Location Name *</label>
+                <input
+                  type="text"
+                  value={locationForm.name}
+                  onChange={(e) => setLocationForm({...locationForm, name: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Main Warehouse"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={locationForm.description}
+                  onChange={(e) => setLocationForm({...locationForm, description: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Location description"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setShowLocationModal(false)}
+                className="px-4 py-2 border rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createLocation}
+                disabled={!locationForm.code || !locationForm.name}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
+              >
+                Create Location
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
