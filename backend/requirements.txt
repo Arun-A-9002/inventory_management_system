@@ -6,7 +6,7 @@ starlette==0.50.0
 # Database and ORM
 SQLAlchemy==2.0.44
 alembic==1.17.2
-PyMySQL==1.1.2
+PyMySQL[rsa]==1.1.2
 mysql-connector-python==9.5.0
 
 # Authentication and Security
@@ -70,3 +70,11 @@ typing_extensions==4.15.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
 six==1.17.0
+
+# Additional Dependencies
+urllib3==2.2.3
+charset-normalizer==3.4.1
+idna==3.10
+certifi==2024.12.14
+Pathlib==1.0.1
+background-tasks==1.0.0

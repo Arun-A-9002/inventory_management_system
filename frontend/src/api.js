@@ -2,9 +2,15 @@
 
 import axios from "axios";
 
+// Base URL configuration - centralized for easy management
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
 const api = axios.create({
-  baseURL: "http://localhost:8000", // Change this if backend runs on different port
+  baseURL: BASE_URL,
   timeout: 10000, // 10 second timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 // 🔥 Add Authorization header automatically to ALL requests
@@ -17,26 +23,6 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 🔥 Handle 401 responses (token expired)
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user_data");
-      
-      // Redirect to login page
-      window.location.href = "/login";
-      
-      return Promise.reject(new Error("Session expired. Please login again."));
-    }
     return Promise.reject(error);
   }
 );

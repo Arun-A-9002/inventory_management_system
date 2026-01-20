@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import api from "../api";
 
 export default function Login() {
   const [tenantCode, setTenantCode] = useState("");
@@ -84,7 +85,7 @@ export default function Login() {
       });
       
       // Always use the regular login endpoint - it will handle both admin and user login
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
+      const res = await fetch(`${api.defaults.baseURL}/auth/login`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -150,7 +151,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/auth/verify", {
+      const res = await fetch(`${api.defaults.baseURL}/auth/verify`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

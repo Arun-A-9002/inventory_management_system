@@ -14,7 +14,7 @@ import ActiveSessions from "./pages/ActiveSessions";
 
 // Organization Setup Pages
 import OrganizationStructure from "./pages/organization/OrganizationStructure";
-import MasterData from "./pages/organization/MasterData";
+import MasterData from "./pages/MasterData/MasterData";
 import TaxSetup from "./pages/organization/Tax";
 import UserAccess from "./pages/organization/UserAccess";
 import InventoryRules from "./pages/organization/InventoryRules";
