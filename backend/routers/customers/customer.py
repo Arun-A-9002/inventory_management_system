@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import json
+import re
 from database import get_current_tenant_db_name, get_tenant_db
 from models.tenant_models import Customer, AuditLog
 from schemas.tenant_schemas import CustomerCreate, CustomerResponse
@@ -11,6 +12,57 @@ from utils.permissions import (
 from utils.logger import log_api, log_error, log_audit
 
 router = APIRouter(prefix="/customers", tags=["Customer Management"])
+
+# Validation functions
+def validate_email(email: str) -> str:
+    """Validate email format"""
+    if not email:
+        return email
+    
+    email = email.strip().lower()
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    return email
+
+def validate_phone(phone: str) -> str:
+    """Validate phone number - 10 digits"""
+    if not phone:
+        raise HTTPException(status_code=400, detail="Mobile number is required")
+    
+    phone = re.sub(r'\D', '', phone)
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Mobile number must be exactly 10 digits")
+    return phone
+
+def validate_pan(pan: str) -> str:
+    """Validate PAN number format"""
+    if not pan:
+        return pan
+    
+    pan = pan.upper().strip()
+    if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$', pan):
+        raise HTTPException(status_code=400, detail="Invalid PAN format. Must be 5 letters + 4 digits + 1 letter")
+    return pan
+
+def validate_gst(gst: str) -> str:
+    """Validate GST number format"""
+    if not gst:
+        return gst
+    
+    gst = gst.upper().strip()
+    if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$', gst):
+        raise HTTPException(status_code=400, detail="Invalid GST format")
+    return gst
+
+def validate_name(name: str, field_name: str) -> str:
+    """Validate name fields"""
+    if not name:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    
+    name = name.strip()
+    if not re.match(r'^[A-Za-z\s.,&()-]+$', name) or len(name) < 2 or len(name) > 150:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}. Only letters, spaces, and common punctuation allowed. 2-150 characters")
+    return name
 
 
 def get_db(tenant_db_name: str = Depends(get_current_tenant_db_name())):
@@ -59,6 +111,28 @@ def create_customer(data: CustomerCreate, request: Request, db: Session = Depend
     log_api("CREATE CUSTOMER")
     
     try:
+        # Validate based on customer type
+        if data.customer_type == 'organization':
+            data.org_name = validate_name(data.org_name, "Organization name")
+            data.org_mobile = validate_phone(data.org_mobile)
+            if data.org_pan:
+                data.org_pan = validate_pan(data.org_pan)
+            if data.org_gst:
+                data.org_gst = validate_gst(data.org_gst)
+        elif data.customer_type == 'self':
+            data.name = validate_name(data.name, "Name")
+            data.mobile = validate_phone(data.mobile)
+            if data.pan:
+                data.pan = validate_pan(data.pan)
+            if data.gst:
+                data.gst = validate_gst(data.gst)
+        else:
+            raise HTTPException(status_code=400, detail="Customer type is required")
+        
+        # Validate email if provided
+        if data.email:
+            data.email = validate_email(data.email)
+        
         customer = Customer(**data.dict())
         db.add(customer)
         db.commit()
@@ -121,6 +195,26 @@ def update_customer(customer_id: int, data: CustomerCreate, request: Request, db
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(404, "Customer not found")
+    
+    # Validate based on customer type
+    if data.customer_type == 'organization':
+        data.org_name = validate_name(data.org_name, "Organization name")
+        data.org_mobile = validate_phone(data.org_mobile)
+        if data.org_pan:
+            data.org_pan = validate_pan(data.org_pan)
+        if data.org_gst:
+            data.org_gst = validate_gst(data.org_gst)
+    elif data.customer_type == 'self':
+        data.name = validate_name(data.name, "Name")
+        data.mobile = validate_phone(data.mobile)
+        if data.pan:
+            data.pan = validate_pan(data.pan)
+        if data.gst:
+            data.gst = validate_gst(data.gst)
+    
+    # Validate email if provided
+    if data.email:
+        data.email = validate_email(data.email)
     
     old_customer_name = customer.org_name if customer.customer_type == 'organization' else customer.name
     old_values = {

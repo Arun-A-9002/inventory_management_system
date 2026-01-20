@@ -20,6 +20,33 @@ export default function CustomerRegistration() {
 
   const [loading, setLoading] = useState(false);
 
+  // Validation functions
+  const validateEmail = (email) => {
+    if (!email) return true; // Optional field
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+  };
+  
+  const validatePhone = (phone) => {
+    if (!phone) return false;
+    const cleanPhone = phone.replace(/\D/g, '');
+    return cleanPhone.length === 10;
+  };
+  
+  const validatePAN = (pan) => {
+    if (!pan) return true; // Optional field
+    return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan.toUpperCase());
+  };
+  
+  const validateGST = (gst) => {
+    if (!gst) return true; // Optional field
+    return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/.test(gst.toUpperCase());
+  };
+  
+  const validateName = (name) => {
+    if (!name) return false;
+    return /^[A-Za-z\s.,&()-]+$/.test(name) && name.length >= 2 && name.length <= 150;
+  };
+
   useEffect(() => {
     if (hasPermission('customers.view')) {
       fetchCustomers();
@@ -94,15 +121,45 @@ export default function CustomerRegistration() {
     }
 
     if (customerForm.customer_type === 'organization') {
-      if (!customerForm.org_name || !customerForm.org_mobile) {
-        showToast('Organization name and mobile are required', 'error');
+      if (!validateName(customerForm.org_name)) {
+        showToast('Organization name is required and must be 2-150 characters with valid characters only', 'error');
+        return;
+      }
+      if (!validatePhone(customerForm.org_mobile)) {
+        showToast('Valid 10-digit mobile number is required', 'error');
+        return;
+      }
+      if (customerForm.org_pan && !validatePAN(customerForm.org_pan)) {
+        showToast('Invalid PAN format. Must be 5 letters + 4 digits + 1 letter', 'error');
+        return;
+      }
+      if (customerForm.org_gst && !validateGST(customerForm.org_gst)) {
+        showToast('Invalid GST format', 'error');
         return;
       }
     } else if (customerForm.customer_type === 'self') {
-      if (!customerForm.name || !customerForm.mobile) {
-        showToast('Name and mobile are required', 'error');
+      if (!validateName(customerForm.name)) {
+        showToast('Name is required and must be 2-150 characters with valid characters only', 'error');
         return;
       }
+      if (!validatePhone(customerForm.mobile)) {
+        showToast('Valid 10-digit mobile number is required', 'error');
+        return;
+      }
+      if (customerForm.pan && !validatePAN(customerForm.pan)) {
+        showToast('Invalid PAN format. Must be 5 letters + 4 digits + 1 letter', 'error');
+        return;
+      }
+      if (customerForm.gst && !validateGST(customerForm.gst)) {
+        showToast('Invalid GST format', 'error');
+        return;
+      }
+    }
+    
+    // Validate email if provided
+    if (customerForm.email && !validateEmail(customerForm.email)) {
+      showToast('Invalid email format', 'error');
+      return;
     }
 
     try {
@@ -141,10 +198,21 @@ export default function CustomerRegistration() {
               <input
                 type="text"
                 value={customerForm.org_name}
-                onChange={(e) => setCustomerForm({...customerForm, org_name: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^A-Za-z\s.,&()-]/g, '');
+                  if (value.length <= 150) {
+                    setCustomerForm({...customerForm, org_name: value});
+                  }
+                }}
+                className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                  customerForm.org_name && !validateName(customerForm.org_name) ? 'border-red-500 bg-red-50' : ''
+                }`}
                 placeholder="Enter organization name"
+                maxLength={150}
               />
+              {customerForm.org_name && !validateName(customerForm.org_name) && (
+                <p className="text-red-500 text-xs mt-1">2-150 characters, letters and common punctuation only</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Organization Type</label>
@@ -178,30 +246,63 @@ export default function CustomerRegistration() {
                 <input
                   type="tel"
                   value={customerForm.org_mobile}
-                  onChange={(e) => setCustomerForm({...customerForm, org_mobile: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  placeholder="10 digit mobile"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 10) {
+                      setCustomerForm({...customerForm, org_mobile: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.org_mobile && !validatePhone(customerForm.org_mobile) ? 'border-red-500 bg-red-50' : ''
+                  }`}
+                  placeholder="9876543210"
+                  maxLength={10}
                 />
+                {customerForm.org_mobile && !validatePhone(customerForm.org_mobile) && (
+                  <p className="text-red-500 text-xs mt-1">Must be exactly 10 digits</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">PAN Number</label>
                 <input
                   type="text"
                   value={customerForm.org_pan}
-                  onChange={(e) => setCustomerForm({...customerForm, org_pan: e.target.value.toUpperCase()})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    if (value.length <= 10) {
+                      setCustomerForm({...customerForm, org_pan: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.org_pan && !validatePAN(customerForm.org_pan) ? 'border-red-500 bg-red-50' : ''
+                  }`}
                   placeholder="ABCDE1234F"
+                  maxLength={10}
                 />
+                {customerForm.org_pan && !validatePAN(customerForm.org_pan) && (
+                  <p className="text-red-500 text-xs mt-1">Format: 5 letters + 4 digits + 1 letter</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">GST Number</label>
                 <input
                   type="text"
                   value={customerForm.org_gst}
-                  onChange={(e) => setCustomerForm({...customerForm, org_gst: e.target.value.toUpperCase()})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    if (value.length <= 15) {
+                      setCustomerForm({...customerForm, org_gst: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.org_gst && !validateGST(customerForm.org_gst) ? 'border-red-500 bg-red-50' : ''
+                  }`}
                   placeholder="22AAAAA0000A1Z5"
+                  maxLength={15}
                 />
+                {customerForm.org_gst && !validateGST(customerForm.org_gst) && (
+                  <p className="text-red-500 text-xs mt-1">Invalid GST format</p>
+                )}
               </div>
             </div>
         </>
@@ -215,10 +316,21 @@ export default function CustomerRegistration() {
               <input
                 type="text"
                 value={customerForm.name}
-                onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^A-Za-z\s.,&()-]/g, '');
+                  if (value.length <= 150) {
+                    setCustomerForm({...customerForm, name: value});
+                  }
+                }}
+                className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                  customerForm.name && !validateName(customerForm.name) ? 'border-red-500 bg-red-50' : ''
+                }`}
                 placeholder="Enter full name"
+                maxLength={150}
               />
+              {customerForm.name && !validateName(customerForm.name) && (
+                <p className="text-red-500 text-xs mt-1">2-150 characters, letters and common punctuation only</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Type</label>
@@ -250,30 +362,63 @@ export default function CustomerRegistration() {
                 <input
                   type="tel"
                   value={customerForm.mobile}
-                  onChange={(e) => setCustomerForm({...customerForm, mobile: e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  placeholder="10 digit mobile"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 10) {
+                      setCustomerForm({...customerForm, mobile: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.mobile && !validatePhone(customerForm.mobile) ? 'border-red-500 bg-red-50' : ''
+                  }`}
+                  placeholder="9876543210"
+                  maxLength={10}
                 />
+                {customerForm.mobile && !validatePhone(customerForm.mobile) && (
+                  <p className="text-red-500 text-xs mt-1">Must be exactly 10 digits</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">PAN Number</label>
                 <input
                   type="text"
                   value={customerForm.pan}
-                  onChange={(e) => setCustomerForm({...customerForm, pan: e.target.value.toUpperCase()})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    if (value.length <= 10) {
+                      setCustomerForm({...customerForm, pan: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.pan && !validatePAN(customerForm.pan) ? 'border-red-500 bg-red-50' : ''
+                  }`}
                   placeholder="ABCDE1234F"
+                  maxLength={10}
                 />
+                {customerForm.pan && !validatePAN(customerForm.pan) && (
+                  <p className="text-red-500 text-xs mt-1">Format: 5 letters + 4 digits + 1 letter</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">GST Number</label>
                 <input
                   type="text"
                   value={customerForm.gst}
-                  onChange={(e) => setCustomerForm({...customerForm, gst: e.target.value.toUpperCase()})}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    if (value.length <= 15) {
+                      setCustomerForm({...customerForm, gst: value});
+                    }
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                    customerForm.gst && !validateGST(customerForm.gst) ? 'border-red-500 bg-red-50' : ''
+                  }`}
                   placeholder="22AAAAA0000A1Z5"
+                  maxLength={15}
                 />
+                {customerForm.gst && !validateGST(customerForm.gst) && (
+                  <p className="text-red-500 text-xs mt-1">Invalid GST format</p>
+                )}
               </div>
             </div>
         </>
@@ -696,10 +841,18 @@ export default function CustomerRegistration() {
                         <input
                           type="email"
                           value={customerForm.email}
-                          onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})}
-                          className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                          placeholder="Optional"
+                          onChange={(e) => {
+                            const value = e.target.value.toLowerCase();
+                            setCustomerForm({...customerForm, email: value});
+                          }}
+                          className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 ${
+                            customerForm.email && !validateEmail(customerForm.email) ? 'border-red-500 bg-red-50' : ''
+                          }`}
+                          placeholder="customer@email.com"
                         />
+                        {customerForm.email && !validateEmail(customerForm.email) && (
+                          <p className="text-red-500 text-xs mt-1">Invalid email format</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Reference Source</label>
