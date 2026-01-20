@@ -11,6 +11,8 @@ export default function Roles() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [permissionSearch, setPermissionSearch] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("all");
 
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
@@ -95,6 +97,8 @@ export default function Roles() {
     setDescription("");
     setIsActive(true);
     setSelectedPermissions(new Set());
+    setPermissionSearch("");
+    setModuleFilter("all");
   }
 
   function startEdit(role) {
@@ -322,11 +326,11 @@ export default function Roles() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-4 sm:p-6">
+          <div className="bg-white rounded-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
-                  {editingId ? 'Edit Role' : 'Add New Role'}
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Edit Role
                 </h3>
                 <button 
                   onClick={closeModal}
@@ -338,83 +342,228 @@ export default function Roles() {
                 </button>
               </div>
 
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Role Name *</label>
-                  <input 
-                    type="text"
-                    value={name} 
-                    onChange={e => setName(e.target.value)} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
-                    placeholder="Enter role name"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea 
-                    value={description} 
-                    onChange={e => setDescription(e.target.value)} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm" 
-                    placeholder="Enter description"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="flex items-center">
-                  <label className="flex items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Role Details */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Role name *</label>
                     <input 
-                      type="checkbox" 
-                      checked={isActive} 
-                      onChange={e => setIsActive(e.target.checked)} 
-                      className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                      type="text"
+                      value={name} 
+                      onChange={e => setName(e.target.value)} 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" 
+                      placeholder="Enter role name"
                     />
-                    <span className="ml-2 text-sm font-medium text-gray-700">Active Role</span>
-                  </label>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
+                    <textarea 
+                      value={description} 
+                      onChange={e => setDescription(e.target.value)} 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" 
+                      placeholder="Enter description"
+                      rows={4}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Permissions ({permissions.length} available)
-                </label>
-                <div className="max-h-96 overflow-y-auto border border-gray-300 rounded-lg p-3 bg-gray-50">
-                  {Object.keys(groupedPermissions).sort().map(group => (
-                    <div key={group} className="mb-4 last:mb-0">
-                      <h4 className="text-sm font-semibold text-gray-900 mb-2 sticky top-0 bg-gray-50 py-1">
-                        {group}
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {groupedPermissions[group].map(perm => (
-                          <label key={perm.id} className="flex items-start p-2 rounded hover:bg-white transition-colors">
-                            <input 
-                              type="checkbox" 
-                              checked={selectedPermissions.has(perm.id)} 
-                              onChange={() => togglePermission(perm.id)} 
-                              className="mt-1 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 flex-shrink-0"
-                            />
-                            <div className="ml-3 min-w-0">
-                              <div className="text-sm font-medium text-gray-900">{perm.label}</div>
-                              <div className="text-xs text-gray-500">{perm.name}</div>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
+                {/* Right Column - Permissions */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Permissions ({permissions.length} total)
+                    </label>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const allPermissionIds = new Set(permissions.map(p => p.id));
+                          setSelectedPermissions(allPermissionIds);
+                        }}
+                        className="text-xs px-2 py-1 text-green-600 bg-green-50 rounded hover:bg-green-100"
+                      >
+                        Select All
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedPermissions(new Set())}
+                        className="text-xs px-2 py-1 text-red-600 bg-red-50 rounded hover:bg-red-100"
+                      >
+                        Deselect All
+                      </button>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Quick Role Templates */}
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-600 mb-2">Quick Role Templates:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const adminPerms = permissions.filter(p => 
+                            p.name.includes('create') || p.name.includes('update') || 
+                            p.name.includes('delete') || p.name.includes('view')
+                          ).map(p => p.id);
+                          setSelectedPermissions(new Set(adminPerms));
+                        }}
+                        className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      >
+                        Admin
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const vendorPerms = permissions.filter(p => 
+                            p.name.includes('vendor') || p.name.includes('view')
+                          ).map(p => p.id);
+                          setSelectedPermissions(new Set(vendorPerms));
+                        }}
+                        className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      >
+                        Vendor Manager
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const billingPerms = permissions.filter(p => 
+                            p.name.includes('billing') || p.name.includes('invoice')
+                          ).map(p => p.id);
+                          setSelectedPermissions(new Set(billingPerms));
+                        }}
+                        className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                      >
+                        Billing
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const orgPerms = permissions.filter(p => 
+                            p.name.includes('organization') || p.name.includes('department')
+                          ).map(p => p.id);
+                          setSelectedPermissions(new Set(orgPerms));
+                        }}
+                        className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                      >
+                        Organization Master
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const empPerms = permissions.filter(p => 
+                            p.name.includes('view') && !p.name.includes('delete')
+                          ).map(p => p.id);
+                          setSelectedPermissions(new Set(empPerms));
+                        }}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        Employee
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Selected Permissions Count */}
+                  <div className="mb-3 text-sm text-gray-600">
+                    {selectedPermissions.size} permissions selected
+                  </div>
+
+                  {/* Search Permissions */}
+                  <div className="mb-3">
+                    <input 
+                      type="text"
+                      placeholder="Search modules or permissions..."
+                      value={permissionSearch}
+                      onChange={(e) => setPermissionSearch(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Module Filter */}
+                  <div className="mb-3">
+                    <select 
+                      value={moduleFilter}
+                      onChange={(e) => setModuleFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Modules</option>
+                      {Object.keys(groupedPermissions).sort().map(group => (
+                        <option key={group} value={group}>{group}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Permissions List */}
+                  <div className="max-h-80 overflow-y-auto border border-gray-300 rounded-lg bg-gray-50">
+                    {Object.keys(groupedPermissions).sort().filter(group => {
+                      const matchesModule = moduleFilter === "all" || group === moduleFilter;
+                      const matchesSearch = !permissionSearch || 
+                        group.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+                        groupedPermissions[group].some(perm => 
+                          perm.label.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+                          perm.name.toLowerCase().includes(permissionSearch.toLowerCase())
+                        );
+                      return matchesModule && matchesSearch;
+                    }).map(group => (
+                      <div key={group} className="mb-4 last:mb-0">
+                        <div className="bg-white px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-gray-900">
+                            {group}
+                          </h4>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const groupPermIds = groupedPermissions[group].map(p => p.id);
+                              const allSelected = groupPermIds.every(id => selectedPermissions.has(id));
+                              const newSelected = new Set(selectedPermissions);
+                              if (allSelected) {
+                                groupPermIds.forEach(id => newSelected.delete(id));
+                              } else {
+                                groupPermIds.forEach(id => newSelected.add(id));
+                              }
+                              setSelectedPermissions(newSelected);
+                            }}
+                            className="text-xs px-2 py-1 text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
+                          >
+                            {groupedPermissions[group].every(p => selectedPermissions.has(p.id)) ? 'Deselect Module' : 'Select Module'}
+                          </button>
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {groupedPermissions[group].filter(perm => {
+                            if (!permissionSearch) return true;
+                            return perm.label.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+                                   perm.name.toLowerCase().includes(permissionSearch.toLowerCase());
+                          }).map(perm => (
+                            <label key={perm.id} className="flex items-start p-2 rounded hover:bg-white transition-colors cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedPermissions.has(perm.id)} 
+                                onChange={() => togglePermission(perm.id)} 
+                                className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <div className="ml-3 min-w-0">
+                                <div className="text-sm font-medium text-gray-900">{perm.label}</div>
+                                <div className="text-xs text-gray-500">{perm.name}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-4 border-t">
                 <button 
                   onClick={closeModal} 
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleSave} 
-                  className="px-4 py-2 text-sm font-medium text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors duration-200"
+                  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200"
                 >
                   {editingId ? 'Update Role' : 'Create Role'}
                 </button>

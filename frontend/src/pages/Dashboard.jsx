@@ -12,7 +12,8 @@ export default function Dashboard() {
     totalCustomers: 0,
     activeLocations: 0,
     pendingOrders: 0,
-    recentTransactions: []
+    recentTransactions: [],
+    recentActivities: []
   });
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -39,14 +40,16 @@ export default function Dashboard() {
       console.log('Fetching dashboard data...');
       
       // Use individual API calls that we know work
-      const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes, companyRes] = await Promise.allSettled([
+      const [itemsRes, stockRes, vendorsRes, customersRes, locationsRes, purchaseRes, companyRes, grnRes, issueRes] = await Promise.allSettled([
         api.get('/items/'),
         api.get('/stock-overview/'),
         api.get('/vendors/'),
         api.get('/customers/'),
         api.get('/inventory/locations/'),
         api.get('/purchase/pr'),
-        api.get('/company/')
+        api.get('/company/'),
+        api.get('/grn/'),
+        api.get('/consumption/issues/')
       ]);
 
       console.log('API Results:', {
@@ -113,7 +116,8 @@ export default function Dashboard() {
         totalCustomers: customersRes.status === 'fulfilled' ? (customersRes.value.data?.length || 0) : 0,
         activeLocations: locationsRes.status === 'fulfilled' ? (locationsRes.value.data?.length || 0) : 0,
         pendingOrders: pendingCount,
-        recentTransactions: []
+        recentTransactions: [],
+        recentActivities: getRecentActivities(grnRes, issueRes, stockRes)
       };
       
       console.log('Final stats:', finalStats);
@@ -130,6 +134,61 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getRecentActivities = (grnRes, issueRes, stockRes) => {
+    const activities = [];
+    
+    // Add recent GRNs
+    if (grnRes.status === 'fulfilled' && grnRes.value.data && Array.isArray(grnRes.value.data)) {
+      grnRes.value.data.slice(0, 3).forEach(grn => {
+        activities.push({
+          type: 'grn',
+          title: 'Stock received',
+          description: `GRN ${grn.grn_number || 'N/A'} from ${grn.vendor_name || 'Unknown'}`,
+          details: `₹${grn.total_amount || 0} • ${grn.status || 'Pending'}`,
+          time: grn.grn_date,
+          icon: 'check',
+          color: 'green'
+        });
+      });
+    }
+    
+    // Add recent issues
+    if (issueRes.status === 'fulfilled' && issueRes.value.data && Array.isArray(issueRes.value.data)) {
+      issueRes.value.data.slice(0, 2).forEach(issue => {
+        activities.push({
+          type: 'issue',
+          title: 'Stock dispensed',
+          description: `Issue ${issue.issue_no || 'N/A'} to ${issue.department || 'Unknown'}`,
+          details: `${issue.total_quantity || 0} items • ${issue.status || 'Completed'}`,
+          time: issue.created_at,
+          icon: 'arrow-right',
+          color: 'blue'
+        });
+      });
+    }
+    
+    // Add low stock alerts
+    if (stockRes.status === 'fulfilled' && stockRes.value.data && Array.isArray(stockRes.value.data)) {
+      const lowStockItems = stockRes.value.data.filter(item => 
+        item.available_qty <= item.min_stock
+      ).slice(0, 2);
+      
+      lowStockItems.forEach(item => {
+        activities.push({
+          type: 'alert',
+          title: 'Low stock alert',
+          description: `${item.item_name || 'Unknown item'} below minimum threshold`,
+          details: `${item.available_qty || 0} left • Min: ${item.min_stock || 0}`,
+          time: new Date().toISOString(),
+          icon: 'warning',
+          color: 'yellow'
+        });
+      });
+    }
+    
+    return activities.slice(0, 5);
   };
 
   const fetchFallbackData = async () => {
@@ -479,12 +538,48 @@ export default function Dashboard() {
               View All
             </button>
           </div>
-          <div className="text-center py-12 sm:py-16">
-            <svg className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 sm:mb-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <p className="text-gray-600 text-base sm:text-lg mb-2 font-medium">No recent activity</p>
-            <p className="text-xs sm:text-sm text-gray-500">Recent transactions and activities will appear here</p>
+          <div className="space-y-4">
+            {stats.recentActivities && stats.recentActivities.length > 0 ? (
+              stats.recentActivities.map((activity, index) => (
+                <div key={index} className={`flex items-center p-3 bg-${activity.color}-50 rounded-lg border border-${activity.color}-200`}>
+                  <div className={`w-8 h-8 bg-${activity.color}-500 rounded-full flex items-center justify-center mr-3`}>
+                    {activity.icon === 'check' && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {activity.icon === 'arrow-right' && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    )}
+                    {activity.icon === 'warning' && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                    <p className="text-xs text-gray-500">{activity.description}</p>
+                    {activity.details && (
+                      <p className="text-xs text-gray-400 mt-1">{activity.details}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {activity.time ? new Date(activity.time).toLocaleDateString() : 'Today'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <p className="text-gray-600 mb-2 font-medium">No recent activity</p>
+                <p className="text-xs text-gray-500">Recent transactions will appear here</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

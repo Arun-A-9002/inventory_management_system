@@ -166,9 +166,9 @@ export default function InventoryLocations() {
     }
 
     setFormData({
-      code: "EXT",
-      name: "External Location",
-      description: "External location for stock segregation outside main premises",
+      code: "",
+      name: "",
+      description: "",
       location_type: "external"
     });
     setShowModal(true);

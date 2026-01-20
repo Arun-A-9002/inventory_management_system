@@ -4,10 +4,19 @@ import { hasPermission } from "../../utils/permissions";
 
 export default function StockLedger() {
   const [ledgerData, setLedgerData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [filters, setFilters] = useState({
+    item: '',
+    batch: '',
+    transaction: '',
+    dateFrom: '',
+    dateTo: '',
+    reference: ''
+  });
 
   useEffect(() => {
     if (hasPermission("stock_ledger.view")) {
@@ -42,16 +51,84 @@ export default function StockLedger() {
       const response = await api.get("/stocks/ledger");
       console.log('Stock ledger response:', response.data);
       setLedgerData(response.data || []);
+      setFilteredData(response.data || []);
     } catch (error) {
       console.error("Error fetching ledger:", error);
       console.error("Error details:", error.response?.data || error.message);
       // Show user-friendly error message
       alert("Failed to load stock data. Please check if you have created any GRN records first.");
       setLedgerData([]);
+      setFilteredData([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const applyFilters = () => {
+    let filtered = [...ledgerData];
+
+    if (filters.item) {
+      filtered = filtered.filter(entry => 
+        entry.item_name.toLowerCase().includes(filters.item.toLowerCase())
+      );
+    }
+
+    if (filters.batch) {
+      filtered = filtered.filter(entry => 
+        entry.batch_no && entry.batch_no.toLowerCase().includes(filters.batch.toLowerCase())
+      );
+    }
+
+    if (filters.transaction) {
+      filtered = filtered.filter(entry => 
+        entry.txn_type.toLowerCase().includes(filters.transaction.toLowerCase())
+      );
+    }
+
+    if (filters.reference) {
+      filtered = filtered.filter(entry => 
+        entry.ref_no && entry.ref_no.toLowerCase().includes(filters.reference.toLowerCase())
+      );
+    }
+
+    if (filters.dateFrom) {
+      filtered = filtered.filter(entry => {
+        const entryDate = new Date(entry.date.split('/').reverse().join('-'));
+        const fromDate = new Date(filters.dateFrom);
+        return entryDate >= fromDate;
+      });
+    }
+
+    if (filters.dateTo) {
+      filtered = filtered.filter(entry => {
+        const entryDate = new Date(entry.date.split('/').reverse().join('-'));
+        const toDate = new Date(filters.dateTo);
+        return entryDate <= toDate;
+      });
+    }
+
+    setFilteredData(filtered);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      item: '',
+      batch: '',
+      transaction: '',
+      dateFrom: '',
+      dateTo: '',
+      reference: ''
+    });
+    setFilteredData(ledgerData);
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, ledgerData]);
 
   const handleDispense = async (entry) => {
     if (!hasPermission("stock_ledger.dispense")) {
@@ -99,6 +176,96 @@ export default function StockLedger() {
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Stock Ledger</h1>
       
+      {/* Filter Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+          <button
+            onClick={clearFilters}
+            className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+          >
+            Clear All
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+            <input
+              type="text"
+              placeholder="Search by item name"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.item}
+              onChange={(e) => handleFilterChange('item', e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
+            <input
+              type="text"
+              placeholder="Search by batch number"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.batch}
+              onChange={(e) => handleFilterChange('batch', e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.transaction}
+              onChange={(e) => handleFilterChange('transaction', e.target.value)}
+            >
+              <option value="">All Transactions</option>
+              <option value="GRN_RECEIPT">GRN Receipt</option>
+              <option value="OPENING">Opening</option>
+              <option value="ISSUE">Issue</option>
+              <option value="TRANSFER">Transfer</option>
+              <option value="DISPOSAL">Disposal</option>
+              <option value="ADJUST_IN">Adjust In</option>
+              <option value="ADJUST_OUT">Adjust Out</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+            <input
+              type="date"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.dateFrom}
+              onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+            <input
+              type="date"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.dateTo}
+              onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reference</label>
+            <input
+              type="text"
+              placeholder="Search by reference number"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              value={filters.reference}
+              onChange={(e) => handleFilterChange('reference', e.target.value)}
+            />
+          </div>
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {filteredData.length} of {ledgerData.length} records
+        </div>
+      </div>
+      
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200 rounded-lg">
           <thead className="bg-gray-50">
@@ -117,7 +284,7 @@ export default function StockLedger() {
             </tr>
           </thead>
           <tbody>
-            {ledgerData.map((entry, idx) => (
+            {filteredData.map((entry, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-4 py-3 border-b">{entry.date}</td>
                 <td className="px-4 py-3 border-b">{entry.item_name}</td>
