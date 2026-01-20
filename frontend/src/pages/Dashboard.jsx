@@ -279,20 +279,20 @@ export default function Dashboard() {
   };
 
   const StatCard = ({ title, value, icon, color, link, trend }) => (
-    <div className="group bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80">
-      <div className="flex items-center justify-between">
+    <div className="group bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-3 sm:p-4 lg:p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80 touch-target">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">{title}</p>
-          <div className="flex items-baseline">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+          <p className="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider mb-1 sm:mb-2 truncate">{title}</p>
+          <div className="flex items-baseline flex-wrap gap-1">
+            <p className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
               {loading ? (
-                <div className="animate-pulse bg-gray-200/50 h-6 sm:h-8 w-12 sm:w-16 rounded-lg"></div>
+                <div className="animate-pulse bg-gray-200/50 h-5 sm:h-6 lg:h-8 w-10 sm:w-12 lg:w-16 rounded-lg"></div>
               ) : (
                 typeof value === 'number' && value > 999 ? value.toLocaleString() : value
               )}
             </p>
             {trend && (
-              <span className={`ml-2 sm:ml-3 px-1.5 sm:px-2 py-1 text-xs font-semibold rounded-full ${
+              <span className={`ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs font-semibold rounded-full whitespace-nowrap ${
                 trend > 0 
                   ? 'bg-green-100/80 text-green-700' 
                   : 'bg-red-100/80 text-red-700'
@@ -303,13 +303,15 @@ export default function Dashboard() {
           </div>
         </div>
         <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0`}>
-          {icon}
+          <div className="w-4 h-4 sm:w-5 sm:h-5">
+            {icon}
+          </div>
         </div>
       </div>
       {link && (
-        <Link to={link} className="inline-flex items-center text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-700 mt-3 sm:mt-4 group-hover:translate-x-1 transition-all duration-300">
-          View Details 
-          <svg className="ml-2 w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Link to={link} className="inline-flex items-center text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-700 mt-2 sm:mt-3 lg:mt-4 group-hover:translate-x-1 transition-all duration-300 touch-target">
+          <span className="truncate">View Details</span>
+          <svg className="ml-1 sm:ml-2 w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </Link>
@@ -318,13 +320,15 @@ export default function Dashboard() {
   );
 
   const QuickActionCard = ({ title, description, link, icon, color }) => (
-    <Link to={link} className="group block bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80">
-      <div className="flex items-center">
-        <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg mr-3 sm:mr-4 group-hover:scale-110 transition-transform duration-300`}>
-          {icon}
+    <Link to={link} className="group block bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-3 sm:p-4 lg:p-6 border border-gray-200/50 transform hover:-translate-y-1 hover:bg-white/80 touch-target">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300 flex-shrink-0`}>
+          <div className="w-4 h-4 sm:w-5 sm:h-5">
+            {icon}
+          </div>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors mb-1 truncate">{title}</h3>
+          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors mb-1 truncate">{title}</h3>
           <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{description}</p>
         </div>
         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,38 +378,32 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 overflow-y-scroll-invisible">
       {/* Header Section */}
       <div className="bg-white/70 backdrop-blur-xl shadow-lg border-b border-gray-200/50">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">Dashboard</h1>
-              <p className="text-gray-600 text-sm sm:text-base lg:text-lg font-medium">Welcome to {companyName} Inventory Management System</p>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-1 sm:mb-2">Dashboard</h1>
+              <p className="text-gray-600 text-xs sm:text-sm lg:text-base xl:text-lg font-medium truncate">Welcome to {companyName} Inventory Management System</p>
             </div>
             {/* Alerts Section */}
             {(stats.lowStockItems > 0 || stats.expiredItems > 0) && (
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="flex flex-row gap-2">
                 {stats.lowStockItems > 0 && (
                   <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200/50 text-yellow-800 rounded-lg p-2 shadow-sm">
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 text-yellow-600 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3 h-3 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
-                      <div>
-                        <p className="font-semibold text-xs">Low Stock Alert</p>
-                        <p className="text-xs opacity-75">{stats.lowStockItems} items require attention</p>
-                      </div>
+                      <p className="font-semibold text-xs whitespace-nowrap">Low Stock: {stats.lowStockItems}</p>
                     </div>
                   </div>
                 )}
                 {stats.expiredItems > 0 && (
                   <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/50 text-red-800 rounded-lg p-2 shadow-sm">
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 text-red-600 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3 h-3 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <div>
-                        <p className="font-semibold text-xs">Expired Stock Alert</p>
-                        <p className="text-xs opacity-75">{stats.expiredItems} items have expired batches</p>
-                      </div>
+                      <p className="font-semibold text-xs whitespace-nowrap">Expired: {stats.expiredItems}</p>
                     </div>
                   </div>
                 )}
@@ -415,11 +413,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-y-scroll-invisible">
+      <div className="px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 overflow-y-scroll-invisible">
         {/* Primary Metrics */}
-        <div className="mb-8 sm:mb-10">
-          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-4 sm:mb-6">Key Metrics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-3 sm:mb-4 lg:mb-6">Key Metrics</h2>
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
             <StatCard
               title="Total Items"
               value={stats.totalItems}
@@ -455,8 +453,8 @@ export default function Dashboard() {
         </div>
 
         {/* Secondary Metrics */}
-        <div className="mb-8 sm:mb-10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
             <StatCard
               title="Total Customers"
               value={stats.totalCustomers}
@@ -482,9 +480,9 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="mb-8 sm:mb-10">
-          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-4 sm:mb-6">Quick Actions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-3 sm:mb-4 lg:mb-6">Quick Actions</h2>
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
             <QuickActionCard
               title="Add New Item"
               description="Create a new inventory item"
@@ -531,53 +529,53 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 border border-gray-200/50">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Recent Activity</h2>
-            <button className="px-4 py-2 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 font-semibold text-sm rounded-xl transition-colors duration-200 self-start sm:self-auto">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg p-3 sm:p-4 lg:p-6 xl:p-8 border border-gray-200/50">
+          <div className="flex flex-col xs:flex-row xs:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">Recent Activity</h2>
+            <button className="px-3 sm:px-4 py-2 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 font-semibold text-xs sm:text-sm rounded-xl transition-colors duration-200 self-start xs:self-auto touch-target">
               View All
             </button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {stats.recentActivities && stats.recentActivities.length > 0 ? (
               stats.recentActivities.map((activity, index) => (
-                <div key={index} className={`flex items-center p-3 bg-${activity.color}-50 rounded-lg border border-${activity.color}-200`}>
-                  <div className={`w-8 h-8 bg-${activity.color}-500 rounded-full flex items-center justify-center mr-3`}>
+                <div key={index} className={`flex items-center p-2 sm:p-3 bg-${activity.color}-50 rounded-lg border border-${activity.color}-200 gap-2 sm:gap-3`}>
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 bg-${activity.color}-500 rounded-full flex items-center justify-center flex-shrink-0`}>
                     {activity.icon === 'check' && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     )}
                     {activity.icon === 'arrow-right' && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                       </svg>
                     )}
                     {activity.icon === 'warning' && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                    <p className="text-xs text-gray-500">{activity.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{activity.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{activity.description}</p>
                     {activity.details && (
-                      <p className="text-xs text-gray-400 mt-1">{activity.details}</p>
+                      <p className="text-xs text-gray-400 mt-1 truncate">{activity.details}</p>
                     )}
                   </div>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-400 flex-shrink-0 hidden xs:block">
                     {activity.time ? new Date(activity.time).toLocaleDateString() : 'Today'}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8">
-                <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="text-center py-6 sm:py-8">
+                <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <p className="text-gray-600 mb-2 font-medium">No recent activity</p>
-                <p className="text-xs text-gray-500">Recent transactions will appear here</p>
+                <p className="text-gray-600 mb-2 font-medium text-sm sm:text-base">No recent activity</p>
+                <p className="text-xs sm:text-sm text-gray-500">Recent transactions will appear here</p>
               </div>
             )}
           </div>

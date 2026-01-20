@@ -43,27 +43,27 @@ export default function DepartmentSetup() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
           {/* LEFT CARD — INFO */}
           <div className="lg:col-span-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-6">
-              <div className="p-6 border-b border-gray-100">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-4 sm:p-6 border-b border-gray-100">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Department Overview</h2>
-                    <p className="text-sm text-gray-500">Read-only department view</p>
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">Department Overview</h2>
+                    <p className="text-xs sm:text-sm text-gray-500">Read-only department view</p>
                   </div>
                 </div>
               </div>
               
-              <div className="p-6">
-                <div className="text-sm text-gray-600 mb-4">
+              <div className="p-4 sm:p-6">
+                <div className="text-xs sm:text-sm text-gray-600 mb-4">
                   Departments are managed in User Management. This is a read-only view.
                 </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-blue-800">
                     To create or modify departments, please go to User Management section.
                   </p>
                 </div>
@@ -74,13 +74,46 @@ export default function DepartmentSetup() {
           {/* RIGHT SIDE — LIST */}
           <div className="lg:col-span-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-900">Department Directory</h3>
-                <p className="text-sm text-gray-500 mt-1">Complete overview of your organization's department information</p>
+              <div className="p-4 sm:p-6 border-b border-gray-100">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Department Directory</h3>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Complete overview of your organization's department information</p>
               </div>
               
               <div className="overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="block sm:hidden">
+                  {/* Mobile Card Layout */}
+                  <div className="divide-y divide-gray-200">
+                    {loading ? (
+                      <div className="p-4 text-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto"></div>
+                      </div>
+                    ) : departments.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400">
+                        No departments registered
+                      </div>
+                    ) : (
+                      departments.map((d) => (
+                        <div key={d.id} className="p-4 hover:bg-gray-50">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-medium text-gray-900">{d.name}</h4>
+                              <p className="text-sm text-gray-500 mt-1">{d.description || 'No description'}</p>
+                            </div>
+                            <span className={`px-2 py-1 text-xs rounded ${
+                              d.is_active 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {d.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div className="hidden sm:block overflow-x-auto">
+                  {/* Desktop Table Layout */}
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -124,7 +157,7 @@ export default function DepartmentSetup() {
                 </div>
               </div>
               
-              <div className="p-4 bg-gray-50 text-sm text-gray-500 border-t">
+              <div className="p-3 sm:p-4 bg-gray-50 text-xs sm:text-sm text-gray-500 border-t">
                 Total: {departments.length} departments
               </div>
             </div>

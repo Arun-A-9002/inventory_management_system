@@ -1717,11 +1717,11 @@ const createLocation = async () => {
                     <p className="text-gray-600 mb-6">Download the template file, fill it with your item data, and upload it back.</p>
                   </div>
                   
-                  <div className="flex justify-center space-x-4">
+                  <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                     <button
                       onClick={() => downloadTemplate('xlsx')}
                       disabled={bulkLoading}
-                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center space-x-2 disabled:opacity-50 text-sm sm:text-base"
                     >
                       <span>📊</span>
                       <span>XLSX Template</span>
@@ -1729,7 +1729,7 @@ const createLocation = async () => {
                     <button
                       onClick={() => downloadTemplate('csv')}
                       disabled={bulkLoading}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center space-x-2 disabled:opacity-50 text-sm sm:text-base"
                     >
                       <span>📄</span>
                       <span>CSV Template</span>
@@ -1813,18 +1813,18 @@ const createLocation = async () => {
                   
                   {previewData && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                          <div className="text-2xl font-bold text-blue-600">{previewData.total_rows}</div>
-                          <div className="text-sm text-gray-600">Total Rows</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-center">
+                        <div className="bg-blue-50 p-3 sm:p-4 rounded-lg">
+                          <div className="text-xl sm:text-2xl font-bold text-blue-600">{previewData.total_rows}</div>
+                          <div className="text-xs sm:text-sm text-gray-600">Total Rows</div>
                         </div>
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <div className="text-2xl font-bold text-green-600">{previewData.valid_rows}</div>
-                          <div className="text-sm text-gray-600">Valid Rows</div>
+                        <div className="bg-green-50 p-3 sm:p-4 rounded-lg">
+                          <div className="text-xl sm:text-2xl font-bold text-green-600">{previewData.valid_rows}</div>
+                          <div className="text-xs sm:text-sm text-gray-600">Valid Rows</div>
                         </div>
-                        <div className="bg-red-50 p-4 rounded-lg">
-                          <div className="text-2xl font-bold text-red-600">{previewData.error_rows}</div>
-                          <div className="text-sm text-gray-600">Error Rows</div>
+                        <div className="bg-red-50 p-3 sm:p-4 rounded-lg">
+                          <div className="text-xl sm:text-2xl font-bold text-red-600">{previewData.error_rows}</div>
+                          <div className="text-xs sm:text-sm text-gray-600">Error Rows</div>
                         </div>
                       </div>
                       
@@ -1863,50 +1863,73 @@ const createLocation = async () => {
                         </div>
                       )}
                       
-                      <div className="max-h-64 overflow-y-auto border rounded-lg">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left">Row</th>
-                              <th className="px-4 py-2 text-left">Code</th>
-                              <th className="px-4 py-2 text-left">Name</th>
-                              <th className="px-4 py-2 text-left">Type</th>
-                              <th className="px-4 py-2 text-left">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
+                      <div className="max-h-48 sm:max-h-64 overflow-y-auto border rounded-lg">
+                        <div className="block sm:hidden">
+                          <div className="divide-y divide-gray-200">
                             {previewData.preview_data.map((item, idx) => (
-                              <tr key={idx} className={item.status === 'Error' ? 'bg-red-50' : 'bg-white'}>
-                                <td className="px-4 py-2">{item.row_number}</td>
-                                <td className="px-4 py-2">{item.code}</td>
-                                <td className="px-4 py-2">{item.name}</td>
-                                <td className="px-4 py-2">{item.item_type}</td>
-                                <td className="px-4 py-2">
+                              <div key={idx} className={`p-3 ${item.status === 'Error' ? 'bg-red-50' : 'bg-white'}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="text-sm font-medium">{item.name}</div>
                                   <span className={`px-2 py-1 rounded-full text-xs ${
                                     item.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                   }`}>
                                     {item.status}
                                   </span>
-                                </td>
-                              </tr>
+                                </div>
+                                <div className="text-xs text-gray-500 space-y-1">
+                                  <div>Row: {item.row_number}</div>
+                                  <div>Code: {item.code}</div>
+                                  <div>Type: {item.item_type}</div>
+                                </div>
+                              </div>
                             ))}
-                          </tbody>
-                        </table>
+                          </div>
+                        </div>
+                        <div className="hidden sm:block">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Row</th>
+                                <th className="px-4 py-2 text-left">Code</th>
+                                <th className="px-4 py-2 text-left">Name</th>
+                                <th className="px-4 py-2 text-left">Type</th>
+                                <th className="px-4 py-2 text-left">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {previewData.preview_data.map((item, idx) => (
+                                <tr key={idx} className={item.status === 'Error' ? 'bg-red-50' : 'bg-white'}>
+                                  <td className="px-4 py-2">{item.row_number}</td>
+                                  <td className="px-4 py-2">{item.code}</td>
+                                  <td className="px-4 py-2">{item.name}</td>
+                                  <td className="px-4 py-2">{item.item_type}</td>
+                                  <td className="px-4 py-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs ${
+                                      item.status === 'Valid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   )}
                   
-                  <div className="flex justify-center space-x-4">
+                  <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-4">
                     <button
                       onClick={() => setBulkStep(2)}
-                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg"
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base"
                     >
                       Back
                     </button>
                     {previewData && previewData.can_proceed && (
                       <button
                         onClick={() => setBulkStep(4)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base"
                       >
                         Proceed to Commit
                       </button>

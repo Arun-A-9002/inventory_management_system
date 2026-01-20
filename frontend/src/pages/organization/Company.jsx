@@ -150,7 +150,49 @@ export default function Company() {
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="block sm:hidden">
+              {/* Mobile Card Layout */}
+              <div className="divide-y divide-gray-200">
+                {filtered.map((c) => (
+                  <div key={c.id} className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        {c.logo_path ? (
+                          <img src={`${api.defaults.baseURL}/company/${c.logo_path}`} alt="Logo" className="h-10 w-10 object-cover rounded" />
+                        ) : (
+                          <div className="h-10 w-10 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">No Logo</div>
+                        )}
+                        <div>
+                          <h3 className="font-medium text-gray-900">{c.name}</h3>
+                          <p className="text-sm text-gray-500">{c.code}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasPermission("company.edit") && (
+                          <button onClick={() => startEdit(c)} className="text-cyan-600 hover:text-cyan-900 p-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                        )}
+                        {hasPermission("company.delete") && (
+                          <button onClick={() => handleDelete(c.id)} className="text-red-600 hover:text-red-900 p-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div><span className="text-gray-500">GST:</span> {c.gst_number}</div>
+                      <div><span className="text-gray-500">Contact:</span> {c.contact_person}</div>
+                      <div><span className="text-gray-500">Email:</span> {c.email}</div>
+                      <div><span className="text-gray-500">Phone:</span> {c.phone}</div>
+                      <div className="col-span-2"><span className="text-gray-500">Address:</span> {c.address}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden sm:block overflow-x-auto">
+              {/* Desktop Table Layout */}
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -215,7 +257,7 @@ export default function Company() {
                 <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit Company' : 'Add Company'}</h3>
                 <button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Name *</label><input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Code *</label><input type="text" value={form.code} onChange={e => setForm({...form, code: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">GST *</label><input type="text" value={form.gst_number} onChange={e => setForm({...form, gst_number: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm" /></div>

@@ -347,19 +347,105 @@ export default function InventoryLocations() {
           </div>
         ) : (
           <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-gray-900">
+                <h2 className="text-base sm:text-lg font-medium text-gray-900">
                   {activeFilter === 'external' ? `External Locations (${filteredLocations.length})` :
                    activeFilter === 'location' ? `Internal Locations (${filteredLocations.length})` :
                    `All Locations (${filteredLocations.length})`}
                 </h2>
-                <div className="text-sm text-gray-500">
+                <div className="text-xs sm:text-sm text-gray-500">
                   {filteredLocations.filter(l => l.is_active).length} active locations
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            
+            {/* Mobile Card Layout */}
+            <div className="block sm:hidden">
+              <div className="divide-y divide-gray-200">
+                {filteredLocations.map((location) => (
+                  <div key={location.id} className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-blue-600">{location.code.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{location.name}</div>
+                          <div className="text-xs text-gray-500">Code: {location.code}</div>
+                        </div>
+                      </div>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 ${
+                        location.is_active 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {location.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                      <div>
+                        <span className="text-gray-500">Description:</span>
+                        <div className="font-medium truncate">{location.description || "—"}</div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Created:</span>
+                        <div className="font-medium">
+                          {new Date(location.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                      {hasPermission('locations.view') && (
+                        <button
+                          onClick={() => handleView(location)}
+                          className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 px-2 py-1 rounded transition-colors duration-150"
+                          title="View Details"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      )}
+                      {hasPermission('locations.edit') && (
+                        <button
+                          onClick={() => handleEdit(location)}
+                          className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded transition-colors duration-150"
+                          title="Edit Location"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      )}
+                      {hasPermission('locations.edit') && (
+                        <button
+                          onClick={() => handleStatusToggle(location)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            location.is_active
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                          title={location.is_active ? "Click to Deactivate" : "Click to Activate"}
+                        >
+                          {location.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Desktop Table Layout */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

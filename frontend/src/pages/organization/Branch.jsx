@@ -151,7 +151,43 @@ export default function Branch() {
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="block sm:hidden">
+              {/* Mobile Card Layout */}
+              <div className="divide-y divide-gray-200">
+                {filtered.map((b) => (
+                  <div key={b.id} className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-medium text-gray-900">{b.name}</h3>
+                        <p className="text-sm text-gray-500">{b.code || 'No code'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasPermission("branch.edit") && (
+                          <button onClick={() => startEdit(b)} className="text-cyan-600 hover:text-cyan-900 p-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                        )}
+                        {hasPermission("branch.delete") && (
+                          <button onClick={() => handleDelete(b.id)} className="text-red-600 hover:text-red-900 p-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div><span className="text-gray-500">Company:</span> {b.company?.name || '-'}</div>
+                      <div><span className="text-gray-500">City:</span> {b.city || '-'}</div>
+                      <div><span className="text-gray-500">State:</span> {b.state || '-'}</div>
+                      <div><span className="text-gray-500">Country:</span> {b.country || '-'}</div>
+                      <div><span className="text-gray-500">Pincode:</span> {b.pincode || '-'}</div>
+                      <div className="col-span-2"><span className="text-gray-500">Address:</span> {b.address || '-'}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden sm:block overflow-x-auto">
+              {/* Desktop Table Layout */}
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -208,7 +244,7 @@ export default function Branch() {
                 <h3 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit Branch' : 'Add Branch'}</h3>
                 <button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-2">Company *</label><select value={form.company_id} onChange={e => setForm({...form, company_id: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm"><option value="">Select Company</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Name *</label><input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Code</label><input type="text" value={form.code} onChange={e => setForm({...form, code: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm" /></div>

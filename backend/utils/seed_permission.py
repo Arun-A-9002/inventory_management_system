@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import sessionmaker
 from database import get_tenant_engine
-from models.tenant_models import TenantBase, Permission
+from models.tenant_models import TenantBase, Permission, Role
 
 # ---------- PERMISSIONS LIST ----------
 PERMISSIONS = [
@@ -59,6 +59,9 @@ PERMISSIONS = [
     ("items.create", "Items — Create", "Item Master"),
     ("items.edit", "Items — Edit", "Item Master"),
     ("items.delete", "Items — Delete", "Item Master"),
+    ("items.bulk_import", "Items — Bulk Import", "Item Master"),
+    ("items.location_access", "Items — Location Access", "Item Master"),
+    ("items.master_data_setup", "Items — Master Data Setup", "Item Master"),
 
     # Category
     ("category.view", "Category — View", "Master Data"),
@@ -167,6 +170,13 @@ PERMISSIONS = [
 ]
 
 
+def add_new_permissions_to_existing_roles(db):
+    """Add new item master permissions to roles that have items.view permission."""
+    # Commented out to make permissions selective
+    # These permissions should be manually assigned through the admin interface
+    pass
+
+
 def seed_permissions_for_tenant(tenant_db: str) -> bool:
     """
     Seed permissions for a specific tenant database.
@@ -188,6 +198,11 @@ def seed_permissions_for_tenant(tenant_db: str) -> bool:
                 added += 1
 
             db.commit()
+            
+            # Add permissions to existing roles that have items.view
+            if added > 0:
+                add_new_permissions_to_existing_roles(db)
+            
             print(f"Permission seeding completed for '{tenant_db}'. Added {added} permissions.")
             return True
 
@@ -273,10 +288,10 @@ def bulk_seed_permissions():
             
             if seed_permissions_for_tenant(tenant.database_name):
                 success_count += 1
-                print(f"✓ Successfully seeded permissions for {tenant.organization_name}")
+                print(f"[OK] Successfully seeded permissions for {tenant.organization_name}")
             else:
                 failed_count += 1
-                print(f"✗ Failed to seed permissions for {tenant.organization_name}")
+                print(f"[FAILED] Failed to seed permissions for {tenant.organization_name}")
         
         print(f"\n=== BULK SEEDING SUMMARY ===")
         print(f"Total tenants: {len(tenants)}")
