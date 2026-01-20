@@ -59,6 +59,7 @@ export default function Item() {
   const [showBatchSelector, setShowBatchSelector] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState("");
   
   // Bulk upload states
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -82,7 +83,7 @@ export default function Item() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showLocationDropdown]);
+  }, [showLocationDropdown, selectedLocationFilter]);
 
   // Auto-preview when file is selected
   useEffect(() => {
@@ -137,7 +138,11 @@ export default function Item() {
   const loadItems = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/items");
+      let url = "/items";
+      if (selectedLocationFilter) {
+        url += `?location_id=${selectedLocationFilter}`;
+      }
+      const res = await api.get(url);
       setItems(res.data || []);
     } catch (err) {
       console.error(err);
@@ -425,6 +430,12 @@ export default function Item() {
     return subCategory ? subCategory.name : "";
   };
 
+  const getLocationName = (locationId) => {
+    if (!locationId) return "No Location";
+    const location = locations.find(loc => loc.id === parseInt(locationId));
+    return location ? location.name : "Unknown Location";
+  };
+
   // Generate Barcode
 const generateBarcode = () => {
   if (!form.item_code) {
@@ -672,12 +683,15 @@ const createLocation = async () => {
   }
 };
 
-  const filteredItems = items.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredItems = items.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.item_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.location_name && item.location_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    return matchesSearch;
+  });
 
   if (!hasPermission("items.view")) {
     return <div className="p-6 text-red-600">You do not have permission to view items.</div>;
@@ -689,106 +703,201 @@ const createLocation = async () => {
       {/* Items List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Items List</h2>
-              <p className="text-sm text-gray-500 mt-1">All inventory items with their specifications and stock details.</p>
-            </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-              {hasPermission("masterdata.setup") && (
-              <button
-                onClick={() => window.location.href = '/app/organization/master-data'}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
-              >
-                <span>⚙️</span>
-                <span className="hidden sm:inline">Master Data Setup</span>
-                <span className="sm:hidden">Setup</span>
-              </button>
-              )}
-              {hasPermission("items.create") && (
-              <button
-                onClick={() => setShowBulkModal(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
-              >
-                <span>📊</span>
-                <span>Bulk Items</span>
-              </button>
-              )}
-              <div className="relative">
+          <div className="flex flex-col gap-4">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Items List</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-gray-500">All inventory items with their specifications and stock details.</p>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {filteredItems.length} items
+                  </span>
+                  {selectedLocationFilter && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      📍 {locations.find(loc => loc.id === parseInt(selectedLocationFilter))?.name || 'Unknown Location'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                {hasPermission("masterdata.setup") && (
                 <button
-                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm"
+                  onClick={() => window.location.href = '/app/organization/master-data'}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
                 >
-                  <span>📍</span>
-                  <span>Locations</span>
-                  <span className="text-xs">▼</span>
+                  <span>⚙️</span>
+                  <span className="hidden sm:inline">Master Data Setup</span>
+                  <span className="sm:hidden">Setup</span>
                 </button>
-                {showLocationDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50">
-                    <div className="p-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-medium">Internal Locations</h3>
-                        <button
-                          onClick={() => { setShowLocationModal(true); setShowLocationDropdown(false); }}
-                          className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                        >
-                          + Add New
-                        </button>
-                      </div>
-                      <div className="max-h-48 overflow-y-auto space-y-2">
-                        {locations.filter(loc => loc.location_type === 'internal').map(location => (
-                          <div key={location.id} className="p-2 border rounded hover:bg-gray-50">
-                            <div className="font-medium text-sm">{location.name}</div>
-                            <div className="text-xs text-gray-500">{location.code}</div>
-                            {location.description && (
-                              <div className="text-xs text-gray-400 mt-1">{location.description}</div>
-                            )}
-                          </div>
-                        ))}
-                        {locations.filter(loc => loc.location_type === 'internal').length === 0 && (
-                          <div className="text-center text-gray-500 py-4 text-sm">No internal locations found</div>
-                        )}
+                )}
+                {hasPermission("items.create") && (
+                <button
+                  onClick={() => setShowBulkModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+                >
+                  <span>📊</span>
+                  <span>Bulk Items</span>
+                </button>
+                )}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors text-sm"
+                  >
+                    <span>📍</span>
+                    <span>Locations</span>
+                    <span className="text-xs">▼</span>
+                  </button>
+                  {showLocationDropdown && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50">
+                      <div className="p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <h3 className="font-medium">Internal Locations</h3>
+                          <button
+                            onClick={() => { setShowLocationModal(true); setShowLocationDropdown(false); }}
+                            className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                          >
+                            + Add New
+                          </button>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto space-y-2">
+                          {locations.filter(loc => loc.location_type === 'internal').map(location => (
+                            <div key={location.id} className="p-2 border rounded hover:bg-gray-50">
+                              <div className="font-medium text-sm">{location.name}</div>
+                              <div className="text-xs text-gray-500">{location.code}</div>
+                              {location.description && (
+                                <div className="text-xs text-gray-400 mt-1">{location.description}</div>
+                              )}
+                            </div>
+                          ))}
+                          {locations.filter(loc => loc.location_type === 'internal').length === 0 && (
+                            <div className="text-center text-gray-500 py-4 text-sm">No internal locations found</div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  disabled={!hasPermission("items.create")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                >
+                  <span>+</span>
+                  <span>Create Item</span>
+                </button>
               </div>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                disabled={!hasPermission("items.create")}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
-              >
-                <span>+</span>
-                <span>Create Item</span>
-              </button>
-              <div className="relative">
+            </div>
+            
+            {/* Filter Section */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+              <div className="relative flex-1 max-w-md">
                 <input
                   type="text"
-                  placeholder="Search items..."
+                  placeholder="Search items, codes, categories, brands, locations..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-full sm:w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  className="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white shadow-sm"
                 />
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
               </div>
+              
+              <div className="flex gap-2 items-center">
+                <div className="relative">
+                  <select
+                    value={selectedLocationFilter}
+                    onChange={(e) => setSelectedLocationFilter(e.target.value)}
+                    className="pl-3 pr-8 py-2.5 w-48 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white shadow-sm appearance-none"
+                  >
+                    <option value="">📍 All Locations</option>
+                    {locations.map(location => (
+                      <option key={location.id} value={location.id}>
+                        📍 {location.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                
+                {selectedLocationFilter && (
+                  <button
+                    onClick={() => setSelectedLocationFilter("")}
+                    className="px-3 py-2.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-1"
+                    title="Clear location filter"
+                  >
+                    <span>✕</span>
+                    <span className="hidden sm:inline">Clear</span>
+                  </button>
+                )}
+              </div>
             </div>
+            
+            {/* Active Filters Display */}
+            {(selectedLocationFilter || searchTerm) && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-gray-600 font-medium">Active filters:</span>
+                {searchTerm && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                    🔍 Search: "{searchTerm}"
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="ml-1 text-green-600 hover:text-green-800"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+                {selectedLocationFilter && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                    📍 Location: {locations.find(loc => loc.id === parseInt(selectedLocationFilter))?.name}
+                    <button
+                      onClick={() => setSelectedLocationFilter("")}
+                      className="ml-1 text-blue-600 hover:text-blue-800"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedLocationFilter("");
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Desktop Table */}
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Details</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location & Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Levels</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pricing</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Details</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Brand</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <div className="flex items-center gap-1">
+                    <span>📍</span>
+                    <span>Location & Quantity</span>
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock Levels</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pricing</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -817,8 +926,18 @@ const createLocation = async () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.brand || "-"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="font-medium text-blue-600">{item.location_name || "No Location"}</div>
-                      <div className="text-lg font-bold text-green-600">Qty: {item.current_quantity || 0}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1 font-medium text-blue-600">
+                            <span className="text-xs">📍</span>
+                            <span>{item.location_name || "No Location"}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-lg font-bold text-green-600 mt-1">
+                            <span className="text-xs text-gray-500">Qty:</span>
+                            <span>{item.current_quantity || 0}</span>
+                          </div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div>Min: {item.min_stock}</div>
@@ -913,9 +1032,15 @@ const createLocation = async () => {
                       <div className="font-medium">{item.brand || "-"}</div>
                     </div>
                     <div>
-                      <span className="text-gray-500">Location:</span>
-                      <div className="font-medium text-blue-600">{item.location_name || "No Location"}</div>
-                      <div className="text-lg font-bold text-green-600">Qty: {item.current_quantity || 0}</div>
+                      <span className="text-gray-500 text-xs font-medium">Location:</span>
+                      <div className="flex items-center gap-1 font-medium text-blue-600 mt-1">
+                        <span className="text-xs">📍</span>
+                        <span>{item.location_name || "No Location"}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-lg font-bold text-green-600 mt-1">
+                        <span className="text-xs text-gray-500">Qty:</span>
+                        <span>{item.current_quantity || 0}</span>
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-500">Stock Levels:</span>
@@ -1116,7 +1241,7 @@ const createLocation = async () => {
                       className="w-full rounded-lg border px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Location</option>
-                      {locations.map(location => (
+                      {locations.filter(location => location.location_type === 'internal').map(location => (
                         <option key={location.id} value={location.id}>{location.name} ({location.code})</option>
                       ))}
                     </select>

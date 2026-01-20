@@ -105,8 +105,14 @@ def create_item(payload: ItemCreate, request: Request, db: Session = Depends(get
 
 # ---------------- GET ALL ----------------
 @router.get("/")
-def list_items(db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
-    items = db.query(Item).options(joinedload(Item.location)).order_by(Item.id.desc()).all()
+def list_items(location_id: int = None, db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
+    query = db.query(Item).options(joinedload(Item.location))
+    
+    # Apply location filter if provided
+    if location_id:
+        query = query.filter(Item.location_id == location_id)
+    
+    items = query.order_by(Item.id.desc()).all()
     
     # Get category and subcategory names
     categories = {cat.id: cat.name for cat in db.query(Category).all()}
