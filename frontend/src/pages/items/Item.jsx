@@ -602,6 +602,24 @@ const commitBulkUpload = async () => {
     });
     
     showToast(`Successfully created ${response.data.created_count} items`, 'success');
+    
+    // Show auto-created items info if any
+    if (response.data.auto_created) {
+      const autoCreated = response.data.auto_created;
+      let message = `Items created successfully! `;
+      if (autoCreated.categories.length > 0) {
+        message += `New categories: ${autoCreated.categories.join(', ')}. `;
+      }
+      if (autoCreated.subcategories.length > 0) {
+        message += `New subcategories: ${autoCreated.subcategories.join(', ')}. `;
+      }
+      if (autoCreated.brands.length > 0) {
+        message += `New brands: ${autoCreated.brands.join(', ')}.`;
+      }
+      if (autoCreated.categories.length > 0 || autoCreated.subcategories.length > 0 || autoCreated.brands.length > 0) {
+        setTimeout(() => showToast(message, 'info'), 2000);
+      }
+    }
     setBulkStep(5);
     loadItems();
   } catch (err) {
@@ -1575,6 +1593,27 @@ const resetBulkUpload = () => {
                         </div>
                       </div>
                       
+                      {previewData.auto_create_info && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h4 className="font-medium text-blue-800 mb-2">Auto-Creation Summary:</h4>
+                          <div className="text-sm text-blue-700 space-y-1">
+                            {previewData.auto_create_info.new_categories.length > 0 && (
+                              <div>• <strong>New Categories:</strong> {previewData.auto_create_info.new_categories.join(', ')}</div>
+                            )}
+                            {previewData.auto_create_info.new_subcategories.length > 0 && (
+                              <div>• <strong>New Subcategories:</strong> {previewData.auto_create_info.new_subcategories.join(', ')}</div>
+                            )}
+                            {previewData.auto_create_info.new_brands.length > 0 && (
+                              <div>• <strong>New Brands:</strong> {previewData.auto_create_info.new_brands.join(', ')}</div>
+                            )}
+                            {previewData.auto_create_info.new_categories.length === 0 && 
+                             previewData.auto_create_info.new_subcategories.length === 0 && 
+                             previewData.auto_create_info.new_brands.length === 0 && (
+                              <div>• No new categories, subcategories, or brands will be created</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {previewData.errors.length > 0 && (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                           <h4 className="font-medium text-red-800 mb-2">Errors Found:</h4>
