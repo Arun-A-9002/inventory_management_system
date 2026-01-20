@@ -247,6 +247,17 @@ def ensure_missing_columns(engine):
                 if "Duplicate column name" not in str(e):
                     print(f"Error adding safety_stock column: {e}")
             
+            # Add location_id and current_quantity columns to items table
+            try:
+                conn.execute(text("ALTER TABLE items ADD COLUMN location_id INT NULL AFTER safety_stock"))
+                conn.execute(text("ALTER TABLE items ADD COLUMN current_quantity INT DEFAULT 0 AFTER location_id"))
+                conn.execute(text("ALTER TABLE items ADD CONSTRAINT fk_items_location FOREIGN KEY (location_id) REFERENCES inventory_locations(id)"))
+                conn.commit()
+                print("Added location_id and current_quantity columns to items table")
+            except Exception as e:
+                if "Duplicate column name" not in str(e) and "Duplicate key name" not in str(e):
+                    print(f"Error adding location/quantity columns: {e}")
+            
             # Add external transfer status management columns
             external_transfer_columns = [
                 ("approved_by", "VARCHAR(255) NULL"),

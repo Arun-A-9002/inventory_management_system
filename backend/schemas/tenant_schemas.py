@@ -458,6 +458,10 @@ class ItemBase(BaseModel):
     max_stock: Optional[int] = 0
     safety_stock: Optional[int] = 0
     
+    # Location & Quantity
+    location_id: Optional[int] = None
+    current_quantity: Optional[int] = 0
+    
     fixing_price: Optional[float] = 0.0
     mrp: Optional[float] = 0.0
     tax: Optional[float] = 0.0
@@ -490,6 +494,10 @@ class ItemUpdate(BaseModel):
     min_stock: Optional[int]
     max_stock: Optional[int]
     safety_stock: Optional[int]
+    
+    # Location & Quantity
+    location_id: Optional[int]
+    current_quantity: Optional[int]
     
     fixing_price: Optional[float]
     mrp: Optional[float]

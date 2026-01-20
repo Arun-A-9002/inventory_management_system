@@ -4,7 +4,7 @@ from typing import List
 import json
 
 from database import get_current_tenant_db_name, get_tenant_db
-from models.tenant_models import Item, Category, SubCategory, AuditLog
+from models.tenant_models import Item, Category, SubCategory, AuditLog, InventoryLocation
 from schemas.tenant_schemas import ItemCreate, ItemUpdate, ItemResponse
 from utils.permissions import require_items_view, require_items_create, require_items_edit, require_items_delete
 from utils.logger import log_api, log_error, log_audit
@@ -106,7 +106,7 @@ def create_item(payload: ItemCreate, request: Request, db: Session = Depends(get
 # ---------------- GET ALL ----------------
 @router.get("/")
 def list_items(db: Session = Depends(get_db), current_user: dict = Depends(require_items_view())):
-    items = db.query(Item).order_by(Item.id.desc()).all()
+    items = db.query(Item).options(joinedload(Item.location)).order_by(Item.id.desc()).all()
     
     # Get category and subcategory names
     categories = {cat.id: cat.name for cat in db.query(Category).all()}
@@ -162,6 +162,9 @@ def list_items(db: Session = Depends(get_db), current_user: dict = Depends(requi
             "min_stock": item.min_stock,
             "max_stock": item.max_stock,
             "safety_stock": getattr(item, 'safety_stock', 0),
+            "location_id": item.location_id,
+            "location_name": item.location.name if item.location else None,
+            "current_quantity": getattr(item, 'current_quantity', 0),
             "fixing_price": item.fixing_price,
             "mrp": item.mrp,
             "tax": item.tax,

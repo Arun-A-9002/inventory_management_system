@@ -364,21 +364,25 @@ class Item(TenantBase):
     max_stock = Column(Integer, default=0)
     safety_stock = Column(Integer, default=0)
     
-    # 4. Pricing Information
+    # 4. Location & Quantity
+    location_id = Column(Integer, ForeignKey("inventory_locations.id"), nullable=True)
+    current_quantity = Column(Integer, default=0)
+    
+    # 5. Pricing Information
     fixing_price = Column(DECIMAL(10, 2), default=0.00)
     mrp = Column(DECIMAL(10, 2), default=0.00)
     tax = Column(Float, default=0.0)
 
-    # 5. Expiry Management
+    # 6. Expiry Management
     has_expiry = Column(Boolean, default=False)
     expiry_date = Column(Date, nullable=True)
     
-    # 6. Warranty Management
+    # 7. Warranty Management
     has_warranty = Column(Boolean, default=False)
     warranty_period = Column(Integer, default=0)
     warranty_period_type = Column(String(20), default="years")
 
-    # 7. Barcode / QR
+    # 8. Barcode / QR
     barcode = Column(String(100), unique=True, nullable=True)
     qr_code = Column(String(100), unique=True, nullable=True)
 
@@ -387,7 +391,8 @@ class Item(TenantBase):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship
+    # Relationships
+    location = relationship("InventoryLocation", foreign_keys=[location_id])
     batches = relationship("ItemBatch", back_populates="item")
 
 
