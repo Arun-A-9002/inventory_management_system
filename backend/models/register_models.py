@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 
 # ⬇️ IMPORT LOGGERS
@@ -35,6 +35,9 @@ class Tenant(Base):
     # NEW FIELDS for refresh token rotation
     refresh_token_hash = Column(String(255), nullable=True)
     refresh_token_expires_at = Column(DateTime, nullable=True)
+    
+    # Admin 2FA setting
+    admin_two_factor_enabled = Column(Boolean, default=False)
 
     # ---------------------------
     # LOG WHEN MODEL IS CREATED

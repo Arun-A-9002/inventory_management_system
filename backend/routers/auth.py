@@ -126,13 +126,55 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
         if not tenant:
             raise HTTPException(400, "Invalid tenant code")
         
-        # Check if admin login
+        # Check if admin login (by email OR by login code matching admin email)
+        admin_user = None
         if '@' in login_identifier and tenant.admin_email == login_identifier:
+            # Admin login by email - find the admin user in tenant DB
+            from database import get_tenant_db
+            from models.tenant_models import User
+            
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            admin_user = tenant_db.query(User).filter(User.email == login_identifier).first()
+            tenant_db.close()
+        elif '@' not in login_identifier:
+            # Check if this login code belongs to an admin user
+            from database import get_tenant_db
+            from models.tenant_models import User
+            
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            admin_user = tenant_db.query(User).filter(
+                User.login_code == login_identifier.upper(),
+                User.email == tenant.admin_email
+            ).first()
+            
+            tenant_db.close()
+        
+        if admin_user:
             hashed_pw = hashlib.sha256(password.encode()).hexdigest()
             if hashed_pw == tenant.password_hash:
-                otp = generate_otp(login_identifier)
-                send_otp_email(login_identifier, otp)
-                return {"message": "OTP sent to email", "requires_otp": True, "email": login_identifier}
+                # Check if admin user has 2FA enabled
+                if admin_user.two_factor_enabled:
+                    otp = generate_otp(admin_user.email)
+                    send_otp_email(admin_user.email, otp)
+                    return {"message": "OTP sent to email", "requires_otp": True, "email": admin_user.email}
+                else:
+                    # Direct admin login without 2FA
+                    access_token = create_access_token({
+                        "sub": str(tenant.id),
+                        "tenant_id": tenant.id,
+                        "email": tenant.admin_email,
+                        "org": tenant.organization_name,
+                        "role": "admin",
+                        "tenant_db": tenant.database_name,
+                        "tenant_code": tenant.tenant_code,
+                        "user_type": "admin",
+                        "full_name": tenant.admin_name
+                    })
+                    return {"access_token": access_token, "token_type": "bearer", "requires_otp": False}
             else:
                 raise HTTPException(400, "Invalid credentials")
         

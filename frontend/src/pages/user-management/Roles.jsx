@@ -114,19 +114,18 @@ export default function Roles() {
     setShowModal(true);
   }
 
-  async function handleDelete(id) {
-    if (!hasPermission("roles.delete")) {
+  async function handleToggleStatus(id, currentStatus) {
+    if (!hasPermission("roles.update")) {
       showToast("Permission denied", 'error');
       return;
     }
-    if (!window.confirm("Delete role?")) return;
     try {
-      await api.delete(`/roles/${id}`);
-      showToast("Role deleted successfully", 'success');
-      await loadAll();
+      const response = await api.put(`/roles/${id}`, { is_active: !currentStatus });
+      setRoles(prev => prev.map(r => r.id === id ? response.data : r));
+      showToast(`Role ${!currentStatus ? 'activated' : 'deactivated'} successfully`, 'success');
     } catch (e) {
       console.error(e);
-      showToast("Delete failed", 'error');
+      showToast("Status update failed", 'error');
     }
   }
 
@@ -242,77 +241,107 @@ export default function Roles() {
             <p className="text-gray-600">Try adjusting your search or filter criteria</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredRoles.map(role => (
-              <div key={role.id} className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow duration-200">
-                <div className="p-4 sm:p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center min-w-0 flex-1">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-lg flex-shrink-0">
+              <div key={role.id} className="bg-white rounded-xl shadow-sm border hover:shadow-lg transition-all duration-200 flex flex-col">
+                {/* Header Section */}
+                <div className="p-6 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
                         {role.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="ml-3 min-w-0 flex-1">
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{role.name}</h3>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">{role.name}</h3>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          role.is_active 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {role.is_active ? '● Active' : '● Inactive'}
+                        </span>
                       </div>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ml-2 ${
-                      role.is_active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {role.is_active ? 'Active' : 'Inactive'}
-                    </span>
                   </div>
                   
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-sm font-medium text-gray-500">Description:</span>
-                      <p className="text-sm text-gray-900 mt-1">
-                        {role.description || 'No description provided'}
-                      </p>
+                  <div className="text-sm text-gray-600">
+                    {role.description || 'No description provided'}
+                  </div>
+                </div>
+
+                {/* Permissions Section */}
+                <div className="p-6 flex-1">
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-gray-700">Permissions</h4>
+                      <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2 py-1 rounded-full">
+                        {(role.permissions || []).length} total
+                      </span>
                     </div>
                     
-                    <div>
-                      <span className="text-sm font-medium text-gray-500">Permissions:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {(role.permissions || []).length > 0 ? (
-                          <>
-                            <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full font-medium">
-                              {role.permissions.length} permissions
-                            </span>
-                            {role.permissions.slice(0, 3).map(perm => (
-                              <span key={perm.id} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                    {(role.permissions || []).length > 0 ? (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {role.permissions.map(perm => (
+                          <div key={perm.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">
                                 {perm.label}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {perm.name}
+                              </div>
+                            </div>
+                            <div className="ml-2">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                perm.group === 'Admin' ? 'bg-red-100 text-red-700' :
+                                perm.group === 'User Management' ? 'bg-blue-100 text-blue-700' :
+                                perm.group === 'Inventory' ? 'bg-green-100 text-green-700' :
+                                perm.group === 'Vendor' ? 'bg-yellow-100 text-yellow-700' :
+                                perm.group === 'Billing' ? 'bg-purple-100 text-purple-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {perm.group || 'Other'}
                               </span>
-                            ))}
-                            {role.permissions.length > 3 && (
-                              <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
-                                +{role.permissions.length - 3} more
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-gray-500">No permissions assigned</span>
-                        )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <div className="text-2xl mb-2">🔒</div>
+                        <div className="text-sm">No permissions assigned</div>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="flex gap-2 mt-6 pt-4 border-t">
+                </div>
+                
+                {/* Actions Section */}
+                <div className="p-6 pt-0 mt-auto">
+                  <div className="flex gap-2">
                     {hasPermission("roles.update") && (
                       <button 
                         onClick={() => startEdit(role)} 
-                        className="flex-1 px-3 py-2 text-sm font-medium text-cyan-600 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors duration-200"
+                        className="flex-1 px-4 py-2 text-sm font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg hover:bg-cyan-100 hover:border-cyan-300 transition-all duration-200 flex items-center justify-center"
                       >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
                         Edit
                       </button>
                     )}
-                    {hasPermission("roles.delete") && (
+                    {hasPermission("roles.update") && (
                       <button 
-                        onClick={() => handleDelete(role.id)} 
-                        className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200"
+                        onClick={() => handleToggleStatus(role.id, role.is_active)} 
+                        className={`flex-1 px-4 py-2 text-sm font-medium border rounded-lg transition-all duration-200 flex items-center justify-center ${
+                          role.is_active 
+                            ? 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
+                            : 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
+                        }`}
                       >
-                        Delete
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={role.is_active ? "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636" : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"} />
+                        </svg>
+                        {role.is_active ? 'Deactivate' : 'Activate'}
                       </button>
                     )}
                   </div>
@@ -365,6 +394,43 @@ export default function Roles() {
                       placeholder="Enter description"
                       rows={4}
                     />
+                  </div>
+
+                  {/* Selected Permissions Preview */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-sm font-medium text-gray-700">Selected Permissions</label>
+                      <span className="text-xs text-gray-500">{selectedPermissions.size} selected</span>
+                    </div>
+                    
+                    {selectedPermissions.size > 0 ? (
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+                        <div className="p-3 space-y-2">
+                          {permissions.filter(p => selectedPermissions.has(p.id)).map(perm => (
+                            <div key={perm.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-900 truncate">{perm.label}</div>
+                                <div className="text-xs text-gray-500 truncate">{perm.name}</div>
+                              </div>
+                              <button 
+                                onClick={() => togglePermission(perm.id)}
+                                className="ml-2 text-red-500 hover:text-red-700"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg p-6 text-center text-gray-500">
+                        <div className="text-2xl mb-2">🔒</div>
+                        <div className="text-sm">No permissions selected</div>
+                        <div className="text-xs mt-1">Use templates or select from the right panel</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
