@@ -502,7 +502,7 @@ export default function Users() {
                     />
                     <div className="ml-3">
                       <div className="text-sm font-medium text-gray-900">Two-Factor Authentication</div>
-                      <div className="text-xs text-gray-500">Require OTP verification for login</div>
+                      <div className="text-xs text-gray-500">Require OTP verification for login (works for both admin and regular users)</div>
                     </div>
                   </label>
                   
@@ -520,6 +520,22 @@ export default function Users() {
                       </div>
                     </div>
                   </label>
+                  
+                  {/* <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-xs text-blue-700">
+                        <strong>2FA Test Cases:</strong><br/>
+                        • Admin login with email + 2FA enabled → OTP required<br/>
+                        • Admin login with email + 2FA disabled → Direct login<br/>
+                        • Admin login with login code + 2FA enabled → OTP required<br/>
+                        • Admin login with login code + 2FA disabled → Direct login<br/>
+                        • Regular user login → Follows individual 2FA setting
+                      </div>
+                    </div>
+                  </div> */}
                 </div>
               </div>
 

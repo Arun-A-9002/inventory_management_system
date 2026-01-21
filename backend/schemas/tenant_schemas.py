@@ -1090,3 +1090,18 @@ class VendorPaymentHistoryResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+    
+class AdminTwoFactorToggle(BaseModel):
+    """Schema for toggling admin 2FA setting"""
+    enabled: bool
+
+class AdminTwoFactorStatus(BaseModel):
+    """Schema for admin 2FA status response"""
+    two_factor_enabled: bool
+    email: str
+
+class AdminTwoFactorResponse(BaseModel):
+    """Schema for admin 2FA toggle response"""
+    message: str
+    two_factor_enabled: bool

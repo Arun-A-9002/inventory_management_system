@@ -1323,3 +1323,23 @@ class AuditLog(TenantBase):
     # Additional context
     module = Column(String(100), nullable=True)  # GRN, INVENTORY, etc.
     description = Column(String(500), nullable=True)  # Human readable description
+
+
+# ============================================================
+#                   ADMIN 2FA MIXIN
+# ============================================================
+class AdminTwoFactorMixin:
+    """Mixin for admin 2FA functionality"""
+    
+    @property
+    def has_2fa_enabled(self):
+        """Check if admin 2FA is enabled"""
+        return self.admin_two_factor_enabled or False
+    
+    def enable_2fa(self):
+        """Enable 2FA for admin"""
+        self.admin_two_factor_enabled = True
+    
+    def disable_2fa(self):
+        """Disable 2FA for admin"""
+        self.admin_two_factor_enabled = False
