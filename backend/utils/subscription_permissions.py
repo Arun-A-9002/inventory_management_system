@@ -1,0 +1,447 @@
+# backend/utils/subscription_permissions.py
+"""
+Subscription-based permission mapping system.
+Defines which permissions are available for each subscription tier.
+"""
+
+from models.tenant_models import SubscriptionTier
+
+# Basic tier permissions (as provided by user)
+BASIC_PERMISSIONS = [
+    # Departments
+    ("departments.view", "Departments — View", "Departments"),
+    ("departments.create", "Departments — Create", "Departments"),
+    ("departments.update", "Departments — Update", "Departments"),
+    ("departments.delete", "Departments — Delete", "Departments"),
+
+    # Roles
+    ("roles.view", "Roles — View", "Roles"),
+    ("roles.update", "Roles — Update", "Roles"),
+    ("roles.delete", "Roles — Delete", "Roles"),
+
+    # Users
+    ("users.view", "Users — View", "Users"),
+    ("users.create", "Users — Create", "Users"),
+    ("users.update", "Users — Update", "Users"),
+    ("users.delete", "Users — Delete", "Users"),
+
+    # Company
+    ("company.view", "Company — View", "Organization"),
+    ("company.create", "Company — Create", "Organization"),
+    ("company.edit", "Company — Edit", "Organization"),
+    ("company.delete", "Company — Delete", "Organization"),
+
+    # Branch
+    ("branch.view", "Branch — View", "Organization"),
+    ("branch.create", "Branch — Create", "Organization"),
+    ("branch.edit", "Branch — Edit", "Organization"),
+    ("branch.delete", "Branch — Delete", "Organization"),
+
+    # Store
+    ("store.view", "Store — View", "Organization"),
+    ("store.create", "Store — Create", "Organization"),
+    ("store.edit", "Store — Edit", "Organization"),
+    ("store.delete", "Store — Delete", "Organization"),
+
+    # Department (view only)
+    ("department.view", "Department — View", "Organization"),
+
+    # Items
+    ("items.view", "Items — View", "Item Master"),
+    ("items.create", "Items — Create", "Item Master"),
+    ("items.edit", "Items — Edit", "Item Master"),
+    ("items.delete", "Items — Delete", "Item Master"),
+
+    # Category
+    ("category.view", "Category — View", "Master Data"),
+    ("category.create", "Category — Create", "Master Data"),
+    ("category.edit", "Category — Edit", "Master Data"),
+    ("category.delete", "Category — Delete", "Master Data"),
+
+    # Sub Category
+    ("subcategory.view", "Sub Category — View", "Master Data"),
+    ("subcategory.create", "Sub Category — Create", "Master Data"),
+    ("subcategory.edit", "Sub Category — Edit", "Master Data"),
+    ("subcategory.delete", "Sub Category — Delete", "Master Data"),
+
+    # Brand
+    ("brand.view", "Brand — View", "Master Data"),
+    ("brand.create", "Brand — Create", "Master Data"),
+    ("brand.edit", "Brand — Edit", "Master Data"),
+    ("brand.delete", "Brand — Delete", "Master Data"),
+
+    # Master Data Setup
+    ("masterdata.setup", "Master Data — Setup Access", "Master Data"),
+
+    # Locations
+    ("locations.view", "Locations — View", "Location Management"),
+    ("locations.create_internal", "Locations — Create Internal", "Location Management"),
+    ("locations.edit", "Locations — Edit", "Location Management"),
+    ("locations.delete", "Locations — Delete", "Location Management"),
+
+    # Items additional
+    ("items.bulk_import", "Items — Bulk Import", "Item Master"),
+    ("items.location_access", "Items — Location Access", "Item Master"),
+    ("items.master_data_setup", "Items — Master Data Setup", "Item Master"),
+
+    # Dashboard
+    ("dashboard.view", "Dashboard — View", "Dashboard"),
+
+    # Audit Log
+    ("audit_log.view", "Audit Log — View", "Audit Log"),
+
+]
+
+# Standard tier permissions (93 permissions)
+STANDARD_PERMISSIONS = [
+    # Departments
+    ("departments.view", "Departments — View", "Departments"),
+    ("departments.create", "Departments — Create", "Departments"),
+    ("departments.update", "Departments — Update", "Departments"),
+    ("departments.delete", "Departments — Delete", "Departments"),
+
+    # Roles
+    ("roles.view", "Roles — View", "Roles"),
+    ("roles.create", "Roles — Create", "Roles"),
+    ("roles.update", "Roles — Update", "Roles"),
+    ("roles.delete", "Roles — Delete", "Roles"),
+
+    # Users
+    ("users.view", "Users — View", "Users"),
+    ("users.create", "Users — Create", "Users"),
+    ("users.update", "Users — Update", "Users"),
+    ("users.delete", "Users — Delete", "Users"),
+
+    # Company
+    ("company.view", "Company — View", "Organization"),
+    ("company.create", "Company — Create", "Organization"),
+    ("company.edit", "Company — Edit", "Organization"),
+    ("company.delete", "Company — Delete", "Organization"),
+
+    # Branch
+    ("branch.view", "Branch — View", "Organization"),
+    ("branch.create", "Branch — Create", "Organization"),
+    ("branch.edit", "Branch — Edit", "Organization"),
+    ("branch.delete", "Branch — Delete", "Organization"),
+
+    # Store
+    ("store.view", "Store — View", "Organization"),
+    ("store.create", "Store — Create", "Organization"),
+    ("store.edit", "Store — Edit", "Organization"),
+    ("store.delete", "Store — Delete", "Organization"),
+
+    # Department
+    ("department.view", "Department — View", "Organization"),
+
+    # Items
+    ("items.view", "Items — View", "Item Master"),
+    ("items.create", "Items — Create", "Item Master"),
+    ("items.edit", "Items — Edit", "Item Master"),
+    ("items.delete", "Items — Delete", "Item Master"),
+    ("items.bulk_import", "Items — Bulk Import", "Item Master"),
+    ("items.location_access", "Items — Location Access", "Item Master"),
+    ("items.master_data_setup", "Items — Master Data Setup", "Item Master"),
+
+    # Category
+    ("category.view", "Category — View", "Master Data"),
+    ("category.create", "Category — Create", "Master Data"),
+    ("category.edit", "Category — Edit", "Master Data"),
+    ("category.delete", "Category — Delete", "Master Data"),
+
+    # Sub Category
+    ("subcategory.view", "Sub Category — View", "Master Data"),
+    ("subcategory.create", "Sub Category — Create", "Master Data"),
+    ("subcategory.edit", "Sub Category — Edit", "Master Data"),
+    ("subcategory.delete", "Sub Category — Delete", "Master Data"),
+
+    # Brand
+    ("brand.view", "Brand — View", "Master Data"),
+    ("brand.create", "Brand — Create", "Master Data"),
+    ("brand.edit", "Brand — Edit", "Master Data"),
+    ("brand.delete", "Brand — Delete", "Master Data"),
+
+    # Master Data Setup
+    ("masterdata.setup", "Master Data — Setup Access", "Master Data"),
+
+    # Vendor Management
+    ("vendors.view", "Vendors — View", "Vendor Management"),
+    ("vendors.create", "Vendors — Create", "Vendor Management"),
+    ("vendors.edit", "Vendors — Edit", "Vendor Management"),
+    ("vendors.delete", "Vendors — Delete", "Vendor Management"),
+    ("vendors.status", "Vendors — Change Status", "Vendor Management"),
+
+    # Location Management
+    ("locations.view", "Locations — View", "Location Management"),
+    ("locations.create_internal", "Locations — Create Internal", "Location Management"),
+    ("locations.create_external", "Locations — Create External", "Location Management"),
+    ("locations.edit", "Locations — Edit", "Location Management"),
+    ("locations.delete", "Locations — Delete", "Location Management"),
+
+    # Inventory
+    ("inventory.view", "Inventory — View", "Inventory"),
+    ("inventory.create", "Inventory — Create", "Inventory"),
+    ("inventory.update", "Inventory — Update", "Inventory"),
+    ("inventory.delete", "Inventory — Delete", "Inventory"),
+
+    # Reports
+    ("reports.view", "Reports — View", "Reports"),
+    ("reports.create", "Reports — Create", "Reports"),
+
+    # Settings
+    ("settings.view", "Settings — View", "Settings"),
+    ("settings.update", "Settings — Update", "Settings"),
+
+    # Purchase Management
+    ("purchase_request.view", "Purchase Request — View", "Purchase Management"),
+    ("purchase_request.create", "Purchase Request — Create", "Purchase Management"),
+    ("purchase_request.edit", "Purchase Request — Edit", "Purchase Management"),
+    ("purchase_request.delete", "Purchase Request — Delete", "Purchase Management"),
+    ("purchase_request.status", "Purchase Request — Change Status", "Purchase Management"),
+    ("purchase_request.send_po", "Purchase Request — Send Purchase Order", "Purchase Management"),
+    ("purchase_order.view", "Purchase Order — View", "Purchase Management"),
+    ("purchase_order.print", "Purchase Order — Print", "Purchase Management"),
+    ("purchase_order.download", "Purchase Order — Download", "Purchase Management"),
+
+    # Goods Receipt & Inspection (GRN)
+    ("grn.view", "GRN — View", "Goods Receipt & Inspection (GRN)"),
+    ("grn.create", "GRN — Create", "Goods Receipt & Inspection (GRN)"),
+    ("grn.edit", "GRN — Edit", "Goods Receipt & Inspection (GRN)"),
+    ("grn.delete", "GRN — Delete", "Goods Receipt & Inspection (GRN)"),
+    ("grn.print", "GRN — Print", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_qc", "GRN — QC Status", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_approve", "GRN — Approve Status", "Goods Receipt & Inspection (GRN)"),
+
+    # Return and Disposal
+    ("return_disposal.view", "Return & Disposal — View", "Return and Disposal"),
+    ("return_disposal.create", "Return & Disposal — Create", "Return and Disposal"),
+    ("return_disposal.edit", "Return & Disposal — Edit", "Return and Disposal"),
+    ("return_disposal.delete", "Return & Disposal — Delete", "Return and Disposal"),
+    ("return_disposal.status_approve", "Return & Disposal — Approve Status", "Return and Disposal"),
+
+    # External Transfer
+    ("external_transfer.create", "External Transfer — Create", "External Transfer"),
+    ("external_transfer.view", "External Transfer — View", "External Transfer"),
+    ("external_transfer.print", "External Transfer — Print", "External Transfer"),
+    ("external_transfer.download", "External Transfer — Download", "External Transfer"),
+
+    # Damaged Returns
+    ("damaged_returns.view", "Damaged Returns — View", "Damaged Returns"),
+    ("damaged_returns.print", "Damaged Returns — Print", "Damaged Returns"),
+
+    # Dashboard
+    ("dashboard.view", "Dashboard — View", "Dashboard"),
+
+    # Audit Log
+    ("audit_log.view", "Audit Log — View", "Audit Log"),
+
+    # Dispensed Items
+    ("dispensed_items.view", "Dispensed Items — View", "Dispensed Items"),
+
+    # Stock Ledger
+    ("stock_ledger.view", "Stock Ledger — View", "Stock Ledger"),
+    ("stock_ledger.dispense", "Stock Ledger — Dispense", "Stock Ledger"),
+    ("stock_ledger.available_qty", "Stock Ledger — Available Quantity", "Stock Ledger"),
+]
+
+# Premium tier permissions (all permissions)
+PREMIUM_PERMISSIONS = [
+    # Departments
+    ("departments.view", "Departments — View", "Departments"),
+    ("departments.create", "Departments — Create", "Departments"),
+    ("departments.update", "Departments — Update", "Departments"),
+    ("departments.delete", "Departments — Delete", "Departments"),
+
+    # Roles
+    ("roles.view", "Roles — View", "Roles"),
+    ("roles.create", "Roles — Create", "Roles"),
+    ("roles.update", "Roles — Update", "Roles"),
+    ("roles.delete", "Roles — Delete", "Roles"),
+
+    # Users
+    ("users.view", "Users — View", "Users"),
+    ("users.create", "Users — Create", "Users"),
+    ("users.update", "Users — Update", "Users"),
+    ("users.delete", "Users — Delete", "Users"),
+
+    # Company
+    ("company.view", "Company — View", "Organization"),
+    ("company.create", "Company — Create", "Organization"),
+    ("company.edit", "Company — Edit", "Organization"),
+    ("company.delete", "Company — Delete", "Organization"),
+
+    # Branch
+    ("branch.view", "Branch — View", "Organization"),
+    ("branch.create", "Branch — Create", "Organization"),
+    ("branch.edit", "Branch — Edit", "Organization"),
+    ("branch.delete", "Branch — Delete", "Organization"),
+
+    # Store
+    ("store.view", "Store — View", "Organization"),
+    ("store.create", "Store — Create", "Organization"),
+    ("store.edit", "Store — Edit", "Organization"),
+    ("store.delete", "Store — Delete", "Organization"),
+
+    # Department (view only)
+    ("department.view", "Department — View", "Organization"),
+
+    # Item Master
+    ("items.view", "Items — View", "Item Master"),
+    ("items.create", "Items — Create", "Item Master"),
+    ("items.edit", "Items — Edit", "Item Master"),
+    ("items.delete", "Items — Delete", "Item Master"),
+    ("items.bulk_import", "Items — Bulk Import", "Item Master"),
+    ("items.location_access", "Items — Location Access", "Item Master"),
+    ("items.master_data_setup", "Items — Master Data Setup", "Item Master"),
+
+    # Category
+    ("category.view", "Category — View", "Master Data"),
+    ("category.create", "Category — Create", "Master Data"),
+    ("category.edit", "Category — Edit", "Master Data"),
+    ("category.delete", "Category — Delete", "Master Data"),
+
+    # Sub Category
+    ("subcategory.view", "Sub Category — View", "Master Data"),
+    ("subcategory.create", "Sub Category — Create", "Master Data"),
+    ("subcategory.edit", "Sub Category — Edit", "Master Data"),
+    ("subcategory.delete", "Sub Category — Delete", "Master Data"),
+
+    # Brand
+    ("brand.view", "Brand — View", "Master Data"),
+    ("brand.create", "Brand — Create", "Master Data"),
+    ("brand.edit", "Brand — Edit", "Master Data"),
+    ("brand.delete", "Brand — Delete", "Master Data"),
+
+    # Master Data Setup
+    ("masterdata.setup", "Master Data — Setup Access", "Master Data"),
+
+    # Vendor Management
+    ("vendors.view", "Vendors — View", "Vendor Management"),
+    ("vendors.create", "Vendors — Create", "Vendor Management"),
+    ("vendors.edit", "Vendors — Edit", "Vendor Management"),
+    ("vendors.delete", "Vendors — Delete", "Vendor Management"),
+    ("vendors.status", "Vendors — Change Status", "Vendor Management"),
+
+    # Customer Management
+    ("customers.view", "Customers — View", "Customer Management"),
+    ("customers.create", "Customers — Create", "Customer Management"),
+    ("customers.edit", "Customers — Edit", "Customer Management"),
+    ("customers.delete", "Customers — Delete", "Customer Management"),
+    ("customers.status", "Customers — Change Status", "Customer Management"),
+
+    # Location Management
+    ("locations.view", "Locations — View", "Location Management"),
+    ("locations.create_internal", "Locations — Create Internal", "Location Management"),
+    ("locations.create_external", "Locations — Create External", "Location Management"),
+    ("locations.edit", "Locations — Edit", "Location Management"),
+    ("locations.delete", "Locations — Delete", "Location Management"),
+
+    # Inventory
+    ("inventory.view", "Inventory — View", "Inventory"),
+    ("inventory.create", "Inventory — Create", "Inventory"),
+    ("inventory.update", "Inventory — Update", "Inventory"),
+    ("inventory.delete", "Inventory — Delete", "Inventory"),
+
+    # Reports
+    ("reports.view", "Reports — View", "Reports"),
+    ("reports.create", "Reports — Create", "Reports"),
+
+    # Settings
+    ("settings.view", "Settings — View", "Settings"),
+    ("settings.update", "Settings — Update", "Settings"),
+
+    # Purchase Management
+    ("purchase_request.view", "Purchase Request — View", "Purchase Management"),
+    ("purchase_request.create", "Purchase Request — Create", "Purchase Management"),
+    ("purchase_request.edit", "Purchase Request — Edit", "Purchase Management"),
+    ("purchase_request.delete", "Purchase Request — Delete", "Purchase Management"),
+    ("purchase_request.status", "Purchase Request — Change Status", "Purchase Management"),
+    ("purchase_request.send_po", "Purchase Request — Send Purchase Order", "Purchase Management"),
+    ("purchase_order.view", "Purchase Order — View", "Purchase Management"),
+    ("purchase_order.print", "Purchase Order — Print", "Purchase Management"),
+    ("purchase_order.download", "Purchase Order — Download", "Purchase Management"),
+
+    # Goods Receipt & Inspection (GRN)
+    ("grn.view", "GRN — View", "Goods Receipt & Inspection (GRN)"),
+    ("grn.create", "GRN — Create", "Goods Receipt & Inspection (GRN)"),
+    ("grn.edit", "GRN — Edit", "Goods Receipt & Inspection (GRN)"),
+    ("grn.delete", "GRN — Delete", "Goods Receipt & Inspection (GRN)"),
+    ("grn.print", "GRN — Print", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_qc", "GRN — QC Status", "Goods Receipt & Inspection (GRN)"),
+    ("grn.status_approve", "GRN — Approve Status", "Goods Receipt & Inspection (GRN)"),
+
+    # Return and Disposal
+    ("return_disposal.view", "Return & Disposal — View", "Return and Disposal"),
+    ("return_disposal.create", "Return & Disposal — Create", "Return and Disposal"),
+    ("return_disposal.edit", "Return & Disposal — Edit", "Return and Disposal"),
+    ("return_disposal.delete", "Return & Disposal — Delete", "Return and Disposal"),
+    ("return_disposal.status_approve", "Return & Disposal — Approve Status", "Return and Disposal"),
+
+    # Vendor Ledger
+    ("vendor_ledger.view", "Vendor Ledger — View", "Vendor Ledger"),
+    ("vendor_ledger.pay", "Vendor Ledger — Pay", "Vendor Ledger"),
+    ("vendor_ledger.print", "Vendor Ledger — Print", "Vendor Ledger"),
+    ("vendor_ledger.invoice_view", "Vendor Ledger — Invoice View", "Vendor Ledger"),
+
+    # Stock Ledger
+    ("stock_ledger.view", "Stock Ledger — View", "Stock Ledger"),
+    ("stock_ledger.dispense", "Stock Ledger — Dispense", "Stock Ledger"),
+    ("stock_ledger.available_qty", "Stock Ledger — Available Quantity", "Stock Ledger"),
+
+    # External Transfer
+    ("external_transfer.create", "External Transfer — Create", "External Transfer"),
+    ("external_transfer.view", "External Transfer — View", "External Transfer"),
+    ("external_transfer.print", "External Transfer — Print", "External Transfer"),
+    ("external_transfer.download", "External Transfer — Download", "External Transfer"),
+    ("external_transfer.return", "External Transfer — Return", "External Transfer"),
+
+    # Damaged Returns
+    ("damaged_returns.view", "Damaged Returns — View", "Damaged Returns"),
+    ("damaged_returns.print", "Damaged Returns — Print", "Damaged Returns"),
+
+    # Dashboard
+    ("dashboard.view", "Dashboard — View", "Dashboard"),
+
+    # Audit Log
+    ("audit_log.view", "Audit Log — View", "Audit Log"),
+    # Dispensed Items
+    ("dispensed_items.view", "Dispensed Items — View", "Dispensed Items"),
+]
+
+def get_permissions_for_tier(tier: SubscriptionTier) -> list:
+    """Get all permissions available for a specific subscription tier."""
+    if tier.value == 'PREMIUM':
+        return PREMIUM_PERMISSIONS
+    elif tier.value == 'STANDARD':
+        return STANDARD_PERMISSIONS
+    else:  # BASIC
+        return BASIC_PERMISSIONS
+
+def get_permission_tier(permission_name: str) -> SubscriptionTier:
+    """Get the minimum subscription tier required for a specific permission."""
+    # Check if permission exists in basic tier
+    basic_perms = [perm[0] for perm in BASIC_PERMISSIONS]
+    if permission_name in basic_perms:
+        return SubscriptionTier.BASIC
+    
+    # Check if permission exists in standard tier
+    standard_perms = [perm[0] for perm in STANDARD_PERMISSIONS]
+    if permission_name in standard_perms:
+        return SubscriptionTier.STANDARD
+    
+    # Otherwise, it's premium
+    return SubscriptionTier.PREMIUM
+
+def can_access_permission(user_tier: SubscriptionTier, permission_name: str) -> bool:
+    """Check if a user's subscription tier allows access to a specific permission."""
+    required_tier = get_permission_tier(permission_name)
+    
+    tier_hierarchy = {
+        "BASIC": 1,
+        "STANDARD": 2,
+        "PREMIUM": 3
+    }
+    
+    user_tier_value = user_tier.value if hasattr(user_tier, 'value') else str(user_tier)
+    required_tier_value = required_tier.value if hasattr(required_tier, 'value') else str(required_tier)
+    
+    return tier_hierarchy[user_tier_value] >= tier_hierarchy[required_tier_value]

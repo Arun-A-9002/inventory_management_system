@@ -111,7 +111,7 @@ def create_department(
 @router.get("/", response_model=List[DepartmentResponse])
 def list_departments(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_department_view()),
+    current_user: dict = Depends(check_permission("departments.view")),
 ):
     return db.query(Department).all()
 
@@ -123,7 +123,7 @@ def list_departments(
 def get_department(
     dept_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_department_view()),
+    current_user: dict = Depends(check_permission("departments.view")),
 ):
     dept = db.query(Department).filter(Department.id == dept_id).first()
     if not dept:

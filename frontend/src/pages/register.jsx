@@ -292,6 +292,7 @@ export default function Register() {
     designation: "",
     status: "Active",
     password: "",
+    subscription_tier: "BASIC",
   };
 
   const [form, setForm] = useState(() => {
@@ -433,7 +434,7 @@ export default function Register() {
     const fields = [
       ["organization_name", "organization_type", "organization_license_number", "contact_phone", "contact_email"],
       ["organization_address", "country", "state", "city", "pincode"],
-      ["admin_name", "admin_email", "admin_phone", "admin_secondary_phone", "designation", "status", "password", "tenant_code"],
+      ["admin_name", "admin_email", "admin_phone", "admin_secondary_phone", "designation", "status", "password", "tenant_code", "subscription_tier"],
     ][current];
 
     let ok = true;
@@ -1082,6 +1083,31 @@ export default function Register() {
                     {errors.tenant_code && (
                       <p className="text-red-600 text-sm mt-1">{errors.tenant_code}</p>
                     )}
+                  </div>
+
+                  {/* Subscription Tier */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Subscription Plan
+                    </label>
+                    <select
+                      name="subscription_tier"
+                      value={form.subscription_tier}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    >
+                      <option value="BASIC">Basic - Essential Features</option>
+                      <option value="STANDARD">Standard - Advanced Features</option>
+                      <option value="PREMIUM">Premium - Full Access</option>
+                    </select>
+                    {errors.subscription_tier && (
+                      <p className="text-red-600 text-sm mt-1">{errors.subscription_tier}</p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-1">
+                      {form.subscription_tier === "BASIC" && "Includes core inventory management features"}
+                      {form.subscription_tier === "STANDARD" && "Includes advanced reporting and analytics"}
+                      {form.subscription_tier === "PREMIUM" && "Full feature access with priority support"}
+                    </p>
                   </div>
 
                   {/* Password */}

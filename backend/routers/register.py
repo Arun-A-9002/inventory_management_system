@@ -25,6 +25,7 @@ from utils.email_service import send_registration_email
 
 # Permission seeding utility
 from utils.seed_permission import seed_permissions_for_tenant
+from models.register_models import SubscriptionTier
 
 router = APIRouter()
 
@@ -130,6 +131,7 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
             status=data.status,
             password_hash=hashed_password,
             database_name=db_name,
+            subscription_tier=SubscriptionTier(data.subscription_tier),
         )
 
         db.add(tenant)
@@ -187,11 +189,11 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
         log_audit(f"Tenant tables created for database: {db_name}")
 
         # -----------------------------------------------------
-        # STEP 3 → Seed permissions in tenant DB
+        # STEP 3 → Seed permissions in tenant DB based on subscription tier
         # -----------------------------------------------------
-        permissions_seeded = seed_permissions_for_tenant(db_name)
+        permissions_seeded = seed_permissions_for_tenant(db_name, tenant.subscription_tier)
         if permissions_seeded:
-            log_audit(f"Permissions seeded successfully for tenant: {db_name}")
+            log_audit(f"Permissions seeded successfully for tenant: {db_name} (tier: {tenant.subscription_tier.value})")
         else:
             log_error(Exception("Permission seeding failed"), f"Failed to seed permissions for tenant: {db_name}")
 

@@ -9,7 +9,7 @@ import { hasPermission, hasAnyPermission, getCurrentUser, isAdmin } from './perm
  */
 const SIDEBAR_PERMISSION_MAP = {
   // Dashboard - always visible
-  dashboard: [],
+  dashboard: ['dashboard.view'],
   
   // User Management module
   userManagement: [
@@ -87,15 +87,11 @@ const SIDEBAR_PERMISSION_MAP = {
     'damaged_returns.view', 'damaged_returns.print'
   ],
   
-  // Audit Log - usually admin only
-  auditLog: [
-    'settings.view', 'settings.update' // Add appropriate permissions
-  ],
+  // Audit Log
+  auditLog: ['audit_log.view'],
   
   // Dispensed Items
-  dispensedItems: [
-    'stock_ledger.view', 'stock_ledger.dispense'
-  ]
+  dispensedItems: ['dispensed_items.view']
 };
 
 /**
@@ -105,32 +101,35 @@ const SIDEBAR_PERMISSION_MAP = {
  */
 export function canViewSidebarItem(menuKey) {
   try {
-    const user = getCurrentUser();
-    
-    // If no user, hide everything except dashboard
-    if (!user) {
-      return menuKey === 'dashboard';
+    // Get permissions from localStorage token instead of API call
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.log(`No token for ${menuKey}`);
+      return false;
     }
     
-    // Admin users can see everything
-    if (isAdmin()) {
+    // Decode JWT token to get permissions
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const userPermissions = payload.permissions || [];
+    
+    console.log(`Checking ${menuKey}:`, {
+      userPermissions,
+      modulePermissions: SIDEBAR_PERMISSION_MAP[menuKey],
+      hasWildcard: userPermissions.includes('*')
+    });
+    
+    // If user has wildcard permission, show all items
+    if (userPermissions.includes('*')) {
+      console.log(`${menuKey}: Showing due to wildcard`);
       return true;
     }
     
-    // Dashboard is always visible for authenticated users
-    if (menuKey === 'dashboard') {
-      return true;
-    }
+    // Check if user has any permission for this module
+    const modulePermissions = SIDEBAR_PERMISSION_MAP[menuKey] || [];
+    const hasPermission = modulePermissions.some(permission => userPermissions.includes(permission));
     
-    // Get permissions for this menu item
-    const requiredPermissions = SIDEBAR_PERMISSION_MAP[menuKey];
-    
-    if (!requiredPermissions || requiredPermissions.length === 0) {
-      return true; // If no permissions defined, show by default
-    }
-    
-    // Check if user has ANY of the required permissions
-    return hasAnyPermission(requiredPermissions);
+    console.log(`${menuKey}: ${hasPermission ? 'SHOW' : 'HIDE'}`);
+    return hasPermission;
     
   } catch (error) {
     console.error('Error checking sidebar permissions:', error);

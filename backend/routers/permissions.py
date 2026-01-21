@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database import get_master_db, get_tenant_db
 from models.register_models import Tenant
 from utils.seed_permission import seed_permissions_for_tenant
+from models.register_models import SubscriptionTier
 from utils.logger import log_audit, log_error
 from utils.audit import log_audit as log_database_audit
 from typing import List
@@ -25,8 +26,8 @@ def seed_permissions_for_tenant_api(tenant_code: str, request: Request, db: Sess
         if not tenant:
             raise HTTPException(status_code=404, detail=f"Tenant with code '{tenant_code}' not found")
         
-        # Seed permissions
-        success = seed_permissions_for_tenant(tenant.database_name)
+        # Seed permissions based on tenant's subscription tier
+        success = seed_permissions_for_tenant(tenant.database_name, tenant.subscription_tier)
         
         if success:
             log_audit(f"Manual permission seeding successful for tenant: {tenant.organization_name} ({tenant_code})")
@@ -93,7 +94,7 @@ def seed_permissions_bulk_api(request: Request, db: Session = Depends(get_master
         
         for tenant in tenants:
             try:
-                success = seed_permissions_for_tenant(tenant.database_name)
+                success = seed_permissions_for_tenant(tenant.database_name, tenant.subscription_tier)
                 
                 if success:
                     success_count += 1

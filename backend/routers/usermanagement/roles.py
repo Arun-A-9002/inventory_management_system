@@ -5,13 +5,15 @@ from typing import List
 from sqlalchemy.orm import Session
 import json
 
-from database import get_current_tenant_db_name, get_tenant_db
+from database import get_current_tenant_db_name, get_tenant_db, get_master_db
 from models.tenant_models import Role, Permission, AuditLog
+from models.register_models import Tenant
 from schemas.tenant_schemas import (
     RoleCreate, RoleUpdate, RoleResponse,
     PermissionCreate, PermissionResponse
 )
 from utils.auth import check_permission
+from utils.subscription_permissions import get_permissions_for_tier
 
 router = APIRouter(prefix="/roles", tags=["Roles"])
 
@@ -61,14 +63,28 @@ def log_audit(db: Session, current_user: dict, action: str, table_name: str, rec
 
 
 # ===========================================================
-# LIST PERMISSIONS
+# LIST PERMISSIONS (FILTERED BY SUBSCRIPTION TIER)
 # ===========================================================
 @router.get("/permissions", response_model=List[PermissionResponse])
 def list_permissions(
     db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.view")),
+    tenant_db_name: str = Depends(get_current_tenant_db_name()),
 ):
-    return db.query(Permission).order_by(Permission.group, Permission.label).all()
+    # Get permissions available for this tenant's subscription tier
+    master_db = next(get_master_db())
+    tenant = master_db.query(Tenant).filter(Tenant.database_name == tenant_db_name).first()
+    master_db.close()
+    
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    
+    tier_permissions = get_permissions_for_tier(tenant.subscription_tier)
+    available_permissions = db.query(Permission).filter(
+        Permission.name.in_([perm[0] for perm in tier_permissions])
+    ).all()
+    
+    return available_permissions
 
 
 # ===========================================================
@@ -92,7 +108,7 @@ def create_permission(
 
 
 # ===========================================================
-# CREATE ROLE
+# CREATE ROLE (WITH SUBSCRIPTION TIER VALIDATION)
 # ===========================================================
 @router.post("/", response_model=RoleResponse)
 def create_role(
@@ -100,6 +116,7 @@ def create_role(
     request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.create")),
+    tenant_db_name: str = Depends(get_current_tenant_db_name()),
 ):
     if db.query(Role).filter(Role.name == payload.name).first():
         raise HTTPException(400, "Role already exists")
@@ -112,6 +129,25 @@ def create_role(
 
     permission_names = []
     if payload.permission_ids:
+        # Get permissions available for this tenant's subscription tier
+        master_db = next(get_master_db())
+        tenant = master_db.query(Tenant).filter(Tenant.database_name == tenant_db_name).first()
+        master_db.close()
+        
+        if not tenant:
+            raise HTTPException(404, "Tenant not found")
+        
+        tier_permissions = get_permissions_for_tier(tenant.subscription_tier)
+        available_permissions = db.query(Permission).filter(
+            Permission.name.in_([perm[0] for perm in tier_permissions])
+        ).all()
+        available_permission_ids = [perm.id for perm in available_permissions]
+        
+        # Validate that all requested permissions are available for this subscription tier
+        invalid_permissions = [pid for pid in payload.permission_ids if pid not in available_permission_ids]
+        if invalid_permissions:
+            raise HTTPException(400, f"Some permissions are not available for your subscription tier: {invalid_permissions}")
+        
         perms = db.query(Permission).filter(Permission.id.in_(payload.permission_ids)).all()
         role.permissions = perms
         permission_names = [perm.name for perm in perms]
@@ -167,7 +203,7 @@ def get_role(
 
 
 # ===========================================================
-# UPDATE ROLE
+# UPDATE ROLE (WITH SUBSCRIPTION TIER VALIDATION)
 # ===========================================================
 @router.put("/{role_id}", response_model=RoleResponse)
 def update_role(
@@ -176,6 +212,7 @@ def update_role(
     request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(check_permission("roles.update")),
+    tenant_db_name: str = Depends(get_current_tenant_db_name()),
 ):
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
@@ -204,6 +241,25 @@ def update_role(
         role.is_active = data["is_active"]
 
     if "permission_ids" in data:
+        # Get permissions available for this tenant's subscription tier
+        master_db = next(get_master_db())
+        tenant = master_db.query(Tenant).filter(Tenant.database_name == tenant_db_name).first()
+        master_db.close()
+        
+        if not tenant:
+            raise HTTPException(404, "Tenant not found")
+        
+        tier_permissions = get_permissions_for_tier(tenant.subscription_tier)
+        available_permissions = db.query(Permission).filter(
+            Permission.name.in_([perm[0] for perm in tier_permissions])
+        ).all()
+        available_permission_ids = [perm.id for perm in available_permissions]
+        
+        # Validate that all requested permissions are available for this subscription tier
+        invalid_permissions = [pid for pid in data["permission_ids"] if pid not in available_permission_ids]
+        if invalid_permissions:
+            raise HTTPException(400, f"Some permissions are not available for your subscription tier: {invalid_permissions}")
+        
         perms = db.query(Permission).filter(Permission.id.in_(data["permission_ids"])).all()
         role.permissions = perms
 

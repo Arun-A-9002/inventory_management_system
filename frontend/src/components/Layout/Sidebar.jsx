@@ -263,9 +263,17 @@ export default function Sidebar({ companyDetails, isCollapsed, onToggle, onMobil
 
   // Filter menu items based on user permissions
   const visibleMenu = menu.filter(item => {
-    if (!item.permissionKey) return true; // Show items without permission key
-    return canViewSidebarItem(item.permissionKey);
+    if (!item.permissionKey) {
+      console.log(`${item.name}: No permission key, showing`);
+      return true; // Show items without permission key
+    }
+    
+    const canView = canViewSidebarItem(item.permissionKey);
+    console.log(`${item.name} (${item.permissionKey}): ${canView ? 'SHOW' : 'HIDE'}`);
+    return canView;
   });
+
+  console.log('Visible menu items:', visibleMenu.map(item => item.name));
 
   return (
     <>

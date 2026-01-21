@@ -92,6 +92,9 @@ from routers.audit_log import router as audit_log_router
 # Permissions Management
 from routers.permissions import router as permissions_router
 
+# Sidebar Management
+from routers.sidebar import router as sidebar_router
+
 # Dashboard
 from routers.dashboard import router as dashboard_router
 
@@ -181,6 +184,9 @@ app.include_router(audit_log_router)
 
 # Permissions Management
 app.include_router(permissions_router, prefix="/api/permissions")
+
+# Sidebar Management
+app.include_router(sidebar_router, prefix="/api")
 
 # Dashboard
 app.include_router(dashboard_router)

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 import re
+from typing import Literal
 
 class RegisterModel(BaseModel):
     # Organization Info
@@ -23,6 +24,9 @@ class RegisterModel(BaseModel):
 
     status: str
     password: str
+    
+    # Subscription tier
+    subscription_tier: Literal["BASIC", "STANDARD", "PREMIUM"] = "BASIC"
 
     # CITY VALIDATION
     @field_validator("city")

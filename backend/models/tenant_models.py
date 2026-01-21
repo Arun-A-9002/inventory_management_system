@@ -10,6 +10,11 @@ from sqlalchemy.ext.declarative import declarative_base
 # Base class for tenant-specific models
 TenantBase = declarative_base()
 
+class SubscriptionTier(enum.Enum):
+    BASIC = "BASIC"
+    STANDARD = "STANDARD"
+    PREMIUM = "PREMIUM"
+
 class Department(TenantBase):
     __tablename__ = "departments"
 
@@ -49,6 +54,7 @@ class Permission(TenantBase):
     name = Column(String(191), unique=True, nullable=False)  # e.g., departments.view
     label = Column(String(255), nullable=False)               # e.g., Departments — View
     group = Column(String(100), nullable=True)                # e.g., Departments
+    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BASIC, nullable=False)  # Required tier
 
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions", lazy="joined")
 

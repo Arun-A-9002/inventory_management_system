@@ -74,6 +74,26 @@ except Exception as e:
 # -------------------------------------------------------
 try:
     Base.metadata.create_all(bind=engine)
+    
+    # Ensure subscription_tier column exists in master_tenant table
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT COUNT(*) as count 
+            FROM information_schema.columns 
+            WHERE table_name = 'master_tenant' 
+            AND column_name = 'subscription_tier'
+            AND table_schema = DATABASE()
+        """))
+        
+        if result.fetchone()[0] == 0:
+            conn.execute(text("""
+                ALTER TABLE master_tenant 
+                ADD COLUMN subscription_tier ENUM('BASIC', 'STANDARD', 'PREMIUM') 
+                NOT NULL DEFAULT 'BASIC'
+            """))
+            conn.commit()
+            log_audit("Added subscription_tier column to master_tenant table")
+    
     log_audit("Master DB tables created successfully")
 except Exception as e:
     log_error(e, location="Master Table Creation")
@@ -157,6 +177,7 @@ def get_tenant_db(tenant_db_name: str):
             with MIGRATION_LOCK:
                 if tenant_db_name not in TENANT_MIGRATIONS_DONE:
                     ensure_missing_columns(engine)
+                    ensure_subscription_tier_migration(engine)
                     TENANT_MIGRATIONS_DONE.add(tenant_db_name)
 
         # 5️⃣ Return DB session
@@ -213,6 +234,63 @@ def get_current_tenant_db_name():
 # RUN DEFAULT TENANT INITIALIZATION
 # -------------------------------------------------------
 # Removed init_tenant_db() to prevent startup errors
+
+
+def ensure_subscription_tier_migration(engine):
+    """Add subscription_tier column to permissions table if not exists"""
+    try:
+        with engine.connect() as conn:
+            # Check if subscription_tier column exists in permissions table
+            result = conn.execute(text("""
+                SELECT COUNT(*) as count 
+                FROM information_schema.columns 
+                WHERE table_name = 'permissions' 
+                AND column_name = 'subscription_tier'
+                AND table_schema = DATABASE()
+            """))
+            
+            if result.fetchone()[0] == 0:
+                # Add the subscription_tier column
+                conn.execute(text("""
+                    ALTER TABLE permissions 
+                    ADD COLUMN subscription_tier ENUM('BASIC', 'STANDARD', 'PREMIUM') 
+                    NOT NULL DEFAULT 'BASIC'
+                """))
+                print("Added subscription_tier column to permissions table")
+                
+                # Update existing permissions with correct subscription tiers
+                from utils.subscription_permissions import get_permission_tier
+                from models.tenant_models import Permission
+                from sqlalchemy.orm import sessionmaker
+                
+                SessionLocal = sessionmaker(bind=engine)
+                db = SessionLocal()
+                
+                try:
+                    permissions = db.query(Permission).all()
+                    updated_count = 0
+                    
+                    for permission in permissions:
+                        required_tier = get_permission_tier(permission.name)
+                        if permission.subscription_tier != required_tier:
+                            permission.subscription_tier = required_tier
+                            updated_count += 1
+                    
+                    if updated_count > 0:
+                        db.commit()
+                        print(f"Updated {updated_count} permissions with correct subscription tiers")
+                        
+                except Exception as e:
+                    db.rollback()
+                    print(f"Error updating permission tiers: {e}")
+                finally:
+                    db.close()
+                    
+            conn.commit()
+            
+    except Exception as e:
+        if "Duplicate column name" not in str(e):
+            print(f"Error in subscription tier migration: {e}")
 
 
 def ensure_missing_columns(engine):
@@ -382,6 +460,9 @@ def ensure_missing_columns(engine):
                 except Exception as e:
                     if "Duplicate column name" not in str(e):
                         print(f"Error adding {column_name} column: {e}")
+            
+            # Run subscription tier migration
+            ensure_subscription_tier_migration(engine)
             
             # Remove hardcoded Administration department if exists
             try:

@@ -162,7 +162,23 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
                     send_otp_email(admin_user.email, otp)
                     return {"message": "OTP sent to email", "requires_otp": True, "email": admin_user.email}
                 else:
-                    # Direct admin login without 2FA
+                    # Direct admin login without 2FA - get admin permissions
+                    from database import get_tenant_db
+                    from models.tenant_models import User
+                    
+                    tenant_db_gen = get_tenant_db(tenant.database_name)
+                    tenant_db = next(tenant_db_gen)
+                    
+                    # Get admin user permissions
+                    admin_permissions = []
+                    admin_user_db = tenant_db.query(User).filter(User.email == admin_user.email).first()
+                    if admin_user_db:
+                        for role in admin_user_db.roles:
+                            for permission in role.permissions:
+                                admin_permissions.append(permission.name)
+                    
+                    tenant_db.close()
+                    
                     access_token = create_access_token({
                         "sub": str(tenant.id),
                         "tenant_id": tenant.id,
@@ -172,7 +188,8 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
                         "tenant_db": tenant.database_name,
                         "tenant_code": tenant.tenant_code,
                         "user_type": "admin",
-                        "full_name": tenant.admin_name
+                        "full_name": tenant.admin_name,
+                        "permissions": list(set(admin_permissions)) if admin_permissions else []
                     })
                     return {"access_token": access_token, "token_type": "bearer", "requires_otp": False}
             else:
@@ -325,6 +342,22 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
         
         # If this is an admin login (both tenant_code and email match)
         if tenant:
+            # Get admin user permissions from tenant database
+            from database import get_tenant_db
+            from models.tenant_models import User
+            
+            tenant_db_gen = get_tenant_db(tenant.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            admin_permissions = []
+            admin_user_db = tenant_db.query(User).filter(User.email == req.email).first()
+            if admin_user_db:
+                for role in admin_user_db.roles:
+                    for permission in role.permissions:
+                        admin_permissions.append(permission.name)
+            
+            tenant_db.close()
+            
             access_token = create_access_token({
                 "sub": str(tenant.id),
                 "tenant_id": tenant.id,
@@ -334,7 +367,8 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
                 "tenant_db": tenant.database_name,
                 "tenant_code": tenant.tenant_code,
                 "user_type": "admin",
-                "full_name": tenant.admin_name
+                "full_name": tenant.admin_name,
+                "permissions": list(set(admin_permissions)) if admin_permissions else []
             })
 
             # Refresh token rotation
@@ -483,9 +517,26 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
             max_age=7 * 24 * 3600
         )
 
-        # -------------------------------
-        # 🔥 UPDATED ACCESS TOKEN (with tenant_id)
-        # -------------------------------
+        # 🔥 UPDATED ACCESS TOKEN (with tenant_id and permissions)
+        # Get admin permissions from tenant database
+        from database import get_tenant_db
+        from models.tenant_models import User
+        
+        admin_permissions = []
+        try:
+            tenant_db_gen = get_tenant_db(user.database_name)
+            tenant_db = next(tenant_db_gen)
+            
+            admin_user_db = tenant_db.query(User).filter(User.email == user.admin_email).first()
+            if admin_user_db:
+                for role in admin_user_db.roles:
+                    for permission in role.permissions:
+                        admin_permissions.append(permission.name)
+            
+            tenant_db.close()
+        except Exception as e:
+            log_error(e, "Error getting admin permissions for refresh")
+        
         new_access = create_access_token({
             "sub": str(user.id),
             "tenant_id": user.id,
@@ -495,7 +546,8 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_mast
             "tenant_code": user.tenant_code,
             "role": "admin",
             "user_type": "admin",
-            "full_name": user.admin_name
+            "full_name": user.admin_name,
+            "permissions": list(set(admin_permissions)) if admin_permissions else []
         })
 
         log_audit(f"TOKEN ROTATED → {user.admin_email}")

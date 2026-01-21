@@ -1,10 +1,16 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
+import enum
 
 # ⬇️ IMPORT LOGGERS
 from utils.logger import log_api, log_audit, log_error
 
 Base = declarative_base()
+
+class SubscriptionTier(enum.Enum):
+    BASIC = "BASIC"
+    STANDARD = "STANDARD"
+    PREMIUM = "PREMIUM"
 
 class Tenant(Base):
     __tablename__ = "master_tenant"
@@ -38,6 +44,9 @@ class Tenant(Base):
     
     # Admin 2FA setting
     admin_two_factor_enabled = Column(Boolean, default=False)
+    
+    # Subscription tier
+    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BASIC, nullable=False)
 
     # ---------------------------
     # LOG WHEN MODEL IS CREATED
