@@ -479,8 +479,24 @@ def migrate_vendor_status(db: Session = Depends(get_db)):
 
 # ---------------- UPDATE VENDOR STATUS ----------------
 @router.patch("/{vendor_id}/status")
-def update_vendor_status(vendor_id: int, status: str, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_status())):
+def update_vendor_status(vendor_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_status())):
     log_api("UPDATE VENDOR STATUS")
+    
+    # Get status from request body
+    import json
+    body = request.body()
+    if hasattr(body, '__await__'):
+        import asyncio
+        body = asyncio.run(body)
+    
+    try:
+        data = json.loads(body.decode())
+        status = data.get('status')
+    except:
+        raise HTTPException(status_code=400, detail="Invalid request body")
+    
+    if not status:
+        raise HTTPException(status_code=400, detail="Status is required")
     
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -506,7 +522,6 @@ def update_vendor_status(vendor_id: int, status: str, request: Request, db: Sess
         request=request
     )
     
-    # Clear cache after status update
     clear_vendor_cache()
     
     log_audit(f"Vendor status updated → {vendor.vendor_name}: {status}")
