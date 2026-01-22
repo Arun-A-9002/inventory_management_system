@@ -849,22 +849,22 @@ export default function GoodsReceipt() {
         <div>
       {/* MODERN HEADER */}
       <div className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Goods Receipt Management</h1>
-                <p className="text-sm text-slate-600">Manage incoming inventory, quality control & stock updates</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Goods Receipt Management</h1>
+                <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">Manage incoming inventory, quality control & stock updates</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-50 px-4 py-2 rounded-lg">
-                <span className="text-sm font-medium text-blue-700">📦 Active GRNs: {grnList.length}</span>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+              <div className="bg-blue-50 px-3 sm:px-4 py-2 rounded-lg text-center sm:text-left">
+                <span className="text-xs sm:text-sm font-medium text-blue-700">📦 Active GRNs: {grnList.length}</span>
               </div>
               {hasPermission("grn.create") && (
                 <button
@@ -894,12 +894,12 @@ export default function GoodsReceipt() {
                     }]);
                     setCreateModal(true);
                   }}
-                  className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
+                  className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-4 sm:px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg"
                 >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  Create GRN
+                  <span className="text-sm sm:text-base">Create GRN</span>
                 </button>
               )}
             </div>
@@ -907,8 +907,8 @@ export default function GoodsReceipt() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-12 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="grid grid-cols-12 gap-4 sm:gap-8">
           {/* LEFT PANEL - REMOVED - Form now in modal */}
           <div className="col-span-12" style={{display: 'none'}}>
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
@@ -1474,26 +1474,26 @@ export default function GoodsReceipt() {
           <div className="col-span-12">
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
               {/* Table Header */}
-              <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
-                <div className="flex items-center justify-between">
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 sm:px-6 py-4 border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-semibold text-slate-900 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                       </svg>
                       Goods Receipt Records
                     </h2>
-                    <p className="text-sm text-slate-600 mt-1">Manage and track all GRN transactions</p>
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1 hidden sm:block">Manage and track all GRN transactions</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={fetchGRNList}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center text-sm"
                     >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Refresh
+                      <span className="hidden sm:inline">Refresh</span>
                     </button>
                   </div>
                 </div>
@@ -1507,88 +1507,204 @@ export default function GoodsReceipt() {
                   </div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">GRN Details</th>
-                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Vendor & PO</th>
-                        <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Invoice Details</th>
-                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Amount</th>
-                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Status</th>
-                        <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {grnList.length === 0 ? (
+                <>
+                  {/* Desktop Table */}
+                  <div className="hidden lg:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <td colSpan="6" className="text-center py-16">
-                            <div className="text-slate-400">
-                              <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                              </svg>
-                              <p className="text-lg font-medium text-slate-500">No GRN records found</p>
-                              <p className="text-sm text-slate-400 mt-1">Create your first goods receipt note to get started</p>
-                            </div>
-                          </td>
+                          <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">GRN Details</th>
+                          <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Vendor & PO</th>
+                          <th className="text-left py-4 px-6 font-semibold text-slate-700 text-sm">Invoice Details</th>
+                          <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Amount</th>
+                          <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Status</th>
+                          <th className="text-center py-4 px-6 font-semibold text-slate-700 text-sm">Actions</th>
                         </tr>
-                      ) : (
-                        grnList.map((grn) => (
-                          <tr key={grn.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-4 px-6">
-                              <div>
-                                <div className="font-semibold text-slate-900">{grn.grn_number}</div>
-                                <div className="text-sm text-slate-500">{new Date(grn.grn_date).toLocaleDateString()}</div>
-                                <div className="text-xs text-slate-400 mt-1">{grn.store}</div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {grnList.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="text-center py-16">
+                              <div className="text-slate-400">
+                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                </svg>
+                                <p className="text-lg font-medium text-slate-500">No GRN records found</p>
+                                <p className="text-sm text-slate-400 mt-1">Create your first goods receipt note to get started</p>
                               </div>
                             </td>
-                            <td className="py-4 px-6">
-                              <div>
-                                <div className="font-medium text-slate-800">{grn.vendor_name}</div>
-                                <div className="text-sm text-slate-500">PO: {grn.po_number}</div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <div>
-                                {grn.invoice_number ? (
-                                  <div className="font-medium text-slate-800">{grn.invoice_number}</div>
-                                ) : (
-                                  <div className="text-sm text-slate-400">No Invoice</div>
-                                )}
-                                {grn.invoice_date ? (
-                                  <div className="text-sm text-slate-500">{new Date(grn.invoice_date).toLocaleDateString()}</div>
-                                ) : (
-                                  <div className="text-sm text-slate-400">No Date</div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-6 text-center">
-                              <div className="font-bold text-green-600 text-lg">₹{(grn.total_amount || 0).toFixed(2)}</div>
-                            </td>
-                            <td className="py-4 px-6 text-center">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-center mb-2">
-                                  {hasPermission("grn.status_qc") && (
-                                    <label className="flex items-center cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={qualityChecks[grn.id] || false}
-                                        onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
-                                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                      />
-                                      <span className="text-xs font-medium text-slate-700">Quality Check</span>
-                                    </label>
+                          </tr>
+                        ) : (
+                          grnList.map((grn) => (
+                            <tr key={grn.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="py-4 px-6">
+                                <div>
+                                  <div className="font-semibold text-slate-900">{grn.grn_number}</div>
+                                  <div className="text-sm text-slate-500">{new Date(grn.grn_date).toLocaleDateString()}</div>
+                                  <div className="text-xs text-slate-400 mt-1">{grn.store}</div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div>
+                                  <div className="font-medium text-slate-800">{grn.vendor_name}</div>
+                                  <div className="text-sm text-slate-500">PO: {grn.po_number}</div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div>
+                                  {grn.invoice_number ? (
+                                    <div className="font-medium text-slate-800">{grn.invoice_number}</div>
+                                  ) : (
+                                    <div className="text-sm text-slate-400">No Invoice</div>
                                   )}
-                                  {!hasPermission("grn.status_qc") && (
-                                    <span className="text-xs text-gray-400">QC: {qualityChecks[grn.id] ? 'Done' : 'Pending'}</span>
+                                  {grn.invoice_date ? (
+                                    <div className="text-sm text-slate-500">{new Date(grn.invoice_date).toLocaleDateString()}</div>
+                                  ) : (
+                                    <div className="text-sm text-slate-400">No Date</div>
                                   )}
                                 </div>
+                              </td>
+                              <td className="py-4 px-6 text-center">
+                                <div className="font-bold text-green-600 text-lg">₹{(grn.total_amount || 0).toFixed(2)}</div>
+                              </td>
+                              <td className="py-4 px-6 text-center">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-center mb-2">
+                                    {hasPermission("grn.status_qc") && (
+                                      <label className="flex items-center cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={qualityChecks[grn.id] || false}
+                                          onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
+                                          className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <span className="text-xs font-medium text-slate-700">Quality Check</span>
+                                      </label>
+                                    )}
+                                    {!hasPermission("grn.status_qc") && (
+                                      <span className="text-xs text-gray-400">QC: {qualityChecks[grn.id] ? 'Done' : 'Pending'}</span>
+                                    )}
+                                  </div>
+                                  {hasPermission("grn.status_approve") ? (
+                                    <select
+                                      value={grn.status || 'Pending'}
+                                      onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
+                                      disabled={!qualityChecks[grn.id]}
+                                      className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                        !qualityChecks[grn.id] ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                                        grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                                        grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                        'bg-yellow-100 text-yellow-800'
+                                      }`}
+                                    >
+                                      <option value="Pending">Pending</option>
+                                      <option value="Approved">Approved</option>
+                                      <option value="Rejected">Rejected</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                      grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                                      grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                      'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {grn.status || 'Pending'}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex items-center justify-center space-x-2">
+                                  {hasPermission("grn.print") && (
+                                    <button 
+                                      onClick={() => handlePrintGRN(grn)}
+                                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                      title="Print GRN"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  {hasPermission("grn.download") && (
+                                    <button 
+                                      onClick={() => handleDownloadGRN(grn)}
+                                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                      title="Download GRN"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  {hasPermission("grn.edit") && (
+                                    <button 
+                                      onClick={() => handleEditGRN(grn)}
+                                      className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                      title="Edit GRN"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  {hasPermission("grn.status") && (
+                                    <button
+                                      onClick={() => toggleGRNStatus(grn)}
+                                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                        grn.status === 'Approved'
+                                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                      }`}
+                                      title={grn.status === 'Approved' ? "Click to Deactivate" : "Click to Activate"}
+                                    >
+                                      {grn.status === 'Approved' ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards */}
+                  <div className="lg:hidden">
+                    {grnList.length === 0 ? (
+                      <div className="text-center py-16">
+                        <div className="text-slate-400">
+                          <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                          </svg>
+                          <p className="text-lg font-medium text-slate-500">No GRN records found</p>
+                          <p className="text-sm text-slate-400 mt-1">Create your first goods receipt note to get started</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 p-4">
+                        {grnList.map((grn) => (
+                          <div key={grn.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center flex-1 min-w-0">
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="font-semibold text-slate-900 truncate">{grn.grn_number}</h4>
+                                  <p className="text-sm text-slate-500">{new Date(grn.grn_date).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end space-y-2">
+                                <div className="font-bold text-green-600 text-lg">₹{(grn.total_amount || 0).toFixed(2)}</div>
                                 {hasPermission("grn.status_approve") ? (
                                   <select
                                     value={grn.status || 'Pending'}
                                     onChange={(e) => updateGRNStatus(grn.id, e.target.value)}
                                     disabled={!qualityChecks[grn.id]}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
+                                    className={`px-2 py-1 rounded-full text-xs font-medium border-0 ${
                                       !qualityChecks[grn.id] ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
                                       grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
                                       grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
@@ -1600,7 +1716,7 @@ export default function GoodsReceipt() {
                                     <option value="Rejected">Rejected</option>
                                   </select>
                                 ) : (
-                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                     grn.status === 'Approved' ? 'bg-green-100 text-green-800' : 
                                     grn.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                     'bg-yellow-100 text-yellow-800'
@@ -1609,63 +1725,99 @@ export default function GoodsReceipt() {
                                   </span>
                                 )}
                               </div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <div className="flex items-center justify-center space-x-2">
-                                {hasPermission("grn.print") && (
-                                  <button 
-                                    onClick={() => handlePrintGRN(grn)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Print GRN"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                    </svg>
-                                  </button>
-                                )}
-                                {hasPermission("grn.download") && (
-                                  <button 
-                                    onClick={() => handleDownloadGRN(grn)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="Download GRN"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                  </button>
-                                )}
-                                {hasPermission("grn.edit") && (
-                                  <button 
-                                    onClick={() => handleEditGRN(grn)}
-                                    className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                    title="Edit GRN"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
-                                )}
-                                {hasPermission("grn.status") && (
-                                  <button
-                                    onClick={() => toggleGRNStatus(grn)}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                      grn.status === 'Approved'
-                                        ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                    }`}
-                                    title={grn.status === 'Approved' ? "Click to Deactivate" : "Click to Activate"}
-                                  >
-                                    {grn.status === 'Approved' ? 'Deactivate' : 'Activate'}
-                                  </button>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm mb-4">
+                              <div>
+                                <span className="text-slate-500">Vendor:</span>
+                                <div className="mt-1">
+                                  <div className="font-medium">{grn.vendor_name}</div>
+                                  <div className="text-slate-600">PO: {grn.po_number}</div>
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Invoice:</span>
+                                <div className="mt-1">
+                                  <div className="font-medium">{grn.invoice_number || 'No Invoice'}</div>
+                                  {grn.invoice_date && <div className="text-slate-600">{new Date(grn.invoice_date).toLocaleDateString()}</div>}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Store:</span>
+                                <span className="ml-2 font-medium">{grn.store}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="text-slate-500">Quality Check:</span>
+                                {hasPermission("grn.status_qc") ? (
+                                  <label className="flex items-center cursor-pointer ml-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={qualityChecks[grn.id] || false}
+                                      onChange={(e) => updateQualityCheck(grn.id, e.target.checked)}
+                                      className="mr-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span className="text-xs font-medium text-slate-700">{qualityChecks[grn.id] ? 'Done' : 'Pending'}</span>
+                                  </label>
+                                ) : (
+                                  <span className="ml-2 text-xs text-gray-600">{qualityChecks[grn.id] ? 'Done' : 'Pending'}</span>
                                 )}
                               </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200">
+                              {hasPermission("grn.print") && (
+                                <button 
+                                  onClick={() => handlePrintGRN(grn)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Print GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                  </svg>
+                                </button>
+                              )}
+                              {hasPermission("grn.download") && (
+                                <button 
+                                  onClick={() => handleDownloadGRN(grn)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Download GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </button>
+                              )}
+                              {hasPermission("grn.edit") && (
+                                <button 
+                                  onClick={() => handleEditGRN(grn)}
+                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  title="Edit GRN"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                              )}
+                              {hasPermission("grn.status") && (
+                                <button
+                                  onClick={() => toggleGRNStatus(grn)}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                    grn.status === 'Approved'
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  }`}
+                                  title={grn.status === 'Approved' ? "Click to Deactivate" : "Click to Activate"}
+                                >
+                                  {grn.status === 'Approved' ? 'Deactivate' : 'Activate'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
               
               {/* Pagination */}
