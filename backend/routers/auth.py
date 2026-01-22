@@ -8,6 +8,10 @@ import hashlib
 import traceback
 import os
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from database import get_master_db
 from models.register_models import Tenant
@@ -156,8 +160,9 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
         if admin_user:
             hashed_pw = hashlib.sha256(password.encode()).hexdigest()
             if hashed_pw == tenant.password_hash:
-                # Check if admin user has 2FA enabled
-                if admin_user.two_factor_enabled:
+                # Check if admin user has 2FA enabled (with fallback)
+                two_factor_enabled = getattr(admin_user, 'two_factor_enabled', False)
+                if two_factor_enabled:
                     otp = generate_otp(admin_user.email)
                     send_otp_email(admin_user.email, otp)
                     return {"message": "OTP sent to email", "requires_otp": True, "email": admin_user.email}
@@ -215,15 +220,17 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
                 tenant_db.close()
                 raise HTTPException(400, "Account is inactive")
             
-            # Check 2FA
-            if tenant_user.two_factor_enabled:
+            # Check 2FA (with fallback)
+            two_factor_enabled = getattr(tenant_user, 'two_factor_enabled', False)
+            if two_factor_enabled:
                 otp = generate_otp(tenant_user.email)
                 send_otp_email(tenant_user.email, otp)
                 tenant_db.close()
                 return {"message": "OTP sent to email", "requires_otp": True, "email": tenant_user.email}
             
             # Direct login
-            if not tenant_user.multi_login_enabled:
+            multi_login_enabled = getattr(tenant_user, 'multi_login_enabled', False)
+            if not multi_login_enabled:
                 existing_sessions = tenant_db.query(UserSession).filter(
                     UserSession.user_id == tenant_user.id,
                     UserSession.is_active == True
@@ -277,8 +284,11 @@ async def login(request: Request, db: Session = Depends(get_master_db)):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         log_error(e, location="Login Endpoint")
-        raise HTTPException(500, "Internal server error")
+        print(f"Login error details: {error_details}")
+        raise HTTPException(500, f"Internal server error: {str(e)}")
 
 
 @router.post("/admin-login")
@@ -410,8 +420,9 @@ def verify(req: OTPVerifyModel, response: Response, db: Session = Depends(get_ma
             tenant_user = tenant_db.query(User).filter(User.email == req.email).first()
             
             if tenant_user:
-                # Check multi-login settings
-                if not tenant_user.multi_login_enabled:
+                # Check multi-login settings (with fallback)
+                multi_login_enabled = getattr(tenant_user, 'multi_login_enabled', False)
+                if not multi_login_enabled:
                     # Check for existing active sessions
                     existing_sessions = tenant_db.query(UserSession).filter(
                         UserSession.user_id == tenant_user.id,

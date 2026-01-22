@@ -4,6 +4,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import os
 import io
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Email configuration - set these in environment variables
 SMTP_SERVER = os.getenv("SMTP_HOST", "smtp.gmail.com")

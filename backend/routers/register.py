@@ -12,6 +12,11 @@ import hashlib
 import re
 import traceback
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Tenant model base (for creating tenant tables)
 from models.tenant_models import TenantBase
@@ -174,7 +179,14 @@ def register(data: RegisterModel, request: Request, db: Session = Depends(get_ma
         # STEP 1 → Create the tenant database
         # -----------------------------------------------------
         import pymysql
-        conn = pymysql.connect(host="localhost", user="root", password="", port=3306)
+        
+        # Use environment variables for database connection
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_user = os.getenv("DB_USER", "root")
+        db_password = os.getenv("DB_PASSWORD", "")
+        db_port = int(os.getenv("DB_PORT", "3306"))
+        
+        conn = pymysql.connect(host=db_host, user=db_user, password=db_password, port=db_port)
         cursor = conn.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}`")
         conn.close()

@@ -17,14 +17,19 @@ import os
 from typing import Optional, Dict, Any
 import redis
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ----------------------------------------------------------
 # CONFIGURATION
 # ----------------------------------------------------------
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS"))
+OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES"))
 
 # Password hashing - using simple SHA256 with salt
 # pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
@@ -34,7 +39,18 @@ security = HTTPBearer()
 
 # Redis for OTP storage (fallback to in-memory dict if Redis not available)
 try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_host = os.getenv("REDIS_HOST")
+    redis_port = int(os.getenv("REDIS_PORT"))
+    redis_db = int(os.getenv("REDIS_DB"))
+    redis_password = os.getenv("REDIS_PASSWORD")
+    
+    redis_client = redis.Redis(
+        host=redis_host, 
+        port=redis_port, 
+        db=redis_db, 
+        password=redis_password if redis_password else None,
+        decode_responses=True
+    )
     redis_client.ping()
     USE_REDIS = True
 except:
@@ -95,7 +111,7 @@ def refresh_expiry() -> datetime:
 def generate_otp(email: str) -> str:
     """Generate and store OTP for email."""
     otp = str(secrets.randbelow(900000) + 100000)  # 6-digit OTP
-    expiry = datetime.utcnow() + timedelta(minutes=10)  # 10 minutes expiry
+    expiry = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)  # Use env variable
     
     otp_data = {
         "otp": otp,
@@ -103,7 +119,8 @@ def generate_otp(email: str) -> str:
     }
     
     if USE_REDIS:
-        redis_client.setex(f"otp:{email}", 600, json.dumps(otp_data))  # 10 minutes
+        redis_expire_time = int(os.getenv("REDIS_EXPIRE_TIME", str(OTP_EXPIRE_MINUTES * 60)))
+        redis_client.setex(f"otp:{email}", redis_expire_time, json.dumps(otp_data))
         print(f"OTP stored in Redis for {email}: {otp}")
     else:
         otp_storage[email] = otp_data
@@ -149,12 +166,13 @@ def verify_otp(email: str, otp: str) -> bool:
 def _send_email_sync(email: str, otp: str) -> bool:
     """Synchronous email sending function."""
     try:
-        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "")
-        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        smtp_server = os.getenv("SMTP_HOST")
+        smtp_port = int(os.getenv("SMTP_PORT"))
+        smtp_username = os.getenv("SMTP_USER")
+        smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_username or not smtp_password:
+            print("SMTP credentials not configured")
             return False
         
         msg = MIMEMultipart()
@@ -168,7 +186,7 @@ def _send_email_sync(email: str, otp: str) -> bool:
             <h2>NUTRYAH Inventory Management System</h2>
             <p>Your One-Time Password (OTP) for login is:</p>
             <h1 style="color: #007bff; font-size: 32px; letter-spacing: 5px;">{otp}</h1>
-            <p>This OTP is valid for 10 minutes.</p>
+            <p>This OTP is valid for {OTP_EXPIRE_MINUTES} minutes.</p>
             <p>If you didn't request this OTP, please ignore this email.</p>
             <br>
             <p>Best regards,<br>NUTRYAH Team</p>
@@ -191,19 +209,29 @@ def _send_email_sync(email: str, otp: str) -> bool:
 
 def send_otp_email(email: str, otp: str) -> bool:
     """Send OTP via email asynchronously."""
-    # Send email in background thread
-    executor = ThreadPoolExecutor(max_workers=1)
-    executor.submit(_send_email_sync, email, otp)
-    return True  # Return immediately
+    # For development/testing - log OTP to console
+    print(f"\n=== OTP FOR {email} ===")
+    print(f"OTP: {otp}")
+    print(f"Valid for {OTP_EXPIRE_MINUTES} minutes")
+    print("========================\n")
+    
+    # Try to send email in background, but don't fail if it doesn't work
+    try:
+        executor = ThreadPoolExecutor(max_workers=1)
+        executor.submit(_send_email_sync, email, otp)
+    except Exception as e:
+        print(f"Email sending failed, but OTP is available in console: {e}")
+    
+    return True  # Always return True so login process continues
 
 def send_registration_email(admin_email: str, organization_name: str, admin_name: str) -> bool:
     """Send registration confirmation email."""
     try:
         # Email configuration
-        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "")
-        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        smtp_server = os.getenv("SMTP_HOST")
+        smtp_port = int(os.getenv("SMTP_PORT"))
+        smtp_username = os.getenv("SMTP_USER")
+        smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_username or not smtp_password:
             print("SMTP credentials not configured")
@@ -249,10 +277,10 @@ def send_welcome_email(email: str, name: str, password: str, login_code: str) ->
     """Send welcome email to new user."""
     try:
         # Email configuration
-        smtp_server = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "")
-        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        smtp_server = os.getenv("SMTP_HOST")
+        smtp_port = int(os.getenv("SMTP_PORT"))
+        smtp_username = os.getenv("SMTP_USER")
+        smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_username or not smtp_password:
             print("SMTP credentials not configured")

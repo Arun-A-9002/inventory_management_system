@@ -1,8 +1,17 @@
 import logging
 import traceback
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Get log level from environment
+LOG_LEVEL = os.getenv("LOG_LEVEL")
+LOG_FILE = os.getenv("LOG_FILE")
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 

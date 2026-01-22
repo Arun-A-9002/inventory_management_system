@@ -4,7 +4,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import urllib.parse
 import pymysql
+import os
 from fastapi import HTTPException
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from models.register_models import Base
 from utils.logger import log_error, log_audit, log_api
@@ -13,11 +18,11 @@ from utils.logger import log_error, log_audit, log_api
 # -------------------------------------------------------
 # MASTER DB CONFIG
 # -------------------------------------------------------
-DB_USER = "root"
-DB_PASSWORD = ""
-DB_HOST = "localhost"
-DB_PORT = "3306"
-MASTER_DB = "ims_master"
+DB_USER = os.getenv("MASTER_DB_USER")
+DB_PASSWORD = os.getenv("MASTER_DB_PASSWORD")
+DB_HOST = os.getenv("MASTER_DB_HOST")
+DB_PORT = os.getenv("MASTER_DB_PORT")
+MASTER_DB = os.getenv("MASTER_DB_NAME")
 
 # -------------------------------------------------------
 # TENANT DB CONFIG
