@@ -222,6 +222,7 @@ export default function Vendor() {
         showToast("Vendor created successfully", 'success');
       }
       resetForm();
+      setShowVendorModal(false);
       loadVendors();
     } catch (err) {
       console.error(err);
@@ -264,6 +265,8 @@ export default function Vendor() {
         setAvailableCities(cities);
       }
     }
+    
+    setShowVendorModal(true);
   };
 
   // const handleDelete = async (id) => {
@@ -1063,13 +1066,10 @@ export default function Vendor() {
             {/* Modal Action Buttons */}
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button 
-                onClick={async () => {
-                  await registerVendor();
-                  setShowVendorModal(false);
-                }} 
+                onClick={registerVendor} 
                 className="flex-1 rounded-full bg-green-600 text-white px-6 py-2 hover:bg-green-700 transition-colors text-sm"
               >
-                Register Vendor
+                {editingId ? "Update Vendor" : "Register Vendor"}
               </button>
               <button 
                 onClick={() => {

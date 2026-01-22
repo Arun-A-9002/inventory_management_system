@@ -169,9 +169,8 @@ def log_audit_trail(db: Session, current_user: dict, action: str, table_name: st
 # ---------------- GET ALL VENDORS ----------------
 @router.get("/")
 def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(require_vendors_view())):
-    # Check cache first
-    if is_cache_valid():
-        return vendor_cache["data"]
+    # Clear cache to ensure fresh data
+    clear_vendor_cache()
     
     vendors = db.query(Vendor).all()
     # Return vendors with all fields for frontend compatibility
@@ -194,10 +193,6 @@ def get_vendors(db: Session = Depends(get_db), current_user: dict = Depends(requ
         "branch_name": vendor.branch_name,
         "status": vendor.status
     } for vendor in vendors]
-    
-    # Cache the result
-    vendor_cache["data"] = result
-    vendor_cache["timestamp"] = datetime.now()
     
     return result
 
